@@ -1,0 +1,21 @@
+# Wave -1: data tier — PostgreSQL 18 (CloudNativePG Cluster), Redis, secret, NetworkPolicy, scrape config.
+# Needs CRDs from: cloudnative-pg (wave -2), external-secrets & vm-operator (observability root).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: shop-data
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project }}
+  source:
+    repoURL: {{ include "app.repoURL" . }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: apps/k8s/data
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: shop
+  {{- include "app.syncPolicy" . | nindent 2 }}

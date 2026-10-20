@@ -1,0 +1,89 @@
+# One VMServiceScrape for all app services: job label = service name
+# (jobLabel), same as service.name in traces → Trace → Metrics correlation in Grafana.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: shop-services
+spec:
+  jobLabel: app.kubernetes.io/name
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: shop
+      app.kubernetes.io/component: backend
+  endpoints:
+    - port: http
+      path: /metrics
+{{- if .Values.alerts.enabled }}
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: shop-services
+spec:
+  groups:
+    # METRICS-based alerts (RED) — evaluated by vmalert against VictoriaMetrics.
+    - name: shop-red
+      rules:
+        - record: job:http_server_requests:rate5m
+          expr: sum by (job, code) (rate(http_server_requests_total{namespace="shop"}[5m]))
+        - alert: ShopHighErrorRate
+          expr: |
+            sum by (job) (rate(http_server_requests_total{namespace="shop", code=~"5.."}[5m]))
+              / sum by (job) (rate(http_server_requests_total{namespace="shop"}[5m]))
+              > {{ .Values.alerts.errorRateThreshold }}
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"{{ $labels.job }}: error rate 5xx {{ $value | humanizePercentage }}"`}}
+            description: Check error traces in Grafana Explore (VictoriaTraces, filter service.name) and ERROR logs in VictoriaLogs.
+        - alert: ShopHighLatencyP95
+          expr: |
+            histogram_quantile(0.95, sum by (job, le) (rate(http_server_request_duration_seconds_bucket{namespace="shop"}[5m])))
+              > {{ .Values.alerts.p95LatencyThresholdSeconds }}
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"{{ $labels.job }}: p95 latency {{ $value | humanizeDuration }}"`}}
+            description: p95 latency above threshold for 10 minutes — inspect the slowest spans in traces.
+        - alert: ShopPaymentDeclineRateHigh
+          expr: |
+            sum(rate(payments_total{namespace="shop", status="declined"}[10m]))
+              / sum(rate(payments_total{namespace="shop", status=~"approved|declined"}[10m]))
+              > 0.3
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Payments declined > 30% over 10 minutes
+            description: Likely a payment provider issue — check payment-provider.authorize spans.
+    # LOGS-based alerts — LogsQL evaluated by vmalert against VictoriaLogs
+    # (the k8s-stack internal vmauth routes /select/logsql to vlselect).
+    - name: shop-logs
+      type: vlogs
+      interval: 5m
+      rules:
+        - alert: ShopErrorLogsSpike
+          expr: '{kubernetes.pod_namespace="shop"} level:=ERROR | stats by (service) count() as error_logs | filter error_logs:>20'
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"{{ $labels.service }}: {{ $value }} ERROR logs in 5 minutes"`}}
+            description: 'Query in Grafana Explore (VictoriaLogs): {kubernetes.pod_namespace="shop"} level:=ERROR'
+{{- end }}
+{{- if .Values.dashboard.enabled }}
+---
+# Dashboard loaded automatically by the Grafana sidecar (searchNamespace: ALL, label grafana_dashboard=1).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-dashboards
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    grafana_folder: {{ .Values.dashboard.folder | quote }}
+data:
+  shop-overview.json: |-
+    {{- .Files.Get "dashboards/shop-overview.json" | nindent 4 }}
+{{- end }}

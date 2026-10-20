@@ -1,0 +1,47 @@
+# PostgreSQL 18 managed by CloudNativePG.
+# - Secret "shop-db-app" (username/password/uri) is created AUTOMATICALLY by the operator → used via DATABASE_URL.
+# - Services: shop-db-rw (primary, read-write), shop-db-ro (replicas), shop-db-r (all instances).
+# - Built-in metrics exporter on port 9187 (scraped by VMPodScrape, monitoring.yaml).
+# - PostgreSQL logs are JSON on stdout → shipped to VictoriaLogs by vlagent.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: shop-db
+  labels:
+    app.kubernetes.io/name: shop-db
+    app.kubernetes.io/part-of: shop
+spec:
+  # Minimal spec: 1 instance. For production HA raise to 3 (1 primary + 2 replicas, automatic
+  # failover) — no application change needed (it still connects to shop-db-rw).
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie
+  primaryUpdateStrategy: unsupervised
+
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+
+  postgresql:
+    parameters:
+      max_connections: "100"
+      shared_buffers: 64MB
+      # Slow queries (>250ms) are logged → searchable in VictoriaLogs.
+      log_min_duration_statement: 250ms
+      log_lock_waits: "on"
+      log_checkpoints: "on"
+      # The operator adds shared_preload_libraries & CREATE EXTENSION pg_stat_statements automatically.
+      pg_stat_statements.max: "1000"
+      pg_stat_statements.track: all
+
+  storage:
+    storageClass: standard-rwo
+    size: 10Gi
+
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+  # The operator creates PDBs; with 1 instance the primary PDB blocks node drains.
+  # false = spot node pools can still drain/upgrade (brief DB restart). Set true when instances >= 3.
+  enablePDB: false

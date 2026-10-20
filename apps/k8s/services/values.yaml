@@ -1,0 +1,94 @@
+# =============================================================================
+# shop-services — values for the 6 microservices. Spec kept as small as possible (Go ~20-30MiB RSS).
+# =============================================================================
+image:
+  # Artifact Registry <region>-docker.pkg.dev/<project>/<repo> — deliberately empty in Git (public repo):
+  # injected by Argo CD from Terraform (argocd-bootstrap → root app "apps" → Application shop-services).
+  registry: ""
+  # Bumped by `make -C apps release TAG=...`, then commit → Argo CD syncs automatically.
+  tag: "0e2bde7f"
+  pullPolicy: IfNotPresent
+
+environment: staging
+
+# OpenTelemetry — standard OTel SDK env vars (read automatically by go.opentelemetry.io/otel).
+otel:
+  tracesEndpoint: http://vtinsert-vmks.monitoring.svc:10481/insert/opentelemetry/v1/traces
+  # 100% sampling for the demo. Production: parentbased_traceidratio + 0.05..0.2
+  # (or tail sampling in an OpenTelemetry Collector to "keep all errors").
+  sampler: parentbased_traceidratio
+  samplerArg: "1.0"
+
+# Defaults for all services (overridable per service).
+defaults:
+  replicas: 2
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  logLevel: info
+
+services:
+  api-gateway:
+    env:
+      USER_SERVICE_URL: http://user-service:8080
+      PRODUCT_SERVICE_URL: http://product-service:8080
+      ORDER_SERVICE_URL: http://order-service:8080
+
+  user-service:
+    postgres: true
+    redis: true
+
+  product-service:
+    postgres: true
+    redis: true
+    env:
+      RESTOCK_INTERVAL: 2m
+
+  order-service:
+    postgres: true
+    env:
+      USER_SERVICE_URL: http://user-service:8080
+      PRODUCT_SERVICE_URL: http://product-service:8080
+      PAYMENT_SERVICE_URL: http://payment-service:8080
+      NOTIFICATION_SERVICE_URL: http://notification-service:8080
+
+  payment-service:
+    postgres: true
+    redis: true
+    env:
+      # 10% of payments declined + random latency up to 400ms → realistic error/latency data.
+      PAYMENT_FAILURE_RATE: "0.1"
+      PAYMENT_MAX_LATENCY: 400ms
+
+  notification-service:
+    redis: true
+
+# Data tier connections (apps/k8s/data).
+postgres:
+  # Secret created by CloudNativePG for Cluster "shop-db".
+  secretName: shop-db-app
+  uriKey: uri
+redis:
+  addr: redis:6379
+  secretName: redis-auth
+  passwordKey: password
+
+# Simple traffic generator (curl loop) so metrics/logs/traces always have data.
+# Set enabled=false (or replicas=0) when not needed.
+trafficGenerator:
+  enabled: true
+  image: curlimages/curl:8.16.0
+  # Pause between iterations (seconds). Each iteration = 1 checkout + 2 reads.
+  sleepSeconds: 1
+  resources:
+    requests: { cpu: 5m, memory: 16Mi }
+    limits: { memory: 32Mi }
+
+# Per-service RED alerts (VMRule) & Grafana dashboard (ConfigMap, loaded by the Grafana sidecar).
+alerts:
+  enabled: true
+  errorRateThreshold: 0.05 # > 5% 5xx
+  p95LatencyThresholdSeconds: 1
+dashboard:
+  enabled: true
+  folder: Shop

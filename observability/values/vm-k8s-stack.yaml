@@ -1,0 +1,659 @@
+# =============================================================================
+# victoria-metrics-k8s-stack — production values for GKE
+# Chart    : vm/victoria-metrics-k8s-stack 0.96.0
+# Contents : VMCluster (metrics) + VLCluster/VLAgent (logs) + VTCluster (traces)
+#            + vmagent + vmalert + alertmanager + Grafana + kube-state-metrics + node-exporter
+# The VictoriaMetrics operator is installed SEPARATELY (vm-operator Application), as the docs
+# recommend: CRD/operator upgrades and removal are controlled independently of the stack.
+# =============================================================================
+
+# Short name keeps resource names under the 63-char limit (chart docs recommendation).
+# All CRs are named "vmks" → services: vminsert-vmks, vmselect-vmks, vlinsert-vmks, vtinsert-vmks, ...
+nameOverride: vmks
+fullnameOverride: vmks
+
+global:
+  clusterLabel: cluster
+  # Default component versions (used by CRs without an explicit image tag).
+  versions:
+    metrics: v1.154.0
+    logs: v1.53.0
+    traces: v0.12.0
+
+# The operator is installed by the vm-operator Application.
+victoria-metrics-operator:
+  enabled: false
+
+# Grafana is reached via `kubectl port-forward svc/grafana 3000:80`; vmalert alert links use this.
+external:
+  grafana:
+    host: localhost:3000
+
+# Internal vmauth: routes vmalert queries (/select/logsql → VictoriaLogs, the rest → vmselect).
+# It sits on the rule evaluation path, so 2 replicas avoid an alerting SPOF.
+internal:
+  vmauth:
+    spec:
+      replicaCount: 2
+      podDisruptionBudget:
+        maxUnavailable: 1
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits: { memory: 128Mi }
+
+# -----------------------------------------------------------------------------
+# Dashboards & rules — fetched by the sync job at deploy time. URLs are PINNED to the release
+# tags matching the component versions (chart defaults point at master = not deterministic).
+# -----------------------------------------------------------------------------
+defaultDashboards:
+  enabled: true
+  dashboards:
+    # The operator is installed separately, but its dashboard is still used.
+    victoriametrics-operator:
+      enabled: true
+      clusterMetric: vm_app_version
+  sources:
+    victoriatraces-cluster:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaTraces/v0.12.0/dashboards/victoriatraces-cluster.json
+    victorialogs-cluster:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/dashboards/victorialogs-cluster.json
+    victorialogs-vlagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/dashboards/vlagent.json
+    victoriametrics-vmagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/dashboards/vmagent.json
+    victoriametrics-cluster:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/dashboards/victoriametrics-cluster.json
+    victoriametrics-vmalert:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/dashboards/vmalert.json
+    victoriametrics-operator:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/dashboards/operator.json
+      enabled: true
+    kubernetes-views-global:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-global.json
+    kubernetes-views-namespaces:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-namespaces.json
+    kubernetes-views-pods:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-pods.json
+    kubernetes-views-nodes:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-nodes.json
+    kubernetes-system-api-server:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-system-api-server.json
+    node-exporter-full:
+      url: https://raw.githubusercontent.com/rfmoz/grafana-dashboards/b173daed1bb163ca320cc3624206e07832219113/prometheus/node-exporter-full.json
+    kube-prometheus:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/grafana-dashboardDefinitions.yaml
+    # Application data tier dashboards (CloudNativePG and Redis exporter).
+    cloudnative-pg:
+      url: https://raw.githubusercontent.com/cloudnative-pg/grafana-dashboards/cluster-v0.0.5/charts/cluster/grafana-dashboard.json
+    redis-exporter:
+      url: https://raw.githubusercontent.com/oliver006/redis_exporter/v1.93.0/contrib/grafana_prometheus_redis_dashboard.json
+
+defaultRules:
+  enabled: true
+  sources:
+    alertmanager:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/alertmanager-prometheusRule.yaml
+    kubernetes-control-plane:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/kubernetesControlPlane-prometheusRule.yaml
+    kubernetes:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/kubePrometheus-prometheusRule.yaml
+    kube-state-metrics:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/kubeStateMetrics-prometheusRule.yaml
+    node-exporter:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/nodeExporter-prometheusRule.yaml
+    vmhealth:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/deployment/docker/rules/alerts-health.yml
+    vmagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/deployment/docker/rules/alerts-vmagent.yml
+    vmalert:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/deployment/docker/rules/alerts-vmalert.yml
+    vmcluster:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.0/deployment/docker/rules/alerts-cluster.yml
+    vmoperator:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/operator/v0.75.0/config/alerting/vmoperator-rules.yaml
+      enabled: true
+    vlhealth:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/deployment/docker/rules/alerts-health.yml
+    vlagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/deployment/docker/rules/alerts-vlagent.yml
+    victorialogs:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/deployment/docker/rules/alerts-vlogs.yml
+    victoriatraces:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaTraces/v0.12.0/deployment/docker/rules/alerts-vtraces.yml
+    vthealth:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaTraces/v0.12.0/deployment/docker/rules/alerts-health.yml
+
+syncJob:
+  resources:
+    requests: { cpu: 10m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+# =============================================================================
+# METRICS — VMCluster (vminsert / vmselect / vmstorage) + vmauth load balancer
+# Durability is delegated to GCE Persistent Disk (storage-level replication) instead of
+# application replication — the cheapest option per the cluster docs. replicationFactor 2
+# would also need 2N-1 = 3 vmstorage nodes to keep 2 copies when one node is down.
+# When a vmstorage restarts or is preempted: ingestion reroutes, queries are briefly partial.
+# =============================================================================
+vmcluster:
+  enabled: true
+  spec:
+    retentionPeriod: "14d"
+    # Explicit 1 — the chart default is 2.
+    replicationFactor: 1
+    # vmauth in front of vminsert & vmselect (docs recommendation for >1 replica): the operator
+    # points the vminsert-vmks / vmselect-vmks Services at vmauth, which balances per request
+    # (not per keep-alive connection like an L4 Service) and skips unhealthy backends.
+    requestsLoadBalancer:
+      enabled: true
+      spec:
+        replicaCount: 2
+        podDisruptionBudget:
+          maxUnavailable: 1
+        topologySpreadConstraints:
+          - maxSkew: 1
+            topologyKey: kubernetes.io/hostname
+            whenUnsatisfiable: ScheduleAnyway
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: vmclusterlb-vmauth-balancer
+                app.kubernetes.io/instance: vmks
+        resources:
+          requests: { cpu: 10m, memory: 32Mi }
+          limits: { memory: 128Mi }
+    vmstorage:
+      replicaCount: 2
+      storageDataPath: /vm-data
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: standard-rwo # pd-balanced (GKE default CSI)
+            resources:
+              requests:
+                storage: 10Gi
+      # PVCs are deleted with the VMCluster / on scale-down — clean teardown, no orphaned disks.
+      persistentVolumeClaimRetentionPolicy:
+        whenDeleted: Delete
+        whenScaled: Delete
+      extraArgs:
+        # Drop duplicate samples from the 2 HA vmagent replicas. Must equal scrapeInterval.
+        dedup.minScrapeInterval: 30s
+        # Docs: keep >= 20% disk free (monthly final dedup needs room for the previous month).
+        storage.minFreeDiskSpaceBytes: "2GB"
+        # Per-vmstorage cardinality limiter: excess series are dropped and logged instead of OOM.
+        # ~137k active series today; limits sized to the 1Gi memory limit (~1KB/series).
+        storage.maxHourlySeries: "500000"
+        storage.maxDailySeries: "1500000"
+      podDisruptionBudget:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmstorage
+              app.kubernetes.io/instance: vmks
+      # Peak usage ~575Mi → request close to real usage so the node is not overcommitted.
+      resources:
+        requests: { cpu: 50m, memory: 384Mi }
+        limits: { memory: 1Gi }
+    vmselect:
+      enabled: true
+      replicaCount: 2
+      # Query cache on emptyDir (no PVC) — saves disk, the cache is safely rebuilt.
+      storage: null
+      extraArgs:
+        dedup.minScrapeInterval: 30s
+        # Answer queries (marked partial) while a vmstorage restarts instead of failing.
+        search.denyPartialResponse: "false"
+        # Default is 20 concurrent queries with no per-query memory cap → one wide query (7-day
+        # dashboard, AI assistant via MCP) can OOM vmselect. Total ≈ 8 × 96MB < 1Gi limit.
+        search.maxConcurrentRequests: "8"
+        search.maxMemoryPerQuery: "96MB"
+      podDisruptionBudget:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vmselect
+              app.kubernetes.io/instance: vmks
+      resources:
+        requests: { cpu: 50m, memory: 128Mi }
+        limits: { memory: 1Gi }
+    vminsert:
+      enabled: true
+      replicaCount: 2
+      podDisruptionBudget:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vminsert
+              app.kubernetes.io/instance: vmks
+      # 256Mi was OOMKilled while absorbing backlog bursts from 2 vmagents → 512Mi.
+      resources:
+        requests: { cpu: 25m, memory: 128Mi }
+        limits: { memory: 512Mi }
+
+vmsingle:
+  enabled: false
+
+# vmagent HA: 2 identical replicas scrape the same targets; VMCluster dedup drops duplicates.
+vmagent:
+  enabled: true
+  spec:
+    replicaCount: 2
+    scrapeInterval: 30s
+    externalLabels:
+      cluster: staging-gke
+    extraArgs:
+      promscrape.streamParse: "true"
+      # Keep failed targets visible in /targets for troubleshooting.
+      promscrape.dropOriginalLabels: "false"
+    # StatefulSet + PVC for the remote-write persistent queue: buffered samples survive pod
+    # rescheduling (e.g. spot preemption) while vminsert is unreachable, instead of being lost
+    # with an emptyDir.
+    statefulMode: true
+    statefulStorage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard-rwo
+          resources:
+            requests:
+              storage: 10Gi # pd-balanced minimum
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
+    remoteWriteSettings:
+      # Headroom below the 10Gi PVC (operator default = full PVC size). ~60KB/s per vmagent
+      # today → ~1.5 days of vminsert outage buffered.
+      maxDiskUsagePerURL: 8GiB
+    podDisruptionBudget:
+      maxUnavailable: 1
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: vmagent
+            app.kubernetes.io/instance: vmks
+    resources:
+      requests: { cpu: 50m, memory: 192Mi }
+      limits: { memory: 512Mi }
+
+vmalert:
+  enabled: true
+  spec:
+    replicaCount: 2
+    evaluationInterval: 30s
+    externalLabels:
+      cluster: staging-gke
+    podDisruptionBudget:
+      maxUnavailable: 1
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+alertmanager:
+  enabled: true
+  spec:
+    # 2 replicas form a gossip cluster (notifications deduplicated across replicas).
+    replicaCount: 2
+    # Silences and the notification log on a PVC instead of emptyDir: they survive both replicas
+    # restarting at once (e.g. a node pool upgrade or Spot preemption).
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard-rwo
+          resources:
+            requests:
+              storage: 10Gi # pd-balanced minimum
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
+    podDisruptionBudget:
+      maxUnavailable: 1
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+  # Default "blackhole" receiver: alerts are visible in Grafana/vmalert but not sent anywhere.
+  # For production add a Slack/Telegram/PagerDuty receiver — keep webhooks/tokens in a Secret
+  # (ExternalSecret), NOT in this file.
+  config:
+    route:
+      receiver: blackhole
+      group_by: [alertname, namespace, cluster]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        - matchers: ['alertname=~"InfoInhibitor|Watchdog"']
+          receiver: blackhole
+    inhibit_rules:
+      - target_matchers: ['severity=~"warning|info"']
+        source_matchers: ['severity="critical"']
+        equal: [cluster, namespace, alertname]
+      - target_matchers: ['severity="info"']
+        source_matchers: ['alertname="InfoInhibitor"']
+        equal: [cluster, namespace]
+    receivers:
+      - name: blackhole
+
+# =============================================================================
+# LOGS — VLCluster (vlinsert / vlselect / vlstorage) + VLAgent DaemonSet (k8sCollector)
+# HA NOTE: VictoriaLogs cluster does NOT replicate data across vlstorage nodes (sharding only).
+#   - Ingestion continues when one vlstorage is down (vlinsert reroutes to healthy nodes).
+#   - Queries return partial results (allowPartialResponse) — logs on the down node are hidden.
+#   - Full HA = 2 independent clusters (VLDistributed CR) → 2x cost; see README.
+# =============================================================================
+vlcluster:
+  enabled: true
+  spec:
+    clusterVersion: v1.53.0
+    vlstorage:
+      replicaCount: 2
+      retentionPeriod: 7d
+      # Drop the oldest partitions when the disk is nearly full (required in production; 10Gi disk).
+      retentionMaxDiskSpaceUsageBytes: 8GiB
+      storageDataPath: /vl-data
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: standard-rwo
+            resources:
+              requests:
+                storage: 10Gi
+      persistentVolumeClaimRetentionPolicy:
+        whenDeleted: Delete
+        whenScaled: Delete
+      podDisruptionBudget:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vlstorage
+              app.kubernetes.io/instance: vmks
+      resources:
+        requests: { cpu: 50m, memory: 128Mi }
+        limits: { memory: 1Gi }
+    vlselect:
+      enabled: true
+      replicaCount: 2
+      extraArgs:
+        search.allowPartialResponse: "true"
+      podDisruptionBudget:
+        maxUnavailable: 1
+      resources:
+        requests: { cpu: 25m, memory: 64Mi }
+        limits: { memory: 512Mi }
+    vlinsert:
+      enabled: true
+      replicaCount: 2
+      podDisruptionBudget:
+        maxUnavailable: 1
+      resources:
+        requests: { cpu: 25m, memory: 64Mi }
+        limits: { memory: 256Mi }
+
+vlagent:
+  enabled: true
+  spec:
+    k8sCollector:
+      enabled: true
+      # JSON fields from application logs (slog) used as _msg/_time.
+      msgFields: [msg, message, log]
+      timeFields: [time, timestamp, ts]
+      includePodLabels: true
+    # Run on ALL nodes (including tainted ones) so no logs are missed.
+    tolerations:
+      - operator: Exists
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+# =============================================================================
+# TRACES — VTCluster (vtinsert / vtselect / vtstorage). Applications send OTLP/HTTP to:
+#   http://vtinsert-vmks.monitoring.svc:10481/insert/opentelemetry/v1/traces
+# Grafana reads via the Jaeger API: http://vtselect-vmks.monitoring.svc:10471/select/jaeger
+# HA NOTE: same as VictoriaLogs — sharding without replication.
+# =============================================================================
+vtcluster:
+  enabled: true
+  spec:
+    clusterVersion: v0.12.0
+    vtstorage:
+      replicaCount: 2
+      retentionPeriod: 7d
+      retentionMaxDiskSpaceUsageBytes: 8GiB
+      storageDataPath: /vt-data
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: standard-rwo
+            resources:
+              requests:
+                storage: 10Gi
+      persistentVolumeClaimRetentionPolicy:
+        whenDeleted: Delete
+        whenScaled: Delete
+      podDisruptionBudget:
+        maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vtstorage
+              app.kubernetes.io/instance: vmks
+      resources:
+        requests: { cpu: 50m, memory: 128Mi }
+        limits: { memory: 1Gi }
+    vtselect:
+      enabled: true
+      replicaCount: 2
+      extraArgs:
+        search.allowPartialResponse: "true"
+      podDisruptionBudget:
+        maxUnavailable: 1
+      resources:
+        requests: { cpu: 25m, memory: 64Mi }
+        limits: { memory: 512Mi }
+    vtinsert:
+      enabled: true
+      replicaCount: 2
+      podDisruptionBudget:
+        maxUnavailable: 1
+      resources:
+        requests: { cpu: 25m, memory: 64Mi }
+        limits: { memory: 256Mi }
+
+# =============================================================================
+# GRAFANA — datasources: VictoriaMetrics (prometheus + plugin), VictoriaLogs (plugin),
+# VictoriaTraces (built-in Jaeger), Alertmanager. Two-way log <-> trace correlation via trace_id.
+# =============================================================================
+defaultDatasources:
+  victoriametrics:
+    datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        uid: VictoriaMetrics
+        isDefault: true
+        jsonData:
+          timeInterval: 30s
+      - name: VictoriaMetrics (DS)
+        type: victoriametrics-metrics-datasource
+        access: proxy
+        uid: VictoriaMetricsDS
+        isDefault: false
+        plugin: true
+  victorialogs:
+    datasources:
+      - name: VictoriaLogs
+        type: victoriametrics-logs-datasource
+        access: proxy
+        uid: VictoriaLogs
+        plugin: true
+        jsonData:
+          maxLines: 1000
+          # Log → Trace: the trace_id field (from app slog) links to the VictoriaTraces datasource.
+          derivedFields:
+            - name: trace_id
+              matcherType: label
+              matcherRegex: trace_id
+              url: '${__value.raw}'
+              urlDisplayLabel: View trace
+              datasourceUid: VictoriaTraces
+  victoriatraces:
+    datasources:
+      - name: VictoriaTraces
+        type: jaeger
+        access: proxy
+        uid: VictoriaTraces
+        jsonData:
+          nodeGraph:
+            enabled: true
+          # Trace → Log: open logs with the same trace_id in VictoriaLogs from a span.
+          tracesToLogsV2:
+            datasourceUid: VictoriaLogs
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            customQuery: true
+            query: 'trace_id:="${__trace.traceId}"'
+          # Trace → Metrics: RED metrics of the related service in VictoriaMetrics.
+          tracesToMetrics:
+            datasourceUid: VictoriaMetrics
+            spanStartTimeShift: "-5m"
+            spanEndTimeShift: "5m"
+            tags:
+              - key: service.name
+                value: job
+            queries:
+              - name: Request rate
+                query: 'sum(rate(http_server_requests_total{$__tags}[1m]))'
+              - name: Error rate (5xx)
+                query: 'sum(rate(http_server_requests_total{$__tags,code=~"5.."}[1m]))'
+              - name: p95 latency
+                query: 'histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{$__tags}[1m])) by (le))'
+
+grafana:
+  enabled: true
+  # Service named "grafana" (not "<release>-grafana") → simpler port-forward.
+  fullnameOverride: grafana
+  replicas: 1
+  # Dashboards & datasources are provisioned from Git; the PVC only keeps runtime state (service
+  # accounts and tokens such as mcp-grafana's, annotations, user preferences) across restarts and
+  # Spot preemptions. RWO disk → Recreate rollouts; fsGroup 472 makes the root chown init container
+  # unnecessary; Helm `lookup` does not run under Argo CD.
+  persistence:
+    enabled: true
+    type: pvc
+    storageClassName: standard-rwo
+    size: 10Gi # pd-balanced minimum
+    lookupVolumeName: false
+  deploymentStrategy:
+    type: Recreate
+  initChownData:
+    enabled: false
+  # Admin password from the ExternalSecret-generated Secret (observability/manifests): no secret
+  # in Git, and stable across Argo CD syncs (the Helm `lookup` issue noted in the chart docs).
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
+  # Pinned plugin versions (signed, downloaded from grafana.com at startup via Cloud NAT).
+  plugins:
+    - victoriametrics-metrics-datasource@0.26.1
+    - victoriametrics-logs-datasource@0.33.1
+  grafana.ini:
+    server:
+      root_url: http://localhost:3000
+    analytics:
+      reporting_enabled: false
+      check_for_updates: false
+      check_for_plugin_updates: false
+    users:
+      allow_sign_up: false
+    auth.anonymous:
+      enabled: false
+    security:
+      disable_gravatar: true
+    # JSON logs so VictoriaLogs parses them cleanly.
+    log.console:
+      format: json
+  sidecar:
+    dashboards:
+      enabled: true
+      # App teams can ship dashboards from their own namespace (ConfigMap label grafana_dashboard=1).
+      searchNamespace: ALL
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { memory: 128Mi }
+  # Peak ~500Mi during dashboard provisioning + plugin install → 768Mi limit.
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 768Mi }
+
+# =============================================================================
+# Exporters & scrape targets — tuned for GKE (Google-managed control plane).
+# =============================================================================
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests: { cpu: 10m, memory: 48Mi }
+    limits: { memory: 192Mi }
+
+prometheus-node-exporter:
+  enabled: true
+  resources:
+    requests: { cpu: 10m, memory: 24Mi }
+    limits: { memory: 64Mi }
+
+kubelet:
+  enabled: true
+  vmScrape:
+    spec:
+      # Chart default labelmaps ALL node labels → on GKE every kubelet/cAdvisor series gets 46–51
+      # labels (dozens of cloud.google.com/*), exceeding -maxLabelsPerTimeseries=40, so vminsert
+      # drops ALL kubelet series. Keep only the node pool name.
+      relabelConfigs:
+        - sourceLabels: [__meta_kubernetes_node_label_cloud_google_com_gke_nodepool]
+          targetLabel: nodepool
+        - sourceLabels: [__metrics_path__]
+          targetLabel: metrics_path
+        - targetLabel: job
+          replacement: kubelet
+kubeApiServer:
+  enabled: true
+# GKE: controller-manager, scheduler and etcd are Google-managed and cannot be scraped.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+# GKE Dataplane V2 (eBPF/Cilium) does not use kube-proxy.
+kubeProxy:
+  enabled: false
+# GKE uses kube-dns (not CoreDNS) when cluster_dns_provider = KUBE_DNS.
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: true
+  service:
+    enabled: true

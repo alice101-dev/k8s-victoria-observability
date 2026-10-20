@@ -1,0 +1,44 @@
+# =============================================================================
+# victoria-logs-mcp — chart vm/victoria-logs-mcp 0.2.0
+# Read-only MCP server for VLCluster: query (LogsQL), hits, stats_query(_range), facets,
+# field/stream names & values + VictoriaLogs docs search.
+# =============================================================================
+fullnameOverride: vl-mcp
+
+image:
+  tag: v1.9.0
+
+vl:
+  entrypoint: http://vlselect-vmks.monitoring.svc:9471
+
+mcp:
+  # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via
+  # kubectl port-forward (gated by GKE IAM). Never expose via Ingress/HTTPRoute without auth.
+  mode: http
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# MCP server metrics scraped by vmagent (VMServiceScrape).
+scrape:
+  enabled: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+# The embedded docs vector DB (`documentation` tool) is the largest memory consumer.
+resources:
+  requests: { cpu: 10m, memory: 128Mi }
+  limits: { memory: 512Mi }
+
+# Startup loads the embedded docs vector DB (can take > 40s); without a startupProbe the default
+# liveness probe (10s + 3 failures) kills the container before port 8080 opens (CrashLoopBackOff).
+startupProbe:
+  httpGet:
+    path: /health/liveness
+    port: http
+  periodSeconds: 10
+  failureThreshold: 30

@@ -1,0 +1,65 @@
+# The data tier is reachable only from shop app pods (+ operator and metrics scraper).
+# Enforced by GKE Dataplane V2 (ADVANCED_DATAPATH).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: shop
+      ports:
+        - { protocol: TCP, port: 6379 }
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - { protocol: TCP, port: 9121 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: shop-db
+spec:
+  podSelector:
+    matchLabels:
+      cnpg.io/cluster: shop-db
+  policyTypes: [Ingress]
+  ingress:
+    # Shop app → PostgreSQL.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/part-of: shop
+      ports:
+        - { protocol: TCP, port: 5432 }
+    # Between instances (streaming replication & status) when instances > 1.
+    - from:
+        - podSelector:
+            matchLabels:
+              cnpg.io/cluster: shop-db
+      ports:
+        - { protocol: TCP, port: 5432 }
+        - { protocol: TCP, port: 8000 }
+    # CloudNativePG operator → instance manager (status API) & PostgreSQL.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: cnpg-system
+      ports:
+        - { protocol: TCP, port: 8000 }
+        - { protocol: TCP, port: 5432 }
+    # vmagent → CNPG built-in metrics exporter.
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - { protocol: TCP, port: 9187 }

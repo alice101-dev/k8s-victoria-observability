@@ -1,0 +1,26 @@
+# Wave -2: VictoriaMetrics Operator + CRDs (VMCluster, VLCluster, VLAgent, VTCluster, VMServiceScrape, VMRule, ...).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vm-operator
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project }}
+  sources:
+    - repoURL: https://victoriametrics.github.io/helm-charts/
+      chart: victoria-metrics-operator
+      targetRevision: {{ .Values.charts.vmOperator }}
+      helm:
+        valueFiles:
+          - $values/observability/values/vm-operator.yaml
+    - repoURL: {{ include "app.repoURL" . }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: vm-operator
+  {{- include "app.syncPolicy" . | nindent 2 }}

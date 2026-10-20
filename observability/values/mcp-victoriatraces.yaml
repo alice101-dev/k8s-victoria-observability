@@ -1,0 +1,44 @@
+# =============================================================================
+# victoria-traces-mcp — chart vm/victoria-traces-mcp 0.2.0 (server from VictoriaMetrics-Community)
+# Read-only MCP server for VTCluster: services, service_names, traces, trace (by ID),
+# dependencies (service graph) + VictoriaTraces docs search.
+# =============================================================================
+fullnameOverride: vt-mcp
+
+image:
+  tag: v1.5.0
+
+vt:
+  entrypoint: http://vtselect-vmks.monitoring.svc:10471
+
+mcp:
+  # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via
+  # kubectl port-forward (gated by GKE IAM). Never expose via Ingress/HTTPRoute without auth.
+  mode: http
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# MCP server metrics scraped by vmagent (VMServiceScrape).
+scrape:
+  enabled: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+# The embedded docs vector DB (`documentation` tool) is the largest memory consumer.
+resources:
+  requests: { cpu: 10m, memory: 128Mi }
+  limits: { memory: 512Mi }
+
+# Startup loads the embedded docs vector DB (can take > 40s); without a startupProbe the default
+# liveness probe (10s + 3 failures) kills the container before port 8080 opens (CrashLoopBackOff).
+startupProbe:
+  httpGet:
+    path: /health/liveness
+    port: http
+  periodSeconds: 10
+  failureThreshold: 30

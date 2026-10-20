@@ -1,0 +1,49 @@
+# =============================================================================
+# victoria-metrics-mcp — chart vm/victoria-metrics-mcp 0.4.0
+# Read-only MCP server for VMCluster: query/query_range, metrics, labels, series, rules, alerts,
+# tsdb_status (cardinality), explain_query + VictoriaMetrics docs search.
+# =============================================================================
+fullnameOverride: vm-mcp
+
+image:
+  # Chart appVersion (v1.120.1) is not the latest release → pin the latest GitHub release.
+  tag: v1.20.2
+
+vm:
+  type: cluster
+  # vmselect root URL (the MCP server appends /select/<tenant>/prometheus itself).
+  entrypoint: http://vmselect-vmks.monitoring.svc:8481
+
+mcp:
+  # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via
+  # kubectl port-forward (gated by GKE IAM). Never expose via Ingress/HTTPRoute without auth.
+  mode: http
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# MCP server metrics scraped by vmagent (VMServiceScrape).
+scrape:
+  enabled: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+# The VictoriaMetrics docs vector DB (`documentation` tool) takes ~500MB when loaded → a 512Mi
+# limit causes CrashLoop. To save memory, add `documentation` to mcp.disable.tools (the vector
+# DB is then not loaded at all).
+resources:
+  requests: { cpu: 10m, memory: 256Mi }
+  limits: { memory: 1Gi }
+
+# Startup loads the embedded docs vector DB (can take > 40s); without a startupProbe the default
+# liveness probe (10s + 3 failures) kills the container before port 8080 opens (CrashLoopBackOff).
+startupProbe:
+  httpGet:
+    path: /health/liveness
+    port: http
+  periodSeconds: 10
+  failureThreshold: 30

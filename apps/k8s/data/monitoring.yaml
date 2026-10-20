@@ -1,0 +1,64 @@
+# Data tier scraping + basic alerts. vmagent uses selectAllByDefault → objects in any namespace
+# are discovered automatically; vmalert loads this VMRule automatically too.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  endpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: shop-db
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: shop-db
+  podMetricsEndpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: shop-data
+spec:
+  groups:
+    - name: shop-data
+      rules:
+        - alert: RedisDown
+          expr: redis_up{namespace="shop"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Shop Redis unreachable from exporter
+            description: redis_exporter in {{ $labels.pod }} reported redis_up=0 for 2 minutes.
+        - alert: RedisMemoryNearLimit
+          expr: redis_memory_used_bytes{namespace="shop"} / redis_memory_max_bytes{namespace="shop"} > 0.9 and redis_memory_max_bytes{namespace="shop"} > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: Redis memory > 90% of maxmemory
+            description: Keys with TTL are being evicted; consider raising maxmemory/limit.
+        - alert: PostgresDown
+          expr: cnpg_collector_up{namespace="shop"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: PostgreSQL {{ $labels.pod }} down
+            description: CloudNativePG exporter reported the instance not queryable for 2 minutes.
+        - alert: PostgresTooManyConnections
+          expr: sum by (pod) (cnpg_backends_total{namespace="shop"}) / on (pod) max by (pod) (cnpg_pg_settings_setting{namespace="shop", name="max_connections"}) > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: PostgreSQL connections > 80% of max_connections
+            description: Check service pool size (DB_MAX_CONNS) or add PgBouncer (CNPG Pooler).

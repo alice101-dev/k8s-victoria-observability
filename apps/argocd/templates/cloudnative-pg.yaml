@@ -1,0 +1,38 @@
+# Wave -2: CloudNativePG operator (CRDs Cluster, Backup, Pooler, ...).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cloudnative-pg
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project }}
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: {{ .Values.charts.cloudnativePg }}
+      helm:
+        valueFiles:
+          - $values/apps/values/cloudnative-pg.yaml
+    - repoURL: {{ include "app.repoURL" . }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  # The operator injects the webhook caBundle itself at runtime → not drift.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      name: cnpg-mutating-webhook-configuration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      name: cnpg-validating-webhook-configuration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+  {{- include "app.syncPolicy" . | nindent 2 }}

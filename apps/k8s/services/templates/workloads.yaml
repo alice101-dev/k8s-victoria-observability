@@ -1,0 +1,171 @@
+{{- range $name, $svc := .Values.services }}
+{{- $replicas := $svc.replicas | default $.Values.defaults.replicas }}
+{{- $resources := $svc.resources | default $.Values.defaults.resources }}
+{{- $labels := include "shop.labels" (dict "name" $name "root" $) }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+automountServiceAccountToken: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+spec:
+  selector:
+    {{- include "shop.selectorLabels" $name | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+spec:
+  replicas: {{ $replicas }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "shop.selectorLabels" $name | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- $labels | nindent 8 }}
+    spec:
+      serviceAccountName: {{ $name }}
+      automountServiceAccountToken: false
+      # Longer than the app's SHUTDOWN_DELAY (5s) + SHUTDOWN_TIMEOUT (15s).
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across nodes — one preempted spot node does not take the service down.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "shop.selectorLabels" $name | nindent 14 }}
+      containers:
+        - name: app
+          image: "{{ required "image.registry is required (injected by Argo CD)" $.Values.image.registry }}/{{ $name }}:{{ $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            # Go GC adapts to the container memory limit (avoids OOMKilled).
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: app
+                  resource: limits.memory
+                  # Explicit (API server default) so Argo CD shows no OutOfSync drift.
+                  divisor: "1"
+            - name: LOG_LEVEL
+              value: {{ $svc.logLevel | default $.Values.defaults.logLevel | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ $name }}
+            # Resource attributes → on every span (filter traces by pod/node/version in Grafana).
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.namespace=shop,service.version={{ $.Values.image.tag }},deployment.environment.name={{ $.Values.environment }},k8s.namespace.name=$(POD_NAMESPACE),k8s.pod.name=$(POD_NAME),k8s.node.name=$(NODE_NAME)"
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              value: {{ $.Values.otel.tracesEndpoint | quote }}
+            - name: OTEL_TRACES_SAMPLER
+              value: {{ $.Values.otel.sampler | quote }}
+            - name: OTEL_TRACES_SAMPLER_ARG
+              value: {{ $.Values.otel.samplerArg | quote }}
+            {{- if $svc.postgres }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.postgres.secretName }}
+                  key: {{ $.Values.postgres.uriKey }}
+            {{- end }}
+            {{- if $svc.redis }}
+            - name: REDIS_ADDR
+              value: {{ $.Values.redis.addr | quote }}
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $.Values.redis.secretName }}
+                  key: {{ $.Values.redis.passwordKey }}
+            {{- end }}
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          # Startup: allow time for Postgres/Redis to be ready (the app retries with backoff).
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 60
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 2
+          resources:
+            {{- toYaml $resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+{{- if gt (int $replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- $labels | nindent 4 }}
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      {{- include "shop.selectorLabels" $name | nindent 6 }}
+{{- end }}
+{{- end }}

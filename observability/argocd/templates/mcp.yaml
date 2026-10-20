@@ -1,0 +1,42 @@
+# Wave 1: MCP (Model Context Protocol) servers for AI assistants (Cursor, VS Code, ...):
+# read-only access to VictoriaMetrics, VictoriaLogs, VictoriaTraces and Grafana. Created after
+# vm-stack is healthy since they need vmselect/vlselect/vtselect, Grafana and the VMServiceScrape CRD.
+{{- $vm := "https://victoriametrics.github.io/helm-charts/" }}
+{{- range $app := list
+  (dict "name" "mcp-victoriametrics" "repo" $vm "chart" "victoria-metrics-mcp" "version" $.Values.charts.vmMcp)
+  (dict "name" "mcp-victorialogs" "repo" $vm "chart" "victoria-logs-mcp" "version" $.Values.charts.vlMcp)
+  (dict "name" "mcp-victoriatraces" "repo" $vm "chart" "victoria-traces-mcp" "version" $.Values.charts.vtMcp)
+  (dict "name" "mcp-grafana" "repo" "https://grafana-community.github.io/helm-charts" "chart" "grafana-mcp" "version" $.Values.charts.grafanaMcp "manifests" "observability/manifests/mcp-grafana") }}
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ $app.name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ $.Values.project }}
+  sources:
+    - repoURL: {{ $app.repo }}
+      chart: {{ $app.chart }}
+      targetRevision: {{ $app.version }}
+      helm:
+        valueFiles:
+          - $values/observability/values/{{ $app.name }}.yaml
+    - repoURL: {{ include "app.repoURL" $ }}
+      targetRevision: {{ $.Values.targetRevision }}
+      ref: values
+    {{- with $app.manifests }}
+    # Extra manifests from Git (credentials, scrape config) in the same Application.
+    - repoURL: {{ include "app.repoURL" $ }}
+      targetRevision: {{ $.Values.targetRevision }}
+      path: {{ . }}
+    {{- end }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  {{- include "app.syncPolicy" $ | nindent 2 }}
+{{- end }}

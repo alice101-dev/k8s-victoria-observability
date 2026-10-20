@@ -1,0 +1,21 @@
+# Wave -1: supporting config in the monitoring namespace that must exist BEFORE the stack:
+# Grafana admin Secret (ExternalSecret + Password generator).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-config
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project }}
+  source:
+    repoURL: {{ include "app.repoURL" . }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: observability/manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  {{- include "app.syncPolicy" . | nindent 2 }}

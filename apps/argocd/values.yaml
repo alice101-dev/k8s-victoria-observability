@@ -1,0 +1,9 @@
+# Overridden by the root Application (created by Terraform, argocd-bootstrap workspace).
+repoURL: ""
+targetRevision: main
+project: shop
+# Image registry path (contains the project ID) — injected by the root Application from Terraform, not in Git.
+imageRegistry: ""
+
+charts:
+  cloudnativePg: 0.29.1

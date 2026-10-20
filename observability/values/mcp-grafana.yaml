@@ -1,0 +1,85 @@
+# =============================================================================
+# grafana-mcp — chart grafana-community/grafana-mcp 0.27.2 (mcp-grafana 2.0.2)
+# Read-only MCP server for Grafana: dashboards, datasources, PromQL/MetricsQL on VictoriaMetrics,
+# LogsQL on VictoriaLogs (through the Loki tools), alerting, annotations and deeplinks.
+# Credentials come from observability/manifests/mcp-grafana (ExternalSecrets, nothing in Git).
+# =============================================================================
+fullnameOverride: grafana-mcp
+
+grafana:
+  url: http://grafana.monitoring.svc
+
+# Write tools removed; the service account is also only a Viewer.
+disableWrite: true
+
+# Exposes /metrics on :9090 (see --metrics-address; scraped by the VMPodScrape in manifests/mcp-grafana).
+metrics:
+  enabled: true
+
+extraArgs:
+  # The image entrypoint defaults to SSE; the last --transport wins. /mcp on port 8000.
+  - --transport
+  - streamable-http
+  # Only the categories this stack can use (default list also has OnCall, Incident, Asserts,
+  # Pyroscope, Tempo, rendering, ...). The Tempo tools do not work with the Jaeger datasource;
+  # traces are covered by vt-mcp. runpanelquery runs any dashboard panel query.
+  - --enabled-tools
+  - search,datasource,dashboard,folder,prometheus,loki,alerting,annotations,navigation,runpanelquery,docs,user
+  # DNS-rebinding protection checks the Host header on the MCP listener (403 otherwise). Allow the
+  # documented port-forward (svc/grafana-mcp 8093:8000) ...
+  - --allowed-hosts
+  - localhost:8093,127.0.0.1:8093
+  # ... and move /healthz and /metrics to side listeners without Host validation, so kubelet
+  # probes and vmagent (Host: <pod-ip>) are not rejected.
+  - --healthz-address
+  - :8081
+  - --metrics-address
+  - :9090
+  # No anonymous usage reporting to Grafana Labs.
+  - --usage-stats
+  - disabled
+
+env:
+  # Read on every request → daily token rotation needs no restart.
+  GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE: /var/run/secrets/grafana/token
+
+envValueFrom:
+  # Callers must send "Authorization: Bearer <token>" (unauthenticated non-loopback binds are
+  # deprecated upstream and log a security error).
+  MCP_GRAFANA_SERVER_TOKEN:
+    secretKeyRef:
+      name: mcp-grafana-server-token
+      key: token
+
+volumes:
+  - name: grafana-token
+    secret:
+      secretName: mcp-grafana-sa-token
+volumeMounts:
+  - name: grafana-token
+    mountPath: /var/run/secrets/grafana
+    readOnly: true
+
+service:
+  type: ClusterIP
+  port: 8000
+
+# No Kubernetes API access needed.
+automountServiceAccountToken: false
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: 8081
+  periodSeconds: 10
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8081
+  periodSeconds: 20
+  failureThreshold: 3
+
+# ~15Mi in use, including after the docs index is loaded.
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits: { memory: 128Mi }

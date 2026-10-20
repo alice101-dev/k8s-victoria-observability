@@ -1,0 +1,64 @@
+# ============================================================
+# Root .gitignore — local Terraform state must NEVER be committed
+# ============================================================
+
+# -----------------------------
+# Terraform
+# -----------------------------
+**/.terraform/*
+# State lives LOCALLY on the laptop (backend "local") — never commit it.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+.terraform.tfstate.lock.info
+# Plan files may contain secrets
+*.tfplan
+*.tfplan.json
+tfplan
+tfplan-destroy
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+# Personal local overrides (e.g. GitOps repo token) — never commit
+local.tfvars
+*.local.tfvars
+
+# -----------------------------
+# Secrets & credentials
+# -----------------------------
+*.pem
+*.key
+*.p12
+*.pfx
+secrets.yaml
+secrets.yml
+.env
+.env.*
+!.env.example
+gcp-credentials.json
+*-credentials.json
+application_default_credentials.json
+kubeconfig
+*.kubeconfig
+
+# -----------------------------
+# Go
+# -----------------------------
+/apps/src/bin/
+*.test
+*.out
+coverage.*
+
+# -----------------------------
+# OS & editor
+# -----------------------------
+.DS_Store
+.idea/
+.vscode/*
+*.swp
+*~

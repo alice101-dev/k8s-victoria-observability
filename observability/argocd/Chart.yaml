@@ -1,0 +1,5 @@
+apiVersion: v2
+name: observability-apps
+description: Argo CD app-of-apps for the observability stack (VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana).
+type: application
+version: 1.0.0

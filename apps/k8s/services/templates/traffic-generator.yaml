@@ -1,0 +1,55 @@
+{{- if .Values.trafficGenerator.enabled }}
+# Traffic generator: each iteration = 1 checkout (POST /api/orders) + 2 reads.
+# user_id 1..60 (only 50 seeded) & product_id 1..22 (20 seeded) → some requests fail on purpose
+# (422) so error dashboards/alerts/traces have data.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-generator
+  labels:
+    app.kubernetes.io/name: traffic-generator
+    app.kubernetes.io/part-of: shop
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: traffic-generator
+      app.kubernetes.io/part-of: shop
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: traffic-generator
+        app.kubernetes.io/part-of: shop
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: curl
+          image: {{ .Values.trafficGenerator.image }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              GW=http://api-gateway:8080
+              while true; do
+                uid=$(( RANDOM % 60 + 1 )); pid=$(( RANDOM % 22 + 1 )); qty=$(( RANDOM % 3 + 1 ))
+                code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -X POST "$GW/api/orders" \
+                  -H 'Content-Type: application/json' \
+                  -d "{\"user_id\":$uid,\"product_id\":$pid,\"quantity\":$qty}")
+                curl -s -o /dev/null -m 5 "$GW/api/products/$pid"
+                curl -s -o /dev/null -m 5 "$GW/api/users/$uid"
+                echo "checkout user=$uid product=$pid qty=$qty status=$code"
+                sleep {{ .Values.trafficGenerator.sleepSeconds }}
+              done
+          resources:
+            {{- toYaml .Values.trafficGenerator.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+{{- end }}
