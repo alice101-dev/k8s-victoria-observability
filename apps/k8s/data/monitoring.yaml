@@ -149,3 +149,20 @@ spec:
           annotations:
             summary: WAL archiving to the backup store is failing on {{ $labels.pod }}
             description: Point-in-time recovery is not possible past the last archived WAL, and pg_wal grows until the disk is full. Check the backup credentials and bucket.
+        # Backup metrics come from the Barman Cloud plugin (barman_cloud_*) or the in-core exporter.
+        - alert: PostgresBackupTooOld
+          expr: time() - max({__name__=~"barman_cloud_cloudnative_pg_io_last_available_backup_timestamp|cnpg_collector_last_available_backup_timestamp", namespace="shop"}) > 26 * 3600
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: The last successful PostgreSQL base backup is {{ $value | humanizeDuration }} old
+            description: The daily ScheduledBackup shop-db-daily did not complete. Check "kubectl -n shop get backups" and the plugin-barman-cloud sidecar logs.
+        - alert: PostgresBackupFailed
+          expr: max({__name__=~"barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp|cnpg_collector_last_failed_backup_timestamp", namespace="shop"}) > max({__name__=~"barman_cloud_cloudnative_pg_io_last_available_backup_timestamp|cnpg_collector_last_available_backup_timestamp", namespace="shop"})
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: The most recent PostgreSQL backup attempt failed
+            description: A backup failed after the last successful one. Check "kubectl -n shop get backups" for the error.

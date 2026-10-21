@@ -98,7 +98,7 @@ Alerts shipped with the application (VMRule):
 - Data tier: `RedisDown`, `RedisNoSingleMaster`, `RedisReplicasMissing`, `RedisMemoryNearLimit`,
   `PostgresDown`, `PostgresStandbyMissing`, `PostgresReplicationLagHigh`, `PostgresTooManyConnections`,
   `PostgresDiskSpaceLow`/`Critical`, `PostgresXidAgeHigh`, `PostgresLongRunningTransaction`,
-  `PostgresWalArchivingFailing`.
+  `PostgresWalArchivingFailing`, `PostgresBackupTooOld`, `PostgresBackupFailed`.
 
 ## Releasing images (GitOps)
 

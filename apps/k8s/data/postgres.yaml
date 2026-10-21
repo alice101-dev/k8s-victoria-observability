@@ -19,6 +19,9 @@ spec:
   # Updates promote the standby first (seconds of write downtime) instead of restarting the primary
   # in place, which waits for the smart shutdown and then a failover (~3 minutes).
   primaryUpdateMethod: switchover
+  # Pooled application connections never close by themselves, so a smart shutdown always waits the
+  # full timeout (default 180s) before a fast shutdown. 15s bounds in-place primary restarts.
+  smartShutdownTimeout: 15
 
   bootstrap:
     initdb:
