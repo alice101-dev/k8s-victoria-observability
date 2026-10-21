@@ -77,6 +77,7 @@ spec:
 # SLIs per target (labels: job = service or journey name, slo = availability|latency, kind = service|journey):
 # error ratios per window for burn rates, 5m request/error rates for the traffic-weighted 30d SLI,
 # objectives as series. Burn rate = error ratio / (1 - objective); 1 spends the budget in exactly 30d.
+# Binary operators match on (job, slo, kind): with "on", only those labels are kept in the result.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMRule
 metadata:
@@ -134,7 +135,7 @@ spec:
         - record: slo:sli_error:ratio_rate30d
           expr: sum_over_time(slo:sli_errors:rate5m[30d]) / sum_over_time(slo:sli_requests:rate5m[30d])
         - record: slo:error_budget_remaining:ratio
-          expr: 1 - slo:sli_error:ratio_rate30d / on (job, slo) (1 - slo:objective:ratio)
+          expr: 1 - slo:sli_error:ratio_rate30d / on (job, slo, kind) (1 - slo:objective:ratio)
         # How much data the 30d window really holds (a staging cluster is recreated often).
         - record: slo:sli_window:seconds
           expr: count_over_time(slo:sli_requests:rate5m[30d]) * 30
@@ -145,13 +146,13 @@ spec:
         - alert: ShopSLOBurnRateCritical
           expr: |
             (
-                slo:sli_error:ratio_rate1h > on (job, slo) (14.4 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate1h > on (job, slo, kind) (14.4 * (1 - slo:objective:ratio))
               and
-                slo:sli_error:ratio_rate5m > on (job, slo) (14.4 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate5m > on (job, slo, kind) (14.4 * (1 - slo:objective:ratio))
             ) or (
-                slo:sli_error:ratio_rate6h > on (job, slo) (6 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate6h > on (job, slo, kind) (6 * (1 - slo:objective:ratio))
               and
-                slo:sli_error:ratio_rate30m > on (job, slo) (6 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate30m > on (job, slo, kind) (6 * (1 - slo:objective:ratio))
             )
           labels:
             severity: critical
@@ -162,13 +163,13 @@ spec:
         - alert: ShopSLOBurnRateWarning
           expr: |
             (
-                slo:sli_error:ratio_rate1d > on (job, slo) (3 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate1d > on (job, slo, kind) (3 * (1 - slo:objective:ratio))
               and
-                slo:sli_error:ratio_rate2h > on (job, slo) (3 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate2h > on (job, slo, kind) (3 * (1 - slo:objective:ratio))
             ) or (
-                slo:sli_error:ratio_rate3d > on (job, slo) (1 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate3d > on (job, slo, kind) (1 * (1 - slo:objective:ratio))
               and
-                slo:sli_error:ratio_rate6h > on (job, slo) (1 * (1 - slo:objective:ratio))
+                slo:sli_error:ratio_rate6h > on (job, slo, kind) (1 * (1 - slo:objective:ratio))
             )
           labels:
             severity: warning

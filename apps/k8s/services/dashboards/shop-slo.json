@@ -496,7 +496,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h{kind=\"journey\"} / on (job, slo) (1 - slo:objective:ratio))",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h{kind=\"journey\"} / on (job, slo, kind) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "D",
           "range": false,
@@ -508,7 +508,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h{kind=\"journey\"} / on (job, slo) (1 - slo:objective:ratio))",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h{kind=\"journey\"} / on (job, slo, kind) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "E",
           "range": false,
@@ -1123,7 +1123,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h{kind=\"service\"} / on (job, slo) (1 - slo:objective:ratio))",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h{kind=\"service\"} / on (job, slo, kind) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "D",
           "range": false,
@@ -1135,7 +1135,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h{kind=\"service\"} / on (job, slo) (1 - slo:objective:ratio))",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h{kind=\"service\"} / on (job, slo, kind) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "E",
           "range": false,
@@ -1243,7 +1243,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "slo:sli_error:ratio_rate1h / on (job, slo) (1 - slo:objective:ratio)",
+          "expr": "slo:sli_error:ratio_rate1h / on (job, slo, kind) (1 - slo:objective:ratio)",
           "legendFormat": "{{job}} · {{slo}}",
           "refId": "A",
           "range": true,
@@ -1325,7 +1325,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "slo:sli_error:ratio_rate6h / on (job, slo) (1 - slo:objective:ratio)",
+          "expr": "slo:sli_error:ratio_rate6h / on (job, slo, kind) (1 - slo:objective:ratio)",
           "legendFormat": "{{job}} · {{slo}}",
           "refId": "A",
           "range": true,

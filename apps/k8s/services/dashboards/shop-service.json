@@ -437,7 +437,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "max(slo:sli_error:ratio_rate1h{job=\"$service\"} / on (job, slo) (1 - slo:objective:ratio))",
+          "expr": "max(slo:sli_error:ratio_rate1h{job=\"$service\"} / on (job, slo, kind) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "A",
           "range": false,
