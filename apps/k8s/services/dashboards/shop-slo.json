@@ -310,7 +310,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "slo:objective:ratio",
+          "expr": "sum by (job, slo) (slo:objective:ratio)",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -322,7 +322,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "1 - slo:sli_error:ratio_rate30d",
+          "expr": "sum by (job, slo) (1 - slo:sli_error:ratio_rate30d)",
           "legendFormat": "",
           "refId": "B",
           "range": false,
@@ -334,7 +334,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "slo:error_budget_remaining:ratio",
+          "expr": "sum by (job, slo) (slo:error_budget_remaining:ratio)",
           "legendFormat": "",
           "refId": "C",
           "range": false,
@@ -346,7 +346,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "slo:sli_error:ratio_rate1h / on (job, slo) (1 - slo:objective:ratio)",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h / on (job, slo) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "D",
           "range": false,
@@ -358,7 +358,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "slo:sli_error:ratio_rate6h / on (job, slo) (1 - slo:objective:ratio)",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h / on (job, slo) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "E",
           "range": false,
@@ -371,7 +371,7 @@
         "x": 0,
         "y": 1,
         "w": 24,
-        "h": 14
+        "h": 15
       }
     },
     {
@@ -382,7 +382,7 @@
       "id": 3,
       "gridPos": {
         "x": 0,
-        "y": 15,
+        "y": 16,
         "w": 24,
         "h": 1
       }
@@ -464,7 +464,7 @@
       "id": 4,
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 17,
         "w": 12,
         "h": 9
       }
@@ -546,7 +546,7 @@
       "id": 5,
       "gridPos": {
         "x": 12,
-        "y": 16,
+        "y": 17,
         "w": 12,
         "h": 9
       }
@@ -559,7 +559,7 @@
       "id": 6,
       "gridPos": {
         "x": 0,
-        "y": 25,
+        "y": 26,
         "w": 24,
         "h": 1
       }
@@ -637,7 +637,7 @@
       "id": 7,
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 27,
         "w": 12,
         "h": 9
       }
@@ -697,7 +697,7 @@
       "id": 8,
       "gridPos": {
         "x": 12,
-        "y": 26,
+        "y": 27,
         "w": 12,
         "h": 9
       }
@@ -710,7 +710,7 @@
       "id": 9,
       "gridPos": {
         "x": 0,
-        "y": 35,
+        "y": 36,
         "w": 24,
         "h": 1
       }
@@ -814,7 +814,7 @@
       "id": 10,
       "gridPos": {
         "x": 0,
-        "y": 36,
+        "y": 37,
         "w": 24,
         "h": 6
       }
