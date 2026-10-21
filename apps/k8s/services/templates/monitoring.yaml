@@ -21,32 +21,12 @@ metadata:
   name: shop-services
 spec:
   groups:
-    # METRICS-based alerts (RED) — evaluated by vmalert against VictoriaMetrics.
+    # METRICS-based alerts — evaluated by vmalert against VictoriaMetrics.
+    # Error rate and latency are covered by the SLO burn-rate alerts (VMRule shop-slo).
     - name: shop-red
       rules:
         - record: job:http_server_requests:rate5m
           expr: sum by (job, code) (rate(http_server_requests_total{namespace="shop"}[5m]))
-        - alert: ShopHighErrorRate
-          expr: |
-            sum by (job) (rate(http_server_requests_total{namespace="shop", code=~"5.."}[5m]))
-              / sum by (job) (rate(http_server_requests_total{namespace="shop"}[5m]))
-              > {{ .Values.alerts.errorRateThreshold }}
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: {{`"{{ $labels.job }}: error rate 5xx {{ $value | humanizePercentage }}"`}}
-            description: Check error traces in Grafana Explore (VictoriaTraces, filter service.name) and ERROR logs in VictoriaLogs.
-        - alert: ShopHighLatencyP95
-          expr: |
-            histogram_quantile(0.95, sum by (job, le) (rate(http_server_request_duration_seconds_bucket{namespace="shop"}[5m])))
-              > {{ .Values.alerts.p95LatencyThresholdSeconds }}
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: {{`"{{ $labels.job }}: p95 latency {{ $value | humanizeDuration }}"`}}
-            description: p95 latency above threshold for 10 minutes — inspect the slowest spans in traces.
         - alert: ShopPaymentDeclineRateHigh
           expr: |
             sum(rate(payments_total{namespace="shop", status="declined"}[10m]))
@@ -72,9 +52,91 @@ spec:
             summary: {{`"{{ $labels.service }}: {{ $value }} ERROR logs in 5 minutes"`}}
             description: 'Query in Grafana Explore (VictoriaLogs): {kubernetes.pod_namespace="shop"} level:=ERROR'
 {{- end }}
+{{- if .Values.slo.enabled }}
+{{- $slo := .Values.slo }}
+{{- $services := keys .Values.services | sortAlpha }}
+---
+# SLIs as error ratios per window (labels: job, slo=availability|latency), objectives as series,
+# and burn-rate alerts. Burn rate = error ratio / (1 - objective); 1 spends the budget in exactly 30d.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: shop-slo
+spec:
+  groups:
+    - name: shop-slo-sli
+      interval: 30s
+      rules:
+        - record: slo:objective:ratio
+          expr: |
+            {{- range $i, $svc := $services }}
+            {{ if $i }}or {{ end }}label_set(vector({{ dig $svc "availability" $slo.availability $slo.overrides }}), "job", "{{ $svc }}", "slo", "availability")
+            or label_set(vector({{ dig $svc "latency" $slo.latency $slo.overrides }}), "job", "{{ $svc }}", "slo", "latency")
+            {{- end }}
+        {{- range $w := list "5m" "30m" "1h" "2h" "6h" "1d" "3d" }}
+        - record: slo:sli_error:ratio_rate{{ $w }}
+          expr: |
+            label_set(
+              (sum by (job) (rate(http_server_requests_total{namespace="shop", code=~"5.."}[{{ $w }}]))
+                or sum by (job) (rate(http_server_requests_total{namespace="shop"}[{{ $w }}])) * 0)
+              / sum by (job) (rate(http_server_requests_total{namespace="shop"}[{{ $w }}])),
+              "slo", "availability")
+            {{- range $svc := $services }}
+            or label_set(
+              1 - sum by (job) (rate(http_server_request_duration_seconds_bucket{namespace="shop", job="{{ $svc }}", le="{{ dig $svc "latencyThreshold" $slo.latencyThreshold $slo.overrides }}"}[{{ $w }}]))
+                / sum by (job) (rate(http_server_request_duration_seconds_count{namespace="shop", job="{{ $svc }}"}[{{ $w }}])),
+              "slo", "latency")
+            {{- end }}
+        {{- end }}
+    - name: shop-slo-budget
+      interval: 1m
+      rules:
+        - record: slo:sli_error:ratio_rate30d
+          expr: avg_over_time(slo:sli_error:ratio_rate5m[30d])
+        - record: slo:error_budget_remaining:ratio
+          expr: 1 - slo:sli_error:ratio_rate30d / on (job, slo) (1 - slo:objective:ratio)
+{{- if .Values.alerts.enabled }}
+    - name: shop-slo-alerts
+      rules:
+        # Page: 2% of the 30d budget spent in 1h, or 5% in 6h.
+        - alert: ShopSLOBurnRateCritical
+          expr: |
+            (
+                slo:sli_error:ratio_rate1h > on (job, slo) (14.4 * (1 - slo:objective:ratio))
+              and
+                slo:sli_error:ratio_rate5m > on (job, slo) (14.4 * (1 - slo:objective:ratio))
+            ) or (
+                slo:sli_error:ratio_rate6h > on (job, slo) (6 * (1 - slo:objective:ratio))
+              and
+                slo:sli_error:ratio_rate30m > on (job, slo) (6 * (1 - slo:objective:ratio))
+            )
+          labels:
+            severity: critical
+          annotations:
+            summary: {{`"{{ $labels.job }}: {{ $labels.slo }} SLO is burning its error budget fast"`}}
+            description: {{`"{{ $value | humanizePercentage }} of requests miss the {{ $labels.slo }} SLI. Open the Shop — Service dashboard for {{ $labels.job }}, then its error traces and WARN/ERROR logs."`}}
+        # Ticket: 10% of the 30d budget spent in 1d, or 10% in 3d.
+        - alert: ShopSLOBurnRateWarning
+          expr: |
+            (
+                slo:sli_error:ratio_rate1d > on (job, slo) (3 * (1 - slo:objective:ratio))
+              and
+                slo:sli_error:ratio_rate2h > on (job, slo) (3 * (1 - slo:objective:ratio))
+            ) or (
+                slo:sli_error:ratio_rate3d > on (job, slo) (1 * (1 - slo:objective:ratio))
+              and
+                slo:sli_error:ratio_rate6h > on (job, slo) (1 * (1 - slo:objective:ratio))
+            )
+          labels:
+            severity: warning
+          annotations:
+            summary: {{`"{{ $labels.job }}: {{ $labels.slo }} SLO error budget is being spent faster than planned"`}}
+            description: {{`"{{ $value | humanizePercentage }} of requests miss the {{ $labels.slo }} SLI over the long window."`}}
+{{- end }}
+{{- end }}
 {{- if .Values.dashboard.enabled }}
 ---
-# Dashboard loaded automatically by the Grafana sidecar (searchNamespace: ALL, label grafana_dashboard=1).
+# Dashboards loaded automatically by the Grafana sidecar (searchNamespace: ALL, label grafana_dashboard=1).
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -84,6 +146,8 @@ metadata:
   annotations:
     grafana_folder: {{ .Values.dashboard.folder | quote }}
 data:
-  shop-overview.json: |-
-    {{- .Files.Get "dashboards/shop-overview.json" | nindent 4 }}
+  {{- range $path, $_ := .Files.Glob "dashboards/*.json" }}
+  {{ base $path }}: |-
+    {{- $.Files.Get $path | nindent 4 }}
+  {{- end }}
 {{- end }}

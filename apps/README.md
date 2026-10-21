@@ -49,7 +49,7 @@ k8s/
 └── services/      # Helm chart — Argo CD app "shop-services" (wave 0)
     ├── values.yaml         # image tag, OpenTelemetry, resources, per-service env
     ├── templates/          # Deployment + Service + ServiceAccount + PDB per service, scrape, rules, traffic generator
-    └── dashboards/         # Grafana dashboard "Shop — Microservices Overview"
+    └── dashboards/         # Grafana dashboards: SLO Overview, Service, Logs, Microservices Overview
 ```
 
 - Each service requests `10m CPU / 32Mi` with a `128Mi` limit and runs 2 replicas spread across nodes
@@ -62,9 +62,22 @@ k8s/
 - `image.registry` is intentionally empty in Git. It contains the GCP project ID, so Terraform
   (`argocd-bootstrap`) injects it into the `shop-services` Application; Git only holds the image tag.
 
+SLOs per service (`slo` in `k8s/services/values.yaml`, 30-day window):
+
+| SLI | Good event | Objective |
+|---|---|---|
+| Availability | response is not 5xx (4xx are client or business outcomes) | 99.5% |
+| Latency | response faster than 500ms (api-gateway, order, payment) or 100ms (others) | 99% |
+
+Recording rules (`slo:sli_error:ratio_rate<window>`, `slo:objective:ratio`,
+`slo:error_budget_remaining:ratio`) feed the dashboards and the burn-rate alerts from the Google SRE
+workbook: `ShopSLOBurnRateCritical` (1h and 5m above 14.4×, or 6h and 30m above 6×) and
+`ShopSLOBurnRateWarning` (1d and 2h above 3×, or 3d and 6h above 1×).
+
 Alerts shipped with the application (VMRule):
 
-- Metrics: `ShopHighErrorRate` (>5% 5xx), `ShopHighLatencyP95` (>1s), `ShopPaymentDeclineRateHigh`.
+- SLO: `ShopSLOBurnRateCritical`, `ShopSLOBurnRateWarning` (labels `job`, `slo`).
+- Metrics: `ShopPaymentDeclineRateHigh`.
 - Logs (LogsQL, `type: vlogs`): `ShopErrorLogsSpike` — more than 20 ERROR logs per service in 5 minutes.
 - Data tier: `RedisDown`, `RedisMemoryNearLimit`, `PostgresDown`, `PostgresTooManyConnections`.
 

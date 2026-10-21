@@ -50,13 +50,23 @@
   },
   "links": [
     {
-      "title": "Explore traces (VictoriaTraces)",
+      "title": "Shop dashboards",
+      "type": "dashboards",
+      "tags": [
+        "shop"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "Explore traces",
       "type": "link",
       "url": "/explore?left={\"datasource\":\"VictoriaTraces\"}",
       "targetBlank": true
     },
     {
-      "title": "Explore logs (VictoriaLogs)",
+      "title": "Explore logs",
       "type": "link",
       "url": "/explore?left={\"datasource\":\"VictoriaLogs\"}",
       "targetBlank": true

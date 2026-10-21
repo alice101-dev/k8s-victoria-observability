@@ -84,11 +84,23 @@ trafficGenerator:
     requests: { cpu: 5m, memory: 16Mi }
     limits: { memory: 32Mi }
 
-# Per-service RED alerts (VMRule) & Grafana dashboard (ConfigMap, loaded by the Grafana sidecar).
+# Alerts (VMRule) & Grafana dashboards (ConfigMap, loaded by the Grafana sidecar).
 alerts:
   enabled: true
-  errorRateThreshold: 0.05 # > 5% 5xx
-  p95LatencyThresholdSeconds: 1
 dashboard:
   enabled: true
   folder: Shop
+
+# Per-service SLOs over a 30-day window, with multi-window multi-burn-rate alerts (Google SRE workbook).
+#   availability: share of requests that are not 5xx (4xx are client or business outcomes)
+#   latency:      share of requests faster than latencyThreshold (must be a histogram bucket: 0.005 … 5)
+slo:
+  enabled: true
+  availability: 0.995
+  latency: 0.99
+  latencyThreshold: "0.1"
+  overrides:
+    # Checkout path: the payment provider adds up to 400ms by design.
+    api-gateway: { latencyThreshold: "0.5" }
+    order-service: { latencyThreshold: "0.5" }
+    payment-service: { latencyThreshold: "0.5" }

@@ -125,10 +125,14 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
 - **Trace → logs:** "Logs for this span" runs `trace_id:="<id>"` against VictoriaLogs.
 - **Log → trace:** the `trace_id` field of every application log links to the trace (derived field).
 - **Trace → metrics:** RED metrics of the span's service (`service.name` ↔ `job`).
-- **Dashboard "Shop — Microservices Overview":** RED per service and route, service-to-service calls,
-  business metrics, error/warning log volume and the latest error logs.
-- **Alerting:** metric rules (error rate, p95 latency, payment declines) and **log-based** rules
-  (LogsQL) evaluated by vmalert.
+- **Dashboards (folder "Shop"), from symptom to cause:**
+  - *SLO Overview:* availability and latency SLOs per service with error budget and burn rates.
+  - *Service:* one service end to end (SLO, RED by route, latency heatmap, dependencies, saturation,
+    WARN/ERROR logs, slowest and failed traces).
+  - *Logs:* log volume, top messages and top pods, filterable by service, level and any field.
+  - *Microservices Overview:* RED for all services side by side, plus business metrics.
+- **Alerting:** SLO burn-rate alerts (multi-window, multi-burn-rate), a payment decline rule and
+  **log-based** rules (LogsQL), all evaluated by vmalert.
 
 ## Getting started
 
