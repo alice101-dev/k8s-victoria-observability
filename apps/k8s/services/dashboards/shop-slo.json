@@ -91,7 +91,7 @@
     },
     {
       "type": "stat",
-      "title": "Checkout success — last 5m",
+      "title": "Checkout · 5m",
       "description": "Share of checkout requests answered without a 5xx at the edge, including failures of every service behind it.",
       "datasource": {
         "type": "prometheus",
@@ -157,7 +157,7 @@
     },
     {
       "type": "stat",
-      "title": "Browse success — last 5m",
+      "title": "Browse · 5m",
       "description": "Share of browse requests answered without a 5xx at the edge, including failures of every service behind it.",
       "datasource": {
         "type": "prometheus",
@@ -550,7 +550,8 @@
             "excludeByName": {
               "Time": true,
               "cluster": true,
-              "__name__": true
+              "__name__": true,
+              "Value #F": true
             },
             "indexByName": {
               "job": 0,
@@ -1297,7 +1298,8 @@
             "excludeByName": {
               "Time": true,
               "cluster": true,
-              "__name__": true
+              "__name__": true,
+              "Value #F": false
             },
             "indexByName": {
               "job": 0,
