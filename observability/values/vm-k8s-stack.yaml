@@ -153,7 +153,7 @@ vmcluster:
         topologySpreadConstraints:
           - maxSkew: 1
             topologyKey: kubernetes.io/hostname
-            whenUnsatisfiable: ScheduleAnyway
+            whenUnsatisfiable: DoNotSchedule
             labelSelector:
               matchLabels:
                 app.kubernetes.io/name: vmclusterlb-vmauth-balancer
@@ -186,10 +186,12 @@ vmcluster:
         storage.maxDailySeries: "1500000"
       podDisruptionBudget:
         maxUnavailable: 1
+      # Hard spread (DoNotSchedule) on every 2-replica component: a soft spread let both replicas
+      # land on one Spot node, so a single preemption took the whole tier down.
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: vmstorage
@@ -216,7 +218,7 @@ vmcluster:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: vmselect
@@ -232,7 +234,7 @@ vmcluster:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: vminsert
@@ -280,7 +282,7 @@ vmagent:
     topologySpreadConstraints:
       - maxSkew: 1
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         labelSelector:
           matchLabels:
             app.kubernetes.io/name: vmagent
@@ -298,6 +300,14 @@ vmalert:
       cluster: staging-gke
     podDisruptionBudget:
       maxUnavailable: 1
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: vmalert
+            app.kubernetes.io/instance: vmks
     resources:
       requests: { cpu: 25m, memory: 64Mi }
       limits: { memory: 256Mi }
@@ -321,6 +331,14 @@ alertmanager:
       whenScaled: Delete
     podDisruptionBudget:
       maxUnavailable: 1
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: vmalertmanager
+            app.kubernetes.io/instance: vmks
     resources:
       requests: { cpu: 10m, memory: 32Mi }
       limits: { memory: 128Mi }
@@ -379,7 +397,7 @@ vlcluster:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: vlstorage
@@ -394,6 +412,14 @@ vlcluster:
         search.allowPartialResponse: "true"
       podDisruptionBudget:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vlselect
+              app.kubernetes.io/instance: vmks
       resources:
         requests: { cpu: 25m, memory: 64Mi }
         limits: { memory: 512Mi }
@@ -402,6 +428,14 @@ vlcluster:
       replicaCount: 2
       podDisruptionBudget:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vlinsert
+              app.kubernetes.io/instance: vmks
       resources:
         requests: { cpu: 25m, memory: 64Mi }
         limits: { memory: 256Mi }
@@ -452,7 +486,7 @@ vtcluster:
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: vtstorage
@@ -467,6 +501,14 @@ vtcluster:
         search.allowPartialResponse: "true"
       podDisruptionBudget:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vtselect
+              app.kubernetes.io/instance: vmks
       resources:
         requests: { cpu: 25m, memory: 64Mi }
         limits: { memory: 512Mi }
@@ -475,6 +517,14 @@ vtcluster:
       replicaCount: 2
       podDisruptionBudget:
         maxUnavailable: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: vtinsert
+              app.kubernetes.io/instance: vmks
       resources:
         requests: { cpu: 25m, memory: 64Mi }
         limits: { memory: 256Mi }

@@ -57,11 +57,11 @@ spec:
         runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
-      # Spread replicas across nodes — one preempted spot node does not take the service down.
+      # Replicas must run on different nodes — one preempted Spot node does not take the service down.
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
+          whenUnsatisfiable: DoNotSchedule
           labelSelector:
             matchLabels:
               {{- include "shop.selectorLabels" $name | nindent 14 }}

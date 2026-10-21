@@ -110,7 +110,7 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
 | Area | Choice | Why |
 |---|---|---|
 | Deployment model | `victoria-metrics-k8s-stack` Helm chart rendering **VictoriaMetrics Operator** CRs; operator installed as a separate app | Official production pattern; the operator handles ordered storage rollouts, config reloads and self-service scrape/rule CRDs |
-| Topology | **Cluster mode** for VMCluster, VLCluster and VTCluster (insert/select/storage ×2, PDBs, topology spread) | Each tier scales out independently; durability comes from GCE persistent disks (no application-level replication); vmauth load-balances vminsert/vmselect |
+| Topology | **Cluster mode** for VMCluster, VLCluster and VTCluster (insert/select/storage ×2 on different nodes, PDBs) | Each tier scales out independently; durability comes from GCE persistent disks (no application-level replication); vmauth load-balances vminsert/vmselect |
 | Log collection | VLAgent `k8sCollector` DaemonSet | Native VictoriaLogs agent, automatic JSON parsing, checkpoints |
 | Trace ingestion | OpenTelemetry SDK → `vtinsert` (OTLP/HTTP) | No extra hop; the SDK batches and retries |
 | Grafana datasources | Prometheus + `victoriametrics-metrics-datasource`, `victoriametrics-logs-datasource`, built-in **Jaeger** for traces | Jaeger API is the documented VictoriaTraces integration |
