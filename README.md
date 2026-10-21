@@ -15,18 +15,95 @@ Details: [`observability/`](observability/README.md) · [`apps/`](apps/README.md
 
 ## Architecture
 
-```text
-                       ┌─────────────────────── GKE (zonal, private nodes, Spot node pool) ───────────────────────┐
-Git ──► Argo CD ──►    │  ns: shop                                  ns: monitoring                                │
-        app-of-apps    │  api-gateway ─► order ─► user / product /  ┌─ VLAgent (DaemonSet) ─► vlinsert ─► vlstorage  │
-                       │                 payment / notification     │                                    ▲ vlselect   │
-                       │  Redis 8 · PostgreSQL 18 (CloudNativePG)   ├─ VMAgent ×2 ─► vmauth ─► vminsert ─► vmstorage  │
-                       │      │ OTLP/HTTP spans                     │                                    ▲ vmselect   │
-                       │      └────────────────────────────────────►├─ vtinsert ─► vtstorage ◄─ vtselect (Jaeger API)  │
-                       │                                            ├─ VMAlert ×2 (MetricsQL + LogsQL) ─► Alertmanager │
-                       │                                            └─ Grafana (VM, VictoriaLogs, Jaeger datasources)  │
-                       └───────────────────────────────────────────────────────────────────────────────────────────┘
+### Delivery: Terraform + GitOps
+
+Terraform builds the platform once; after that, Git is the only way to change what runs in the
+cluster.
+
+```mermaid
+flowchart LR
+  eng(["Engineer"])
+
+  subgraph ws["Workstation"]
+    tf["Terraform<br/>local state per workspace"]
+    rel["make -C apps release<br/>docker buildx"]
+  end
+
+  repo["GitHub repository<br/>Helm values · manifests · image tag"]
+
+  subgraph gcp["GCP · asia-southeast2 (Jakarta)"]
+    ar[("Artifact Registry")]
+    subgraph gke["GKE Standard · zonal · private nodes · Spot node pool"]
+      argo["Argo CD<br/>root apps: observability, apps"]
+      mon["ns monitoring<br/>VictoriaMetrics · VictoriaLogs · VictoriaTraces<br/>Grafana · MCP servers"]
+      shop["ns shop<br/>6 Go services · Redis · PostgreSQL 18"]
+    end
+  end
+
+  eng --> tf & rel
+  eng -- "git push" --> repo
+  tf -- "VPC · Cloud NAT · firewall · GKE · registry" --> gke
+  tf -- "Argo CD + root Applications" --> argo
+  rel -- "push images" --> ar
+  repo -- "desired state" --> argo
+  argo -- "sync waves" --> mon & shop
+  ar -. "pull" .-> shop
 ```
+
+### Runtime: telemetry pipeline
+
+Metrics, logs and traces each run in cluster mode (insert / select / storage) with two replicas
+per tier.
+
+```mermaid
+flowchart LR
+  subgraph shop["ns shop"]
+    direction TB
+    tg["traffic-generator"] --> gw["api-gateway"]
+    gw --> svcs["order · user · product<br/>payment · notification"]
+    svcs --> data[("PostgreSQL 18 · Redis 8")]
+  end
+
+  subgraph metrics["Metrics · VMCluster behind vmauth"]
+    vmagent["VMAgent ×2<br/>persistent queue"] --> vminsert["vminsert"] --> vmstorage[("vmstorage")] --> vmselect["vmselect<br/>MetricsQL"]
+  end
+
+  subgraph logs["Logs · VLCluster"]
+    vlagent["VLAgent<br/>DaemonSet"] --> vlinsert["vlinsert"] --> vlstorage[("vlstorage")] --> vlselect["vlselect<br/>LogsQL"]
+  end
+
+  subgraph traces["Traces · VTCluster"]
+    vtinsert["vtinsert"] --> vtstorage[("vtstorage")] --> vtselect["vtselect<br/>Jaeger API"]
+  end
+
+  subgraph use["Consumers"]
+    vmalert["VMAlert ×2"] --> am["Alertmanager ×2"]
+    grafana["Grafana 13"]
+    mcp["MCP servers"]
+  end
+
+  shop -. "scrape /metrics" .-> vmagent
+  shop -. "stdout JSON" .-> vlagent
+  shop -. "OTLP/HTTP" .-> vtinsert
+
+  vmselect --> vmalert & grafana & mcp
+  vlselect --> vmalert & grafana & mcp
+  vtselect --> grafana & mcp
+  grafana --> mcp
+
+  grafana -- "port-forward" --> eng(["Engineer"])
+  mcp -- "port-forward" --> ai(["AI assistant"])
+```
+
+| Signal | Collection | Storage | Query | Retention |
+|---|---|---|---|---|
+| Metrics | VMAgent scrapes every target declared with VMServiceScrape / VMPodScrape and remote-writes through vmauth | VMCluster | MetricsQL (PromQL-compatible) | 14d |
+| Logs | VLAgent tails container stdout on every node and parses JSON fields, including `trace_id` | VLCluster | LogsQL | 7d, 8GiB per node |
+| Traces | OpenTelemetry SDK sends spans over OTLP/HTTP straight to vtinsert | VTCluster | Jaeger API | 7d, 8GiB per node |
+| Alerts | VMAlert evaluates MetricsQL and LogsQL rules; Alertmanager runs as a gossip cluster | – | – | – |
+
+Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached with
+`kubectl port-forward` through the IAM-gated GKE DNS endpoint.
 
 ## Stack
 
