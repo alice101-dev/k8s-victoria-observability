@@ -664,6 +664,9 @@ grafana:
 # =============================================================================
 kube-state-metrics:
   enabled: true
+  # Node zone label on kube_node_labels (used by the CloudNativePG dashboard zone panel).
+  metricLabelsAllowlist:
+    - nodes=[topology.kubernetes.io/zone]
   resources:
     requests: { cpu: 10m, memory: 48Mi }
     limits: { memory: 192Mi }

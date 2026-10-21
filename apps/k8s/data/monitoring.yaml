@@ -22,6 +22,21 @@ spec:
   podMetricsEndpoints:
     - port: metrics
 ---
+# CloudNativePG operator (controller-runtime metrics): reconcile errors and webhook traffic, used by the
+# Operator row and the "Operator Namespace" variable of the CloudNativePG dashboard.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: cnpg-operator
+spec:
+  namespaceSelector:
+    matchNames: [cnpg-system]
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudnative-pg
+  podMetricsEndpoints:
+    - port: metrics
+---
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMRule
 metadata:
@@ -94,3 +109,43 @@ spec:
           annotations:
             summary: PostgreSQL connections > 80% of max_connections
             description: Check service pool size (DB_MAX_CONNS) or add PgBouncer (CNPG Pooler).
+        # Thresholds follow the CloudNativePG recommended alerts.
+        - alert: PostgresDiskSpaceLow
+          expr: max by (persistentvolumeclaim) (1 - kubelet_volume_stats_available_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"} / kubelet_volume_stats_capacity_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"}) > 0.8
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: PostgreSQL volume {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full
+            description: PostgreSQL stops accepting writes when the disk is full. Grow spec.storage.size (the operator resizes the PVCs) or clean up data.
+        - alert: PostgresDiskSpaceCritical
+          expr: max by (persistentvolumeclaim) (1 - kubelet_volume_stats_available_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"} / kubelet_volume_stats_capacity_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"}) > 0.9
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: PostgreSQL volume {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full
+            description: Writes will fail soon. Grow spec.storage.size now.
+        - alert: PostgresXidAgeHigh
+          expr: max by (datname) (cnpg_pg_database_xid_age{namespace="shop"}) > 300000000
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: The oldest unfrozen transaction ID in {{ $labels.datname }} is {{ $value }} transactions old
+            description: Autovacuum is not keeping up; at ~2 billion PostgreSQL stops writes to prevent transaction ID wraparound. Check long transactions and autovacuum.
+        - alert: PostgresLongRunningTransaction
+          expr: max by (pod) (cnpg_backends_max_tx_duration_seconds{namespace="shop"}) > 300
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: A transaction on {{ $labels.pod }} has been open for {{ $value | humanizeDuration }}
+            description: Long transactions hold locks and block vacuum (table bloat, XID age). Find it with pg_stat_activity and fix or terminate it.
+        - alert: PostgresWalArchivingFailing
+          expr: increase(cnpg_pg_stat_archiver_failed_count{namespace="shop"}[10m]) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: WAL archiving to the backup store is failing on {{ $labels.pod }}
+            description: Point-in-time recovery is not possible past the last archived WAL, and pg_wal grows until the disk is full. Check the backup credentials and bucket.

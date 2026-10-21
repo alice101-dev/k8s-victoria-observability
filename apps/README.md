@@ -45,7 +45,7 @@ k8s/
 │   ├── postgres.yaml       # CloudNativePG Cluster "shop-db", PostgreSQL 18.6, primary + sync standby, 10Gi each
 │   ├── redis.yaml          # Redis 8 + Sentinel (3 pods, AOF) + redis_exporter + password ExternalSecret
 │   ├── networkpolicy.yaml  # only shop pods (+ operator, + metrics scraper) can reach PostgreSQL/Redis
-│   └── monitoring.yaml     # VMServiceScrape (Redis), VMPodScrape (CloudNativePG), data-tier VMRule
+│   └── monitoring.yaml     # VMServiceScrape (Redis), VMPodScrape (CloudNativePG instances + operator), data-tier VMRule
 └── services/      # Helm chart — Argo CD app "shop-services" (wave 0)
     ├── values.yaml         # image tag, OpenTelemetry, resources, per-service env
     ├── templates/          # Deployment + Service + ServiceAccount + PDB per service, scrape, rules, traffic generator
@@ -91,7 +91,9 @@ Alerts shipped with the application (VMRule):
 - Metrics: `ShopServiceDown` (a deployment with no available replicas), `ShopPaymentDeclineRateHigh`.
 - Logs (LogsQL, `type: vlogs`): `ShopErrorLogsSpike` — more than 20 ERROR logs per service in 5 minutes.
 - Data tier: `RedisDown`, `RedisNoSingleMaster`, `RedisReplicasMissing`, `RedisMemoryNearLimit`,
-  `PostgresDown`, `PostgresStandbyMissing`, `PostgresReplicationLagHigh`, `PostgresTooManyConnections`.
+  `PostgresDown`, `PostgresStandbyMissing`, `PostgresReplicationLagHigh`, `PostgresTooManyConnections`,
+  `PostgresDiskSpaceLow`/`Critical`, `PostgresXidAgeHigh`, `PostgresLongRunningTransaction`,
+  `PostgresWalArchivingFailing`.
 
 ## Releasing images (GitOps)
 

@@ -12,8 +12,8 @@ resources:
   requests: { cpu: 25m, memory: 64Mi }
   limits: { memory: 256Mi }
 
-# PodMonitor is a prometheus-operator CRD (not used here). PostgreSQL instances are scraped via
-# VMPodScrape in apps/k8s/data/monitoring.yaml; the dashboard comes from the k8s-stack sync job.
+# PodMonitor is a prometheus-operator CRD (not used here). PostgreSQL instances and this operator are
+# scraped via VMPodScrape in apps/k8s/data/monitoring.yaml; the dashboard comes from the k8s-stack sync job.
 monitoring:
   podMonitorEnabled: false
   grafanaDashboard:
