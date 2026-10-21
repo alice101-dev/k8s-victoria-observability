@@ -51,6 +51,11 @@ variable "image_repository" {
   type        = string
 }
 
+variable "backup_bucket" {
+  description = "PostgreSQL backup bucket key (without <project>-<env>- prefix), as in the cloud-storage workspace"
+  type        = string
+}
+
 variable "gitops_target_revision" {
   description = "Branch or tag synced by Argo CD"
   type        = string

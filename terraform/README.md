@@ -1,4 +1,4 @@
-# terraform — VPC, Cloud NAT, firewall, GKE, Artifact Registry, Argo CD bootstrap
+# terraform — VPC, Cloud NAT, firewall, GKE, Artifact Registry, Cloud Storage, Argo CD bootstrap
 
 Small reusable **modules** in `modules/` and one **workspace per service** in `environments/staging/`,
 each with its own state to keep the blast radius small. Workspaces reference each other **by name**
@@ -10,7 +10,7 @@ terraform/
 ├── Makefile                    # init / validate / plan / apply / apply-all / teardown
 ├── scripts/teardown.sh         # ordered workload deletion (PVCs/disks included), then destroy
 ├── modules/
-│   ├── services/  vpc/  cloud-nat/  firewall/  artifact-registry/
+│   ├── services/  vpc/  cloud-nat/  firewall/  artifact-registry/  cloud-storage/
 │   ├── kubernetes-engine/      # GKE Standard, private nodes, Dataplane V2, Workload Identity, Spot-only pools
 │   └── argocd-bootstrap/       # helm_release argo-cd + argocd-apps (AppProjects + root applications)
 └── environments/staging/
@@ -20,7 +20,8 @@ terraform/
     ├── firewall/               # 4. SSH through IAP only
     ├── kubernetes-engine/      # 5. staging-observability (zonal) + Spot e2-standard-2 pool (2–4 nodes)
     ├── artifact-registry/      # 6. staging-shop (Docker, immutable tags, cleanup policies)
-    └── argocd-bootstrap/       # 7. Argo CD + root applications → everything else is GitOps
+    ├── cloud-storage/          # 7. <project>-staging-pg-backup (PostgreSQL backups, Workload Identity access)
+    └── argocd-bootstrap/       # 8. Argo CD + root applications → everything else is GitOps
 ```
 
 Providers: `hashicorp/google ~> 7.35.0`, `hashicorp/helm ~> 3.1.0`.
@@ -40,6 +41,7 @@ The `services` workspace (applied first) enables every Google API the stack need
 | `iam.googleapis.com`, `iamcredentials.googleapis.com` | Node service account, Workload Identity |
 | `logging.googleapis.com`, `monitoring.googleapis.com` | GKE system component logs/metrics |
 | `cloudresourcemanager.googleapis.com`, `serviceusage.googleapis.com` | Terraform project and API management |
+| `storage.googleapis.com` | PostgreSQL backup bucket |
 
 `disable_on_destroy = false`: destroying the workspace never turns APIs off.
 
@@ -54,7 +56,11 @@ The `services` workspace (applied first) enables every Google API the stack need
 - Cloud Logging and Cloud Monitoring receive **system components only**, and Managed Prometheus is
   disabled — workload telemetry goes to the Victoria stack.
 - **No project ID in the repository**: `project_id` comes from `TF_VAR_project_id`, which the Makefile
-  reads from the git-ignored `../.env`.
+  reads from the git-ignored `../.env`. Names that contain it (image registry, backup bucket) are built
+  at apply time and injected into the root Applications by `argocd-bootstrap`.
+- **Workload Identity without Google service accounts**: the backup bucket grants its roles directly to
+  the Kubernetes ServiceAccount `shop/shop-db` (`principal://…/subject/ns/shop/sa/shop-db`), so there is
+  no key and no `iam.gke.io/gcp-service-account` annotation.
 
 ## Prerequisites
 

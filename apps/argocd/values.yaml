@@ -4,6 +4,10 @@ targetRevision: main
 project: shop
 # Image registry path (contains the project ID) — injected by the root Application from Terraform, not in Git.
 imageRegistry: ""
+# PostgreSQL backup bucket (contains the project ID) — injected the same way (cloud-storage workspace).
+backupBucket: ""
 
 charts:
+  certManager: v1.21.2
   cloudnativePg: 0.29.1
+  pluginBarmanCloud: 0.8.1

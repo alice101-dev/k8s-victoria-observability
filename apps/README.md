@@ -57,6 +57,11 @@ k8s/
 - PostgreSQL runs a primary and a standby on different nodes with quorum synchronous replication
   (`dataDurability: preferred`); CloudNativePG fails over automatically and applications keep using
   the `shop-db-rw` service.
+- Backups use the CloudNativePG **Barman Cloud plugin** (`k8s/data/backup.yaml`): daily base backups at
+  02:00 UTC plus continuous WAL archiving to `gs://<project>-staging-pg-backup`, kept 7 days
+  (point-in-time recovery). The bucket name is injected by Argo CD from Terraform, and access goes
+  through Workload Identity for the `shop-db` ServiceAccount. The plugin needs cert-manager; both run
+  as Argo CD apps (waves -4 and -2).
 - Redis runs 3 pods (one per node), each with redis + Sentinel. Sentinel promotes a replica about 5s
   after the master is lost, and services discover the master through `redis-sentinel:26379`
   (go-redis `FailoverClient`). A master that is shut down hands over to a replica first (preStop).

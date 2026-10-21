@@ -1,0 +1,28 @@
+# Wave -2: Barman Cloud plugin for CloudNativePG (CNPG-I) — base backups and WAL archiving to
+# object storage (CRD ObjectStore). Replaces the in-tree barmanObjectStore, deprecated since 1.26.
+# Must run in the operator namespace; needs cert-manager (wave -4) and the operator (wave -3).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: plugin-barman-cloud
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project }}
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: plugin-barman-cloud
+      targetRevision: {{ .Values.charts.pluginBarmanCloud }}
+      helm:
+        valueFiles:
+          - $values/apps/values/plugin-barman-cloud.yaml
+    - repoURL: {{ include "app.repoURL" . }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  {{- include "app.syncPolicy" . | nindent 2 }}

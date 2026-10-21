@@ -15,6 +15,17 @@ spec:
     repoURL: {{ include "app.repoURL" . }}
     targetRevision: {{ .Values.targetRevision }}
     path: apps/k8s/data
+    # The backup bucket name contains the project ID → from Terraform (root app), not in Git.
+    kustomize:
+      patches:
+        - target:
+            group: barmancloud.cnpg.io
+            kind: ObjectStore
+            name: shop-backup
+          patch: |-
+            - op: replace
+              path: /spec/configuration/destinationPath
+              value: gs://{{ required "backupBucket is required (injected by the root Application from Terraform)" .Values.backupBucket }}
   destination:
     server: https://kubernetes.default.svc
     namespace: shop

@@ -53,6 +53,13 @@ spec:
     storageClass: standard-rwo
     size: 10Gi
 
+  # WAL archiving and base backups through the Barman Cloud plugin (ObjectStore in backup.yaml).
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: shop-backup
+
   resources:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 512Mi }

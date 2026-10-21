@@ -17,9 +17,9 @@ TFVARS_GKE="$ROOT/environments/$ENV/kubernetes-engine/$ENV.tfvars"
 
 # Child Applications in reverse sync-wave order: workloads first, operators and CRDs last
 # (operators must still run to process their custom resource finalizers).
-CHILD_APPS=(shop-services shop-data cloudnative-pg mcp-grafana mcp-victoriatraces mcp-victorialogs mcp-victoriametrics vm-stack observability-config vm-operator external-secrets)
+CHILD_APPS=(shop-services shop-data plugin-barman-cloud cloudnative-pg cert-manager mcp-grafana mcp-victoriatraces mcp-victorialogs mcp-victoriametrics vm-stack observability-config vm-operator external-secrets)
 ROOT_APPS=(apps observability)
-DESTROY_ORDER=(argocd-bootstrap artifact-registry kubernetes-engine firewall cloud-nat vpc)
+DESTROY_ORDER=(argocd-bootstrap cloud-storage artifact-registry kubernetes-engine firewall cloud-nat vpc)
 
 tfvar() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$TFVARS_GKE"; }
 

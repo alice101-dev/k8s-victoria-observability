@@ -16,6 +16,7 @@ enabled_apis = [
   "logging.googleapis.com",              # GKE system component logs
   "monitoring.googleapis.com",           # GKE system component metrics
   "serviceusage.googleapis.com",         # Used by Terraform to manage APIs
+  "storage.googleapis.com",              # PostgreSQL backups (cloud-storage workspace)
 ]
 
 # false: destroying this workspace never disables APIs.

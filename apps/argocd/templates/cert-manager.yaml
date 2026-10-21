@@ -1,0 +1,37 @@
+# Wave -4: cert-manager — issues the mTLS certificates between the CloudNativePG operator and
+# the Barman Cloud backup plugin.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project }}
+  sources:
+    - repoURL: https://charts.jetstack.io
+      chart: cert-manager
+      targetRevision: {{ .Values.charts.certManager }}
+      helm:
+        valueFiles:
+          - $values/apps/values/cert-manager.yaml
+    - repoURL: {{ include "app.repoURL" . }}
+      targetRevision: {{ .Values.targetRevision }}
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  # cainjector writes the webhook caBundle at runtime → not drift.
+  ignoreDifferences:
+    - group: admissionregistration.k8s.io
+      kind: MutatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+    - group: admissionregistration.k8s.io
+      kind: ValidatingWebhookConfiguration
+      jqPathExpressions:
+        - .webhooks[]?.clientConfig.caBundle
+  {{- include "app.syncPolicy" . | nindent 2 }}

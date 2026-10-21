@@ -22,6 +22,10 @@ gitops_target_revision = "main"
 # apply time and injected into the root Application, so the project ID never lands in Git.
 image_repository = "shop" # same key as in artifact-registry/staging.tfvars
 
+# --- PostgreSQL backups ---
+# Bucket "<project>-<env>-<key>" (cloud-storage workspace), injected like the image registry.
+backup_bucket = "pg-backup" # same key as in cloud-storage/staging.tfvars
+
 # --- AppProjects: restrict each domain to its namespaces and chart sources ---
 app_projects = {
   observability = {
@@ -36,9 +40,11 @@ app_projects = {
   }
   shop = {
     description = "Shop application: 6 Go microservices, Redis, PostgreSQL 18 (CloudNativePG)"
-    namespaces  = ["shop", "cnpg-system"]
+    # cert-manager: required by the CloudNativePG Barman Cloud backup plugin.
+    namespaces = ["shop", "cnpg-system", "cert-manager"]
     source_repos = [
       "https://cloudnative-pg.github.io/charts",
+      "https://charts.jetstack.io",
     ]
   }
 }

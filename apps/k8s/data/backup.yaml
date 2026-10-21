@@ -1,0 +1,40 @@
+# PostgreSQL backups with the Barman Cloud plugin: daily base backups and continuous WAL archiving
+# to Cloud Storage → point-in-time recovery within the retention window.
+# Access through GKE Workload Identity: the instance pods' ServiceAccount (shop-db) is granted the
+# bucket roles in Terraform (cloud-storage workspace); no keys, no annotations.
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: shop-backup
+spec:
+  configuration:
+    # Replaced by Argo CD with gs://<project>-<env>-pg-backup (the name contains the project ID).
+    destinationPath: gs://BUCKET-INJECTED-BY-ARGOCD
+    googleCredentials:
+      gkeEnvironment: true
+    wal:
+      compression: zstd
+    data:
+      compression: gzip
+  # Oldest point in time that can be restored; Barman deletes older backups and WAL.
+  retentionPolicy: 7d
+  # Sidecar injected into every PostgreSQL pod (WAL upload, backups, retention).
+  instanceSidecarConfiguration:
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { memory: 512Mi }
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: shop-db-daily
+spec:
+  cluster:
+    name: shop-db
+  # Six fields (seconds first): every day at 02:00 UTC. immediate: a first backup right away.
+  schedule: "0 0 2 * * *"
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

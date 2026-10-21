@@ -5,6 +5,8 @@
 locals {
   # Image host path contains the project ID, so it is built here instead of in Git.
   image_registry = "${var.region}-docker.pkg.dev/${var.project_id}/${var.env}-${var.image_repository}"
+  # Same naming rule as the cloud-storage workspace (bucket names contain the project ID).
+  backup_bucket = "${var.project_id}-${var.env}-${var.backup_bucket}"
 }
 
 module "argocd" {
@@ -24,5 +26,6 @@ module "argocd" {
   # Passed to every root app-of-apps chart (ignored where unused).
   root_app_values = {
     imageRegistry = local.image_registry
+    backupBucket  = local.backup_bucket
   }
 }
