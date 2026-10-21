@@ -6,7 +6,7 @@ image:
   # injected by Argo CD from Terraform (argocd-bootstrap → root app "apps" → Application shop-services).
   registry: ""
   # Bumped by `make -C apps release TAG=...`, then commit → Argo CD syncs automatically.
-  tag: "5225d5e8"
+  tag: "c272bdef"
   pullPolicy: IfNotPresent
 
 environment: staging
@@ -69,7 +69,9 @@ postgres:
   secretName: shop-db-app
   uriKey: uri
 redis:
-  addr: redis:6379
+  # Sentinel endpoints and master name (apps/k8s/data/redis.yaml); clients follow failovers.
+  sentinelAddrs: redis-sentinel:26379
+  masterName: shop
   secretName: redis-auth
   passwordKey: password
 

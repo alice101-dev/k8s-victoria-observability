@@ -38,6 +38,22 @@ spec:
           annotations:
             summary: Shop Redis unreachable from exporter
             description: redis_exporter in {{ $labels.pod }} reported redis_up=0 for 2 minutes.
+        - alert: RedisNoSingleMaster
+          expr: count(redis_instance_info{namespace="shop", role="master"}) != 1 or absent(redis_instance_info{namespace="shop", role="master"})
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: Redis does not have exactly one master
+            description: No master means writes fail, two masters mean split brain. Check Sentinel with "sentinel masters" on port 26379.
+        - alert: RedisReplicasMissing
+          expr: max(redis_connected_slaves{namespace="shop"}) < 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: Redis master has {{ $value }} of 2 replicas connected
+            description: Fewer replicas means a failover may lose recent writes or have no candidate at all.
         - alert: RedisMemoryNearLimit
           expr: redis_memory_used_bytes{namespace="shop"} / redis_memory_max_bytes{namespace="shop"} > 0.9 and redis_memory_max_bytes{namespace="shop"} > 0
           for: 10m
@@ -54,6 +70,22 @@ spec:
           annotations:
             summary: PostgreSQL {{ $labels.pod }} down
             description: CloudNativePG exporter reported the instance not queryable for 2 minutes.
+        - alert: PostgresStandbyMissing
+          expr: max(cnpg_pg_replication_streaming_replicas{namespace="shop"}) < 1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: PostgreSQL primary has no streaming standby
+            description: Automatic failover is not possible and commits are no longer synchronous (dataDurability preferred).
+        - alert: PostgresReplicationLagHigh
+          expr: max by (pod) (cnpg_pg_replication_lag{namespace="shop"}) > 30
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: PostgreSQL standby {{ $labels.pod }} is {{ $value }}s behind the primary
+            description: A failover now would lose the unreplicated transactions; check the standby's disk and network.
         - alert: PostgresTooManyConnections
           expr: sum by (pod) (cnpg_backends_total{namespace="shop"}) / on (pod) max by (pod) (cnpg_pg_settings_setting{namespace="shop", name="max_connections"}) > 0.8
           for: 5m

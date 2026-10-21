@@ -42,8 +42,8 @@ replicas), and `GOMEMLIMIT` derived from the container memory limit.
 ```text
 k8s/
 ├── data/          # Kustomize — Argo CD app "shop-data" (wave -1)
-│   ├── postgres.yaml       # CloudNativePG Cluster "shop-db", PostgreSQL 18.6, 1 instance, 10Gi
-│   ├── redis.yaml          # Redis 8 StatefulSet (AOF) + redis_exporter + password ExternalSecret
+│   ├── postgres.yaml       # CloudNativePG Cluster "shop-db", PostgreSQL 18.6, primary + sync standby, 10Gi each
+│   ├── redis.yaml          # Redis 8 + Sentinel (3 pods, AOF) + redis_exporter + password ExternalSecret
 │   ├── networkpolicy.yaml  # only shop pods (+ operator, + metrics scraper) can reach PostgreSQL/Redis
 │   └── monitoring.yaml     # VMServiceScrape (Redis), VMPodScrape (CloudNativePG), data-tier VMRule
 └── services/      # Helm chart — Argo CD app "shop-services" (wave 0)
@@ -54,8 +54,12 @@ k8s/
 
 - Each service requests `10m CPU / 32Mi` with a `128Mi` limit and runs 2 replicas spread across nodes
   with a PodDisruptionBudget, so losing one Spot node does not take a service down.
-- PostgreSQL runs a single instance; set `instances: 3` for automatic failover (applications already
-  connect through the `shop-db-rw` service).
+- PostgreSQL runs a primary and a standby on different nodes with quorum synchronous replication
+  (`dataDurability: preferred`); CloudNativePG fails over automatically and applications keep using
+  the `shop-db-rw` service.
+- Redis runs 3 pods (one per node), each with redis + Sentinel. Sentinel promotes a replica about 5s
+  after the master is lost, and services discover the master through `redis-sentinel:26379`
+  (go-redis `FailoverClient`). A master that is shut down hands over to a replica first (preStop).
 - Trace sampling is 100% (`otel.samplerArg: "1.0"`); lower it in `k8s/services/values.yaml` for production.
 - Secrets are not stored in Git: `shop-db-app` is created by CloudNativePG and `redis-auth` by an
   External Secrets password generator (`refreshPolicy: CreatedOnce`).
@@ -79,7 +83,8 @@ Alerts shipped with the application (VMRule):
 - SLO: `ShopSLOBurnRateCritical`, `ShopSLOBurnRateWarning` (labels `job`, `slo`).
 - Metrics: `ShopPaymentDeclineRateHigh`.
 - Logs (LogsQL, `type: vlogs`): `ShopErrorLogsSpike` — more than 20 ERROR logs per service in 5 minutes.
-- Data tier: `RedisDown`, `RedisMemoryNearLimit`, `PostgresDown`, `PostgresTooManyConnections`.
+- Data tier: `RedisDown`, `RedisNoSingleMaster`, `RedisReplicasMissing`, `RedisMemoryNearLimit`,
+  `PostgresDown`, `PostgresStandbyMissing`, `PostgresReplicationLagHigh`, `PostgresTooManyConnections`.
 
 ## Releasing images (GitOps)
 

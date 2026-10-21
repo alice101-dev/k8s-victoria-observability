@@ -10,12 +10,14 @@ spec:
       app.kubernetes.io/name: redis
   policyTypes: [Ingress]
   ingress:
+    # Shop app → Redis and Sentinel; also replication and Sentinel gossip between the Redis pods.
     - from:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: shop
       ports:
         - { protocol: TCP, port: 6379 }
+        - { protocol: TCP, port: 26379 }
     - from:
         - namespaceSelector:
             matchLabels:

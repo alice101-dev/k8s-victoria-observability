@@ -1,4 +1,6 @@
-# Redis 8 (single instance, AOF persistence) + redis_exporter sidecar.
+# Redis 8 with Sentinel: 3 pods, each running redis + sentinel + redis_exporter.
+# 1 master + 2 replicas; 3 sentinels (quorum 2) promote a replica when the master is down for 5s.
+# Clients ask Sentinel for the master (service redis-sentinel) and follow failovers (go-redis FailoverClient).
 # Used for: read-through cache (user/product), payment idempotency keys, notification Redis Stream.
 # Password generated randomly once by External Secrets (no secret in Git).
 apiVersion: generators.external-secrets.io/v1alpha1
@@ -37,6 +39,7 @@ metadata:
     app.kubernetes.io/part-of: shop
 data:
   redis.conf: |
+    dir /data
     appendonly yes
     appendfsync everysec
     # Memory cap below the container limit (128Mi) to avoid OOMKilled.
@@ -45,35 +48,122 @@ data:
     maxmemory-policy volatile-lru
     save ""
     protected-mode no
+  # Writes redis.conf and sentinel.conf for this pod. The current master comes from any reachable
+  # Sentinel; on a fresh cluster (no Sentinel knows a master yet) pod 0 starts as master.
+  init.sh: |
+    set -eu
+    DOMAIN="redis-node.${POD_NAMESPACE}.svc.cluster.local"
+    SELF="${POD_NAME}.${DOMAIN}"
+    MASTER=""
+    for i in 0 1 2; do
+      peer="redis-node-${i}.${DOMAIN}"
+      [ "$peer" = "$SELF" ] && continue
+      m=$(timeout 3 redis-cli -h "$peer" -p 26379 -a "$REDIS_PASSWORD" --no-auth-warning \
+            sentinel get-master-addr-by-name shop 2>/dev/null | head -n1) || true
+      case "$m" in *".${DOMAIN}") MASTER="$m"; break ;; esac
+    done
+    [ -n "$MASTER" ] || MASTER="redis-node-0.${DOMAIN}"
+    echo "self=${SELF} master=${MASTER}"
+
+    {
+      echo "include /etc/redis/redis.conf"
+      echo "requirepass \"${REDIS_PASSWORD}\""
+      echo "masterauth \"${REDIS_PASSWORD}\""
+      echo "replica-announce-ip ${SELF}"
+      if [ "$MASTER" != "$SELF" ]; then echo "replicaof ${MASTER} 6379"; fi
+    } > /run/redis/redis.conf
+
+    # Sentinel rewrites this file at runtime, so it lives on the pod's emptyDir.
+    cat > /run/redis/sentinel.conf <<EOF
+    port 26379
+    sentinel resolve-hostnames yes
+    sentinel announce-hostnames yes
+    sentinel announce-ip ${SELF}
+    sentinel announce-port 26379
+    requirepass "${REDIS_PASSWORD}"
+    sentinel sentinel-pass "${REDIS_PASSWORD}"
+    sentinel monitor shop ${MASTER} 6379 2
+    sentinel auth-pass shop "${REDIS_PASSWORD}"
+    sentinel down-after-milliseconds shop 5000
+    sentinel failover-timeout shop 30000
+    sentinel parallel-syncs shop 1
+    EOF
+  # Planned failover before the master stops (rollout, node drain), so writes move to a replica first.
+  prestop.sh: |
+    cli() { redis-cli -a "$REDIS_PASSWORD" --no-auth-warning "$@"; }
+    [ "$(cli role 2>/dev/null | head -n1)" = "master" ] || exit 0
+    cli -h redis-sentinel -p 26379 sentinel failover shop >/dev/null 2>&1 || exit 0
+    for i in $(seq 1 20); do
+      sleep 1
+      [ "$(cli role 2>/dev/null | head -n1)" = "slave" ] && exit 0
+    done
 ---
+# Headless: stable per-pod DNS names (announced to Sentinel), also before the pods are ready.
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis
+  name: redis-node
   labels:
     app.kubernetes.io/name: redis
     app.kubernetes.io/part-of: shop
+    app.kubernetes.io/component: node
 spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
   selector:
     app.kubernetes.io/name: redis
   ports:
     - name: redis
       port: 6379
       targetPort: redis
+    - name: sentinel
+      port: 26379
+      targetPort: sentinel
     - name: metrics
       port: 9121
       targetPort: metrics
 ---
-apiVersion: apps/v1
-kind: StatefulSet
+# Entry point for clients: any Sentinel returns the current master.
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-sentinel
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: shop
+    app.kubernetes.io/component: sentinel
+spec:
+  selector:
+    app.kubernetes.io/name: redis
+  ports:
+    - name: sentinel
+      port: 26379
+      targetPort: sentinel
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
   name: redis
   labels:
     app.kubernetes.io/name: redis
     app.kubernetes.io/part-of: shop
 spec:
-  serviceName: redis
-  replicas: 1
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-node
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/part-of: shop
+spec:
+  serviceName: redis-node
+  replicas: 3
+  podManagementPolicy: Parallel
   selector:
     matchLabels:
       app.kubernetes.io/name: redis
@@ -88,6 +178,14 @@ spec:
     spec:
       automountServiceAccountToken: false
       terminationGracePeriodSeconds: 30
+      # One pod per node: losing a node must leave 2 of 3 sentinels for a quorum.
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: redis
       securityContext:
         runAsNonRoot: true
         runAsUser: 999
@@ -95,11 +193,50 @@ spec:
         fsGroup: 999
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: config
+          image: redis:8.8.3-alpine
+          command: ["sh", "/etc/redis/init.sh"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: config
+              mountPath: /etc/redis
+            - name: run
+              mountPath: /run/redis
       containers:
         - name: redis
           image: redis:8.8.3-alpine
-          command: ["sh", "-c", 'exec redis-server /etc/redis/redis.conf --requirepass "$REDIS_PASSWORD"']
+          command: ["redis-server", "/run/redis/redis.conf"]
           env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:
@@ -118,6 +255,10 @@ spec:
               port: redis
             initialDelaySeconds: 15
             periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "/etc/redis/prestop.sh"]
           resources:
             requests: { cpu: 20m, memory: 64Mi }
             limits: { memory: 128Mi }
@@ -131,6 +272,49 @@ spec:
               mountPath: /data
             - name: config
               mountPath: /etc/redis
+            - name: run
+              mountPath: /run/redis
+        - name: sentinel
+          image: redis:8.8.3-alpine
+          command: ["redis-server", "/run/redis/sentinel.conf", "--sentinel"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+          ports:
+            - name: sentinel
+              containerPort: 26379
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", 'redis-cli -p 26379 --no-auth-warning -a "$REDIS_PASSWORD" ping | grep -q PONG']
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: sentinel
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: run
+              mountPath: /run/redis
         - name: exporter
           image: oliver006/redis_exporter:v1.93.0
           env:
@@ -159,6 +343,10 @@ spec:
         - name: config
           configMap:
             name: redis-config
+        - name: run
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
   volumeClaimTemplates:
     # Explicit apiVersion/kind: the API server adds them → without this Argo CD stays OutOfSync.
     - apiVersion: v1

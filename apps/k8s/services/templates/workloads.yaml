@@ -114,8 +114,10 @@ spec:
                   key: {{ $.Values.postgres.uriKey }}
             {{- end }}
             {{- if $svc.redis }}
-            - name: REDIS_ADDR
-              value: {{ $.Values.redis.addr | quote }}
+            - name: REDIS_SENTINEL_ADDRS
+              value: {{ $.Values.redis.sentinelAddrs | quote }}
+            - name: REDIS_MASTER_NAME
+              value: {{ $.Values.redis.masterName | quote }}
             - name: REDIS_PASSWORD
               valueFrom:
                 secretKeyRef:

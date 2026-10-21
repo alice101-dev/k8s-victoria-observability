@@ -206,7 +206,7 @@ production practices. To harden it for production:
 | 100% trace sampling | Lower `otel.samplerArg` in `apps/k8s/services/values.yaml` (e.g. `0.1`) or add tail sampling with an OpenTelemetry Collector |
 | VictoriaMetrics Operator admission webhook disabled | Install cert-manager and set `admissionWebhooks.certManager.enabled: true` |
 | Alertmanager `blackhole` receiver | Configure Slack/PagerDuty receivers with credentials from an ExternalSecret |
-| Single PostgreSQL instance, no backups | `instances: 3` plus barman-cloud backups to GCS |
+| PostgreSQL primary + 1 synchronous standby, no backups | `instances: 3` across zones plus barman-cloud backups to GCS |
 | Single Grafana replica with SQLite on a PVC | External PostgreSQL database for Grafana and 2+ replicas |
 
 ## Secrets and configuration
