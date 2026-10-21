@@ -64,10 +64,19 @@ spec:
 {{- end }}
 {{- if .Values.slo.enabled }}
 {{- $slo := .Values.slo }}
-{{- $services := keys .Values.services | sortAlpha }}
+{{- /* SLI targets: every service (all of its requests) and every user journey (api-gateway routes). */}}
+{{- $targets := list }}
+{{- range $svc := keys .Values.services | sortAlpha }}
+{{- $targets = append $targets (dict "name" $svc "kind" "service" "sel" (printf "namespace=\"shop\", job=\"%s\"" $svc) "o" (get $slo.overrides $svc | default dict)) }}
+{{- end }}
+{{- range $name := keys $slo.journeys | sortAlpha }}
+{{- $j := get $slo.journeys $name }}
+{{- $targets = append $targets (dict "name" $name "kind" "journey" "sel" (printf "namespace=\"shop\", job=\"api-gateway\", method=\"%s\", route=~\"%s\"" $j.method $j.route) "o" $j) }}
+{{- end }}
 ---
-# SLIs as error ratios per window (labels: job, slo=availability|latency), objectives as series,
-# and burn-rate alerts. Burn rate = error ratio / (1 - objective); 1 spends the budget in exactly 30d.
+# SLIs per target (labels: job = service or journey name, slo = availability|latency, kind = service|journey):
+# error ratios per window for burn rates, 5m request/error rates for the traffic-weighted 30d SLI,
+# objectives as series. Burn rate = error ratio / (1 - objective); 1 spends the budget in exactly 30d.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMRule
 metadata:
@@ -75,36 +84,60 @@ metadata:
 spec:
   groups:
     - name: shop-slo-sli
+      # slo:sli_window:seconds below assumes this 30s interval.
       interval: 30s
       rules:
         - record: slo:objective:ratio
           expr: |
-            {{- range $i, $svc := $services }}
-            {{ if $i }}or {{ end }}label_set(vector({{ dig $svc "availability" $slo.availability $slo.overrides }}), "job", "{{ $svc }}", "slo", "availability")
-            or label_set(vector({{ dig $svc "latency" $slo.latency $slo.overrides }}), "job", "{{ $svc }}", "slo", "latency")
+            {{- range $i, $t := $targets }}
+            {{ if $i }}or {{ end }}label_set(vector({{ $t.o.availability | default $slo.availability }}), "job", "{{ $t.name }}", "slo", "availability", "kind", "{{ $t.kind }}")
+            or label_set(vector({{ $t.o.latency | default $slo.latency }}), "job", "{{ $t.name }}", "slo", "latency", "kind", "{{ $t.kind }}")
             {{- end }}
         {{- range $w := list "5m" "30m" "1h" "2h" "6h" "1d" "3d" }}
         - record: slo:sli_error:ratio_rate{{ $w }}
           expr: |
-            label_set(
-              (sum by (job) (rate(http_server_requests_total{namespace="shop", code=~"5.."}[{{ $w }}]))
-                or sum by (job) (rate(http_server_requests_total{namespace="shop"}[{{ $w }}])) * 0)
-              / sum by (job) (rate(http_server_requests_total{namespace="shop"}[{{ $w }}])),
-              "slo", "availability")
-            {{- range $svc := $services }}
+            {{- range $i, $t := $targets }}
+            {{- $le := $t.o.latencyThreshold | default $slo.latencyThreshold }}
+            {{ if $i }}or {{ end }}label_set(
+              (sum(rate(http_server_requests_total{ {{- $t.sel }}, code=~"5.."}[{{ $w }}])) or sum(rate(http_server_requests_total{ {{- $t.sel }}}[{{ $w }}])) * 0)
+                / sum(rate(http_server_requests_total{ {{- $t.sel }}}[{{ $w }}])),
+              "job", "{{ $t.name }}", "slo", "availability", "kind", "{{ $t.kind }}")
             or label_set(
-              clamp_min(1 - sum by (job) (rate(http_server_request_duration_seconds_bucket{namespace="shop", job="{{ $svc }}", le="{{ dig $svc "latencyThreshold" $slo.latencyThreshold $slo.overrides }}"}[{{ $w }}]))
-                / sum by (job) (rate(http_server_request_duration_seconds_count{namespace="shop", job="{{ $svc }}"}[{{ $w }}])), 0),
-              "slo", "latency")
+              clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{ {{- $t.sel }}, le="{{ $le }}"}[{{ $w }}]))
+                / sum(rate(http_server_request_duration_seconds_count{ {{- $t.sel }}}[{{ $w }}])), 0),
+              "job", "{{ $t.name }}", "slo", "latency", "kind", "{{ $t.kind }}")
             {{- end }}
         {{- end }}
+        - record: slo:sli_requests:rate5m
+          expr: |
+            {{- range $i, $t := $targets }}
+            {{ if $i }}or {{ end }}label_set(sum(rate(http_server_requests_total{ {{- $t.sel }}}[5m])), "job", "{{ $t.name }}", "slo", "availability", "kind", "{{ $t.kind }}")
+            or label_set(sum(rate(http_server_request_duration_seconds_count{ {{- $t.sel }}}[5m])), "job", "{{ $t.name }}", "slo", "latency", "kind", "{{ $t.kind }}")
+            {{- end }}
+        - record: slo:sli_errors:rate5m
+          expr: |
+            {{- range $i, $t := $targets }}
+            {{- $le := $t.o.latencyThreshold | default $slo.latencyThreshold }}
+            {{ if $i }}or {{ end }}label_set(
+              sum(rate(http_server_requests_total{ {{- $t.sel }}, code=~"5.."}[5m])) or sum(rate(http_server_requests_total{ {{- $t.sel }}}[5m])) * 0,
+              "job", "{{ $t.name }}", "slo", "availability", "kind", "{{ $t.kind }}")
+            or label_set(
+              clamp_min(sum(rate(http_server_request_duration_seconds_count{ {{- $t.sel }}}[5m]))
+                - sum(rate(http_server_request_duration_seconds_bucket{ {{- $t.sel }}, le="{{ $le }}"}[5m])), 0),
+              "job", "{{ $t.name }}", "slo", "latency", "kind", "{{ $t.kind }}")
+            {{- end }}
     - name: shop-slo-budget
       interval: 1m
       rules:
+        # Traffic-weighted: bad requests / all requests over 30d (an average of 5m ratios would
+        # weigh a quiet 5 minutes as much as a busy one).
         - record: slo:sli_error:ratio_rate30d
-          expr: avg_over_time(slo:sli_error:ratio_rate5m[30d])
+          expr: sum_over_time(slo:sli_errors:rate5m[30d]) / sum_over_time(slo:sli_requests:rate5m[30d])
         - record: slo:error_budget_remaining:ratio
           expr: 1 - slo:sli_error:ratio_rate30d / on (job, slo) (1 - slo:objective:ratio)
+        # How much data the 30d window really holds (a staging cluster is recreated often).
+        - record: slo:sli_window:seconds
+          expr: count_over_time(slo:sli_requests:rate5m[30d]) * 30
 {{- if .Values.alerts.enabled }}
     - name: shop-slo-alerts
       rules:
@@ -123,8 +156,8 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: {{`"{{ $labels.job }}: {{ $labels.slo }} SLO is burning its error budget fast"`}}
-            description: {{`"{{ $value | humanizePercentage }} of requests miss the {{ $labels.slo }} SLI. Open the Shop — Service dashboard for {{ $labels.job }}, then its error traces and WARN/ERROR logs."`}}
+            summary: {{`"{{ $labels.job }} ({{ $labels.kind }}): {{ $labels.slo }} SLO is burning its error budget fast"`}}
+            description: {{`"{{ $value | humanizePercentage }} of requests miss the {{ $labels.slo }} SLI. Start from the Shop — SLO Overview, then the Shop — Service dashboard of the failing service: error traces and WARN/ERROR logs."`}}
         # Ticket: 10% of the 30d budget spent in 1d, or 10% in 3d.
         - alert: ShopSLOBurnRateWarning
           expr: |
@@ -140,7 +173,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: {{`"{{ $labels.job }}: {{ $labels.slo }} SLO error budget is being spent faster than planned"`}}
+            summary: {{`"{{ $labels.job }} ({{ $labels.kind }}): {{ $labels.slo }} SLO error budget is being spent faster than planned"`}}
             description: {{`"{{ $value | humanizePercentage }} of requests miss the {{ $labels.slo }} SLI over the long window."`}}
 {{- end }}
 {{- end }}

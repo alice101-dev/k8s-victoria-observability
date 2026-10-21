@@ -106,3 +106,8 @@ slo:
     api-gateway: { latencyThreshold: "0.5" }
     order-service: { latencyThreshold: "0.5" }
     payment-service: { latencyThreshold: "0.5" }
+  # User journeys, measured at the edge (api-gateway): what users experience, including failures of any
+  # service behind it. A service with no ready pod loses its own SLI, but the journey still burns.
+  journeys:
+    checkout: { method: POST, route: /api/orders, latencyThreshold: "0.5" }
+    browse: { method: GET, route: "/api/products/|/api/users/", latencyThreshold: "0.1" }

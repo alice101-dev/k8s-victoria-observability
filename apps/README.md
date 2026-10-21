@@ -73,8 +73,15 @@ SLOs per service (`slo` in `k8s/services/values.yaml`, 30-day window):
 | Availability | response is not 5xx (4xx are client or business outcomes) | 99.5% |
 | Latency | response faster than 500ms (api-gateway, order, payment) or 100ms (others) | 99% |
 
-Recording rules (`slo:sli_error:ratio_rate<window>`, `slo:objective:ratio`,
-`slo:error_budget_remaining:ratio`) feed the dashboards and the burn-rate alerts from the Google SRE
+The same SLIs are also measured per **user journey** at api-gateway: `checkout` (POST /api/orders,
+500ms) and `browse` (GET /api/products/, /api/users/, 100ms). Journeys show what users experience: a
+service with no ready pod receives no requests, so its own SLI disappears, while the journeys that
+depend on it keep burning.
+
+Recording rules (label `kind` = `service` or `journey`): `slo:sli_error:ratio_rate<window>` for burn
+rates, `slo:sli_requests:rate5m` and `slo:sli_errors:rate5m` for a traffic-weighted 30-day SLI,
+`slo:objective:ratio`, `slo:error_budget_remaining:ratio` and `slo:sli_window:seconds` (how much data the
+30-day window really holds). They feed the dashboards and the burn-rate alerts from the Google SRE
 workbook: `ShopSLOBurnRateCritical` (1h and 5m above 14.4×, or 6h and 30m above 6×) and
 `ShopSLOBurnRateWarning` (1d and 2h above 3×, or 3d and 6h above 1×).
 

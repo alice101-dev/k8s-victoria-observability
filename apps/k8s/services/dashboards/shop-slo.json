@@ -49,7 +49,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Error budget — 30-day window",
+      "title": "User journeys — measured at api-gateway",
       "collapsed": false,
       "panels": [],
       "id": 1,
@@ -61,8 +61,767 @@
       }
     },
     {
+      "type": "stat",
+      "title": "Checkout success — last 5m",
+      "description": "Share of checkout requests answered without a 5xx at the edge, including failures of every service behind it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.99
+              },
+              {
+                "color": "green",
+                "value": 0.995
+              }
+            ]
+          },
+          "noValue": "no traffic"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1 - slo:sli_error:ratio_rate5m{job=\"checkout\", slo=\"availability\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 7
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Browse success — last 5m",
+      "description": "Share of browse requests answered without a 5xx at the edge, including failures of every service behind it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.99
+              },
+              {
+                "color": "green",
+                "value": 0.995
+              }
+            ]
+          },
+          "noValue": "no traffic"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1 - slo:sli_error:ratio_rate5m{job=\"browse\", slo=\"availability\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 7
+      }
+    },
+    {
       "type": "table",
-      "title": "SLO status per service",
+      "title": "Journey SLOs",
+      "description": "What users experience. A service that is down loses its own SLI (it receives no requests), but the journeys that depend on it keep burning here.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Journey"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open api-gateway dashboard",
+                    "url": "/d/shop-service/shop-service?var-service=api-gateway&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Objective"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Actual (30d)"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Budget remaining"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0
+                    },
+                    {
+                      "color": "green",
+                      "value": 0.25
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Burn rate 1h"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 14.4
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Burn rate 6h"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 1
+                    },
+                    {
+                      "color": "red",
+                      "value": 6
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Data in window"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Budget remaining",
+            "desc": false
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "cluster": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "job": 0,
+              "slo": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4,
+              "Value #D": 5,
+              "Value #E": 6,
+              "Value #F": 7
+            },
+            "renameByName": {
+              "job": "Journey",
+              "slo": "SLI",
+              "Value #A": "Objective",
+              "Value #B": "Actual (30d)",
+              "Value #C": "Budget remaining",
+              "Value #D": "Burn rate 1h",
+              "Value #E": "Burn rate 6h",
+              "Value #F": "Data in window"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:objective:ratio{kind=\"journey\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (1 - slo:sli_error:ratio_rate30d{kind=\"journey\"})",
+          "legendFormat": "",
+          "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:error_budget_remaining:ratio{kind=\"journey\"})",
+          "legendFormat": "",
+          "refId": "C",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h{kind=\"journey\"} / on (job, slo) (1 - slo:objective:ratio))",
+          "legendFormat": "",
+          "refId": "D",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h{kind=\"journey\"} / on (job, slo) (1 - slo:objective:ratio))",
+          "legendFormat": "",
+          "refId": "E",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:sli_window:seconds{kind=\"journey\"})",
+          "legendFormat": "",
+          "refId": "F",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 16,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Service health",
+      "collapsed": false,
+      "panels": [],
+      "id": 5,
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Services without ready pods",
+      "description": "A service with no ready pod is down even though its SLO rows stay quiet. Alert: ShopServiceDown.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count(kube_deployment_status_replicas_available{namespace=\"shop\", deployment=~\"api-gateway|notification-service|order-service|payment-service|product-service|user-service\"} == 0) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 4,
+        "h": 6
+      }
+    },
+    {
+      "type": "bargauge",
+      "title": "Ready pods per service",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.01
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (deployment) (kube_deployment_status_replicas_available{namespace=\"shop\", deployment=~\"api-gateway|notification-service|order-service|payment-service|product-service|user-service\"}) / max by (deployment) (kube_deployment_spec_replicas{namespace=\"shop\", deployment=~\"api-gateway|notification-service|order-service|payment-service|product-service|user-service\"})",
+          "legendFormat": "{{deployment}}",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "x": 4,
+        "y": 9,
+        "w": 12,
+        "h": 6
+      }
+    },
+    {
+      "type": "stat",
+      "title": "SLO data in window",
+      "description": "How much data the 30-day window really holds. Below 30 days (e.g. a recently created cluster), budget figures describe only this period and a short incident looks much larger.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 2592000
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(slo:sli_window:seconds)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 8,
+      "gridPos": {
+        "x": 16,
+        "y": 9,
+        "w": 4,
+        "h": 6
+      }
+    },
+    {
+      "type": "stat",
+      "title": "SLO rules last evaluated",
+      "description": "Age of the newest SLI sample. If vmalert or the metrics storage is down, the dashboard silently goes stale.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 90
+              },
+              {
+                "color": "red",
+                "value": 300
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "time() - max(timestamp(slo:sli_error:ratio_rate5m))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "x": 20,
+        "y": 9,
+        "w": 4,
+        "h": 6
+      }
+    },
+    {
+      "type": "row",
+      "title": "Services — error budget (30-day window)",
+      "collapsed": false,
+      "panels": [],
+      "id": 10,
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Service SLOs",
       "description": "Availability = share of non-5xx responses; latency = share of requests faster than the service threshold. Burn rate 1 spends the budget in exactly 30 days; alerts page at 14.4 (1h) or 6 (6h). Click a service to drill down.",
       "datasource": {
         "type": "prometheus",
@@ -254,6 +1013,22 @@
                 }
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Data in window"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
           }
         ]
       },
@@ -290,7 +1065,8 @@
               "Value #B": 3,
               "Value #C": 4,
               "Value #D": 5,
-              "Value #E": 6
+              "Value #E": 6,
+              "Value #F": 7
             },
             "renameByName": {
               "job": "Service",
@@ -299,7 +1075,8 @@
               "Value #B": "Actual (30d)",
               "Value #C": "Budget remaining",
               "Value #D": "Burn rate 1h",
-              "Value #E": "Burn rate 6h"
+              "Value #E": "Burn rate 6h",
+              "Value #F": "Data in window"
             }
           }
         }
@@ -310,7 +1087,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:objective:ratio)",
+          "expr": "sum by (job, slo) (slo:objective:ratio{kind=\"service\"})",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -322,7 +1099,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (1 - slo:sli_error:ratio_rate30d)",
+          "expr": "sum by (job, slo) (1 - slo:sli_error:ratio_rate30d{kind=\"service\"})",
           "legendFormat": "",
           "refId": "B",
           "range": false,
@@ -334,7 +1111,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:error_budget_remaining:ratio)",
+          "expr": "sum by (job, slo) (slo:error_budget_remaining:ratio{kind=\"service\"})",
           "legendFormat": "",
           "refId": "C",
           "range": false,
@@ -346,7 +1123,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h / on (job, slo) (1 - slo:objective:ratio))",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate1h{kind=\"service\"} / on (job, slo) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "D",
           "range": false,
@@ -358,18 +1135,30 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h / on (job, slo) (1 - slo:objective:ratio))",
+          "expr": "sum by (job, slo) (slo:sli_error:ratio_rate6h{kind=\"service\"} / on (job, slo) (1 - slo:objective:ratio))",
           "legendFormat": "",
           "refId": "E",
           "range": false,
           "instant": true,
           "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:sli_window:seconds{kind=\"service\"})",
+          "legendFormat": "",
+          "refId": "F",
+          "range": false,
+          "instant": true,
+          "format": "table"
         }
       ],
-      "id": 2,
+      "id": 11,
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 16,
         "w": 24,
         "h": 15
       }
@@ -379,10 +1168,10 @@
       "title": "Burn rate",
       "collapsed": false,
       "panels": [],
-      "id": 3,
+      "id": 12,
       "gridPos": {
         "x": 0,
-        "y": 16,
+        "y": 31,
         "w": 24,
         "h": 1
       }
@@ -461,10 +1250,10 @@
           "instant": false
         }
       ],
-      "id": 4,
+      "id": 13,
       "gridPos": {
         "x": 0,
-        "y": 17,
+        "y": 32,
         "w": 12,
         "h": 9
       }
@@ -543,10 +1332,10 @@
           "instant": false
         }
       ],
-      "id": 5,
+      "id": 14,
       "gridPos": {
         "x": 12,
-        "y": 17,
+        "y": 32,
         "w": 12,
         "h": 9
       }
@@ -556,10 +1345,10 @@
       "title": "Budget and SLI trends",
       "collapsed": false,
       "panels": [],
-      "id": 6,
+      "id": 15,
       "gridPos": {
         "x": 0,
-        "y": 26,
+        "y": 41,
         "w": 24,
         "h": 1
       }
@@ -634,10 +1423,10 @@
           "instant": false
         }
       ],
-      "id": 7,
+      "id": 16,
       "gridPos": {
         "x": 0,
-        "y": 27,
+        "y": 42,
         "w": 12,
         "h": 9
       }
@@ -694,10 +1483,10 @@
           "instant": false
         }
       ],
-      "id": 8,
+      "id": 17,
       "gridPos": {
         "x": 12,
-        "y": 27,
+        "y": 42,
         "w": 12,
         "h": 9
       }
@@ -707,10 +1496,10 @@
       "title": "Alerts",
       "collapsed": false,
       "panels": [],
-      "id": 9,
+      "id": 18,
       "gridPos": {
         "x": 0,
-        "y": 36,
+        "y": 51,
         "w": 24,
         "h": 1
       }
@@ -811,10 +1600,10 @@
           "format": "table"
         }
       ],
-      "id": 10,
+      "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 37,
+        "y": 52,
         "w": 24,
         "h": 6
       }
