@@ -44,7 +44,36 @@
     }
   ],
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "name": "Rollouts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "blue",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "changes(max by (deployment) (kube_deployment_metadata_generation{namespace=\"shop\"})[1m]) > 0 or changes(max by (statefulset) (kube_statefulset_metadata_generation{namespace=\"shop\"})[1m]) > 0",
+        "titleFormat": "Rollout {{deployment}}{{statefulset}}",
+        "textFormat": "Spec changed (image, env or resources)"
+      },
+      {
+        "name": "Shop alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "max by (alertname, job, deployment, slo) (ALERTS{alertname=~\"Shop.*\", alertstate=\"firing\"})",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{job}}{{deployment}} {{slo}}"
+      }
+    ]
   },
   "panels": [
     {
@@ -122,7 +151,7 @@
       "gridPos": {
         "x": 0,
         "y": 1,
-        "w": 4,
+        "w": 3,
         "h": 7
       }
     },
@@ -186,9 +215,9 @@
       ],
       "id": 3,
       "gridPos": {
-        "x": 4,
+        "x": 3,
         "y": 1,
-        "w": 4,
+        "w": 3,
         "h": 7
       }
     },
@@ -402,6 +431,98 @@
                 "value": 1
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Threshold"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "no 5xx"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Budget gone in"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 86400
+                    },
+                    {
+                      "color": "green",
+                      "value": 604800
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "exhausted",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 31536000,
+                      "to": null,
+                      "result": {
+                        "text": "not at this rate",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -434,12 +555,14 @@
             "indexByName": {
               "job": 0,
               "slo": 1,
-              "Value #A": 2,
-              "Value #B": 3,
-              "Value #C": 4,
-              "Value #D": 5,
-              "Value #E": 6,
-              "Value #F": 7
+              "Value #G": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #H": 8,
+              "Value #F": 9
             },
             "renameByName": {
               "job": "Journey",
@@ -449,7 +572,9 @@
               "Value #C": "Budget remaining",
               "Value #D": "Burn rate 1h",
               "Value #E": "Burn rate 6h",
-              "Value #F": "Data in window"
+              "Value #F": "Data in window",
+              "Value #G": "Threshold",
+              "Value #H": "Budget gone in"
             }
           }
         }
@@ -526,13 +651,37 @@
           "range": false,
           "instant": true,
           "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:sli_threshold:seconds{kind=\"journey\"})",
+          "legendFormat": "",
+          "refId": "G",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (clamp_max(clamp_min(slo:error_budget_remaining:ratio{kind=\"journey\"}, 0) * 2592000 / on (job, slo, kind) (slo:sli_error:ratio_rate1h{kind=\"journey\"} / on (job, slo, kind) (1 - slo:objective:ratio)), 31536000))",
+          "legendFormat": "",
+          "refId": "H",
+          "range": false,
+          "instant": true,
+          "format": "table"
         }
       ],
       "id": 4,
       "gridPos": {
-        "x": 8,
+        "x": 6,
         "y": 1,
-        "w": 16,
+        "w": 18,
         "h": 7
       }
     },
@@ -822,7 +971,7 @@
     {
       "type": "table",
       "title": "Service SLOs",
-      "description": "Availability = share of non-5xx responses; latency = share of requests faster than the service threshold. Burn rate 1 spends the budget in exactly 30 days; alerts page at 14.4 (1h) or 6 (6h). Click a service to drill down.",
+      "description": "Availability = share of non-5xx responses; latency = share of requests faster than the service threshold. Burn rate 1 spends the budget in exactly 30 days; alerts page at 14.4 (1h) or 6 (6h). Budget gone in = remaining budget at the current 1h burn rate. Click a service to drill down.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1029,6 +1178,98 @@
                 "value": 1
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Threshold"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "no 5xx"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Budget gone in"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 86400
+                    },
+                    {
+                      "color": "green",
+                      "value": 604800
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "exhausted",
+                        "color": "red"
+                      }
+                    }
+                  },
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 31536000,
+                      "to": null,
+                      "result": {
+                        "text": "not at this rate",
+                        "color": "green"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
           }
         ]
       },
@@ -1061,12 +1302,14 @@
             "indexByName": {
               "job": 0,
               "slo": 1,
-              "Value #A": 2,
-              "Value #B": 3,
-              "Value #C": 4,
-              "Value #D": 5,
-              "Value #E": 6,
-              "Value #F": 7
+              "Value #G": 2,
+              "Value #A": 3,
+              "Value #B": 4,
+              "Value #C": 5,
+              "Value #D": 6,
+              "Value #E": 7,
+              "Value #H": 8,
+              "Value #F": 9
             },
             "renameByName": {
               "job": "Service",
@@ -1076,7 +1319,9 @@
               "Value #C": "Budget remaining",
               "Value #D": "Burn rate 1h",
               "Value #E": "Burn rate 6h",
-              "Value #F": "Data in window"
+              "Value #F": "Data in window",
+              "Value #G": "Threshold",
+              "Value #H": "Budget gone in"
             }
           }
         }
@@ -1150,6 +1395,30 @@
           "expr": "sum by (job, slo) (slo:sli_window:seconds{kind=\"service\"})",
           "legendFormat": "",
           "refId": "F",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (slo:sli_threshold:seconds{kind=\"service\"})",
+          "legendFormat": "",
+          "refId": "G",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, slo) (clamp_max(clamp_min(slo:error_budget_remaining:ratio{kind=\"service\"}, 0) * 2592000 / on (job, slo, kind) (slo:sli_error:ratio_rate1h{kind=\"service\"} / on (job, slo, kind) (1 - slo:objective:ratio)), 31536000))",
+          "legendFormat": "",
+          "refId": "H",
           "range": false,
           "instant": true,
           "format": "table"

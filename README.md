@@ -126,9 +126,11 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
 - **Log → trace:** the `trace_id` field of every application log links to the trace (derived field).
 - **Trace → metrics:** RED metrics of the span's service (`service.name` ↔ `job`).
 - **Dashboards (folder "Shop"), from symptom to cause:**
-  - *SLO Overview:* availability and latency SLOs per service with error budget and burn rates.
-  - *Service:* one service end to end (SLO, RED by route, latency heatmap, dependencies, saturation,
-    WARN/ERROR logs, slowest and failed traces).
+  - *SLO Overview:* user-journey SLOs (checkout, browse) measured at the edge, then per-service SLOs:
+    error budget, burn rates, time until the budget is gone and how much data the window holds.
+  - *Service:* one service end to end (SLO, RED and latency SLI by route, latency heatmap, dependencies,
+    saturation, WARN/ERROR logs, slowest and failed traces).
+  - Every Shop dashboard marks rollouts and firing Shop alerts on its graphs.
   - *Logs:* log volume, top messages and top pods, filterable by service, level and any field.
   - *Microservices Overview:* RED for all services side by side, plus business metrics.
 - **Alerting:** SLO burn-rate alerts (multi-window, multi-burn-rate), a payment decline rule and

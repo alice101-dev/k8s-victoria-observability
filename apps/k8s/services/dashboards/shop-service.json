@@ -106,7 +106,36 @@
     }
   ],
   "annotations": {
-    "list": []
+    "list": [
+      {
+        "name": "Rollouts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "blue",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "changes(max by (deployment) (kube_deployment_metadata_generation{namespace=\"shop\"})[1m]) > 0 or changes(max by (statefulset) (kube_statefulset_metadata_generation{namespace=\"shop\"})[1m]) > 0",
+        "titleFormat": "Rollout {{deployment}}{{statefulset}}",
+        "textFormat": "Spec changed (image, env or resources)"
+      },
+      {
+        "name": "Shop alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "max by (alertname, job, deployment, slo) (ALERTS{alertname=~\"Shop.*\", alertstate=\"firing\"})",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{job}}{{deployment}} {{slo}}"
+      }
+    ]
   },
   "panels": [
     {
@@ -779,12 +808,9 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": [
-            "mean",
-            "max"
-          ]
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -830,7 +856,7 @@
       "gridPos": {
         "x": 0,
         "y": 15,
-        "w": 12,
+        "w": 8,
         "h": 8
       }
     },
@@ -860,12 +886,9 @@
       },
       "options": {
         "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": [
-            "mean",
-            "max"
-          ]
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
         },
         "tooltip": {
           "mode": "multi",
@@ -887,9 +910,83 @@
       ],
       "id": 14,
       "gridPos": {
-        "x": 12,
+        "x": 8,
         "y": 15,
-        "w": 12,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Slower than the SLO threshold — by route",
+      "description": "Latency SLI per route: share of requests slower than the service threshold. The dashed line is the 1% the SLO allows; a single slow route shows up here even when the service average looks fine.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "thresholdsStyle": {
+              "mode": "dashed"
+            },
+            "axisSoftMax": 0.02
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "clamp_min(1 - histogram_share(scalar(max(slo:sli_threshold:seconds{job=\"$service\", slo=\"latency\"})), sum by (route, le) (rate(http_server_request_duration_seconds_bucket{namespace=\"shop\", job=\"$service\"}[$__rate_interval]))), 0)",
+          "legendFormat": "{{route}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 15,
+      "gridPos": {
+        "x": 16,
+        "y": 15,
+        "w": 8,
         "h": 8
       }
     },
@@ -953,7 +1050,7 @@
           "format": "heatmap"
         }
       ],
-      "id": 15,
+      "id": 16,
       "gridPos": {
         "x": 0,
         "y": 23,
@@ -966,7 +1063,7 @@
       "title": "Dependencies",
       "collapsed": false,
       "panels": [],
-      "id": 16,
+      "id": 17,
       "gridPos": {
         "x": 0,
         "y": 31,
@@ -1022,7 +1119,7 @@
           "instant": false
         }
       ],
-      "id": 17,
+      "id": 18,
       "gridPos": {
         "x": 0,
         "y": 32,
@@ -1078,7 +1175,7 @@
           "instant": false
         }
       ],
-      "id": 18,
+      "id": 19,
       "gridPos": {
         "x": 8,
         "y": 32,
@@ -1134,7 +1231,7 @@
           "instant": false
         }
       ],
-      "id": 19,
+      "id": 20,
       "gridPos": {
         "x": 16,
         "y": 32,
@@ -1147,7 +1244,7 @@
       "title": "Saturation",
       "collapsed": false,
       "panels": [],
-      "id": 20,
+      "id": 21,
       "gridPos": {
         "x": 0,
         "y": 40,
@@ -1215,7 +1312,7 @@
           "instant": false
         }
       ],
-      "id": 21,
+      "id": 22,
       "gridPos": {
         "x": 0,
         "y": 41,
@@ -1282,7 +1379,7 @@
           "instant": false
         }
       ],
-      "id": 22,
+      "id": 23,
       "gridPos": {
         "x": 6,
         "y": 41,
@@ -1349,7 +1446,7 @@
           "instant": false
         }
       ],
-      "id": 23,
+      "id": 24,
       "gridPos": {
         "x": 12,
         "y": 41,
@@ -1408,7 +1505,7 @@
           "instant": false
         }
       ],
-      "id": 24,
+      "id": 25,
       "gridPos": {
         "x": 18,
         "y": 41,
@@ -1421,7 +1518,7 @@
       "title": "Logs — $service",
       "collapsed": false,
       "panels": [],
-      "id": 25,
+      "id": 26,
       "gridPos": {
         "x": 0,
         "y": 49,
@@ -1540,7 +1637,7 @@
           "legendFormat": "{{level}}"
         }
       ],
-      "id": 26,
+      "id": 27,
       "gridPos": {
         "x": 0,
         "y": 50,
@@ -1642,7 +1739,7 @@
           "refId": "A"
         }
       ],
-      "id": 27,
+      "id": 28,
       "gridPos": {
         "x": 12,
         "y": 50,
@@ -1679,7 +1776,7 @@
           "maxLines": 500
         }
       ],
-      "id": 28,
+      "id": 29,
       "gridPos": {
         "x": 0,
         "y": 58,
@@ -1692,7 +1789,7 @@
       "title": "Traces — $service",
       "collapsed": false,
       "panels": [],
-      "id": 29,
+      "id": 30,
       "gridPos": {
         "x": 0,
         "y": 68,
@@ -1746,7 +1843,7 @@
           "limit": 20
         }
       ],
-      "id": 30,
+      "id": 31,
       "gridPos": {
         "x": 0,
         "y": 69,
@@ -1800,7 +1897,7 @@
           "limit": 20
         }
       ],
-      "id": 31,
+      "id": 32,
       "gridPos": {
         "x": 12,
         "y": 69,

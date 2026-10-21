@@ -94,6 +94,13 @@ spec:
             {{ if $i }}or {{ end }}label_set(vector({{ $t.o.availability | default $slo.availability }}), "job", "{{ $t.name }}", "slo", "availability", "kind", "{{ $t.kind }}")
             or label_set(vector({{ $t.o.latency | default $slo.latency }}), "job", "{{ $t.name }}", "slo", "latency", "kind", "{{ $t.kind }}")
             {{- end }}
+        # Latency threshold per target (0 for availability), shown next to the SLO and used per route.
+        - record: slo:sli_threshold:seconds
+          expr: |
+            {{- range $i, $t := $targets }}
+            {{ if $i }}or {{ end }}label_set(vector(0), "job", "{{ $t.name }}", "slo", "availability", "kind", "{{ $t.kind }}")
+            or label_set(vector({{ $t.o.latencyThreshold | default $slo.latencyThreshold }}), "job", "{{ $t.name }}", "slo", "latency", "kind", "{{ $t.kind }}")
+            {{- end }}
         {{- range $w := list "5m" "30m" "1h" "2h" "6h" "1d" "3d" }}
         - record: slo:sli_error:ratio_rate{{ $w }}
           expr: |
