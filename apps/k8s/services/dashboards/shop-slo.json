@@ -142,6 +142,10 @@
                 "value": 1
               },
               {
+                "id": "min",
+                "value": 0
+              },
+              {
                 "id": "max",
                 "value": 1
               },
@@ -276,6 +280,7 @@
           "options": {
             "excludeByName": {
               "Time": true,
+              "cluster": true,
               "__name__": true
             },
             "indexByName": {
@@ -366,7 +371,7 @@
         "x": 0,
         "y": 1,
         "w": 24,
-        "h": 10
+        "h": 14
       }
     },
     {
@@ -377,7 +382,7 @@
       "id": 3,
       "gridPos": {
         "x": 0,
-        "y": 11,
+        "y": 15,
         "w": 24,
         "h": 1
       }
@@ -404,7 +409,8 @@
             },
             "thresholdsStyle": {
               "mode": "dashed"
-            }
+            },
+            "axisSoftMax": 1
           },
           "thresholds": {
             "mode": "absolute",
@@ -458,7 +464,7 @@
       "id": 4,
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 16,
         "w": 12,
         "h": 9
       }
@@ -485,7 +491,8 @@
             },
             "thresholdsStyle": {
               "mode": "dashed"
-            }
+            },
+            "axisSoftMax": 1
           },
           "thresholds": {
             "mode": "absolute",
@@ -539,7 +546,7 @@
       "id": 5,
       "gridPos": {
         "x": 12,
-        "y": 12,
+        "y": 16,
         "w": 12,
         "h": 9
       }
@@ -552,7 +559,7 @@
       "id": 6,
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 25,
         "w": 24,
         "h": 1
       }
@@ -570,7 +577,7 @@
           "unit": "percentunit",
           "custom": {
             "lineWidth": 1,
-            "fillOpacity": 10,
+            "fillOpacity": 0,
             "showPoints": "never",
             "drawStyle": "line",
             "stacking": {
@@ -579,7 +586,8 @@
             },
             "thresholdsStyle": {
               "mode": "dashed"
-            }
+            },
+            "axisSoftMin": 0
           },
           "thresholds": {
             "mode": "absolute",
@@ -594,7 +602,8 @@
               }
             ]
           },
-          "decimals": 1
+          "decimals": 1,
+          "max": 1
         },
         "overrides": []
       },
@@ -628,7 +637,7 @@
       "id": 7,
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 26,
         "w": 12,
         "h": 9
       }
@@ -652,9 +661,9 @@
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
-          },
-          "decimals": 2
+            },
+            "axisSoftMax": 0.01
+          }
         },
         "overrides": []
       },
@@ -688,7 +697,7 @@
       "id": 8,
       "gridPos": {
         "x": 12,
-        "y": 22,
+        "y": 26,
         "w": 12,
         "h": 9
       }
@@ -701,7 +710,7 @@
       "id": 9,
       "gridPos": {
         "x": 0,
-        "y": 31,
+        "y": 35,
         "w": 24,
         "h": 1
       }
@@ -805,7 +814,7 @@
       "id": 10,
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 36,
         "w": 24,
         "h": 6
       }

@@ -385,6 +385,8 @@
               "Value": 3
             },
             "renameByName": {
+              "service": "Service",
+              "level": "Level",
               "_msg": "Message",
               "Value": "Count",
               "hits": "Count"
@@ -461,6 +463,10 @@
             "excludeByName": {
               "Time": true,
               "__name__": true
+            },
+            "indexByName": {
+              "kubernetes.pod_name": 0,
+              "Value": 1
             },
             "renameByName": {
               "kubernetes.pod_name": "Pod",

@@ -83,8 +83,8 @@ spec:
               "slo", "availability")
             {{- range $svc := $services }}
             or label_set(
-              1 - sum by (job) (rate(http_server_request_duration_seconds_bucket{namespace="shop", job="{{ $svc }}", le="{{ dig $svc "latencyThreshold" $slo.latencyThreshold $slo.overrides }}"}[{{ $w }}]))
-                / sum by (job) (rate(http_server_request_duration_seconds_count{namespace="shop", job="{{ $svc }}"}[{{ $w }}])),
+              clamp_min(1 - sum by (job) (rate(http_server_request_duration_seconds_bucket{namespace="shop", job="{{ $svc }}", le="{{ dig $svc "latencyThreshold" $slo.latencyThreshold $slo.overrides }}"}[{{ $w }}]))
+                / sum by (job) (rate(http_server_request_duration_seconds_count{namespace="shop", job="{{ $svc }}"}[{{ $w }}])), 0),
               "slo", "latency")
             {{- end }}
         {{- end }}
