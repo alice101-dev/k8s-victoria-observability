@@ -59,6 +59,8 @@ spec:
   # WAL archiving and base backups through the Barman Cloud plugin (ObjectStore in backup.yaml).
   plugins:
     - name: barman-cloud.cloudnative-pg.io
+      # Explicit: the operator webhook defaults it, and a missing list field shows as drift in Argo CD.
+      enabled: true
       isWALArchiver: true
       parameters:
         barmanObjectName: shop-backup
