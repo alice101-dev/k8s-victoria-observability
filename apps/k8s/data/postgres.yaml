@@ -16,6 +16,9 @@ spec:
   instances: 2
   imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie
   primaryUpdateStrategy: unsupervised
+  # Updates promote the standby first (seconds of write downtime) instead of restarting the primary
+  # in place, which waits for the smart shutdown and then a failover (~3 minutes).
+  primaryUpdateMethod: switchover
 
   bootstrap:
     initdb:
