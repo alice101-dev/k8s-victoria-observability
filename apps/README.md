@@ -81,7 +81,7 @@ workbook: `ShopSLOBurnRateCritical` (1h and 5m above 14.4×, or 6h and 30m above
 Alerts shipped with the application (VMRule):
 
 - SLO: `ShopSLOBurnRateCritical`, `ShopSLOBurnRateWarning` (labels `job`, `slo`).
-- Metrics: `ShopPaymentDeclineRateHigh`.
+- Metrics: `ShopServiceDown` (a deployment with no available replicas), `ShopPaymentDeclineRateHigh`.
 - Logs (LogsQL, `type: vlogs`): `ShopErrorLogsSpike` — more than 20 ERROR logs per service in 5 minutes.
 - Data tier: `RedisDown`, `RedisNoSingleMaster`, `RedisReplicasMissing`, `RedisMemoryNearLimit`,
   `PostgresDown`, `PostgresStandbyMissing`, `PostgresReplicationLagHigh`, `PostgresTooManyConnections`.

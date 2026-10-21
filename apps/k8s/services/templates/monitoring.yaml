@@ -27,6 +27,16 @@ spec:
       rules:
         - record: job:http_server_requests:rate5m
           expr: sum by (job, code) (rate(http_server_requests_total{namespace="shop"}[5m]))
+        # A service with no ready pod serves no requests, so its own SLI disappears instead of
+        # burning; only its callers would alert. This names the service that is down.
+        - alert: ShopServiceDown
+          expr: kube_deployment_status_replicas_available{namespace="shop", deployment=~"{{ keys .Values.services | sortAlpha | join "|" }}"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: {{`"{{ $labels.deployment }} has no available replicas"`}}
+            description: {{`"Every request to {{ $labels.deployment }} fails. Check its pods' startup logs (waiting for dependency) and recent changes."`}}
         - alert: ShopPaymentDeclineRateHigh
           expr: |
             sum(rate(payments_total{namespace="shop", status="declined"}[10m]))
