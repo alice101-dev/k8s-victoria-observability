@@ -608,9 +608,11 @@ d.add(lq_table("Endpoints (server spans)",
                overrides=[LINKS_ON("Endpoint", ENDPOINT_LINK), LINKS_ON("Service", SERVICE_DASH_LINK, 150),
                           COUNT("Calls"), by_name("Req/s", [{"id": "unit", "value": "reqps"}, {"id": "decimals", "value": 2},
                                                             {"id": "custom.width", "value": 80}]),
-                          PCT("5xx %", 0.5, 1), PCT("4xx %", 20, 50), NS_UNIT("p50"), NS_UNIT("p95"), NS_UNIT("p99"),
-                          NS_UNIT("Max")],
-               sort=[{"displayName": "p95", "desc": True}], hide=("e5", "e4")), 24, 9)
+                          PCT("5xx %", 0.5, 1),
+                          by_name("4xx %", [{"id": "unit", "value": "percent"}, {"id": "decimals", "value": 2},
+                                            {"id": "custom.width", "value": 80}]),
+                          NS_UNIT("p50"), NS_UNIT("p95"), NS_UNIT("p99"), NS_UNIT("Max")],
+               sort=[{"displayName": "p95", "desc": True}], hide=("e5", "e4")), 24, 11)
 d.add(ts("p95 by endpoint", [vl(f"{SERVER} | stats by (name) quantile(0.95, duration) p95", "statsRange",
                                 legend="{{name}}", ds=VTL)], "ns", ds=VTL), 12, 8)
 d.add(ts("5xx by endpoint", [vl(f"{SERVER} {IS_5XX} | stats by (name) count() failed", "statsRange",
@@ -761,6 +763,13 @@ d.add({"type": "traces", "title": "Trace ${trace_id}", "datasource": VT,
        "description": "The trace selected in a table above (or pasted into the Trace ID variable): every span with its "
                       "timing, attributes and links to the logs and metrics of its service.",
        "options": {}, "targets": [{"datasource": VT, "refId": "A", "query": "${trace_id}"}]}, 24, 18)
+
+
+# Span graphs: at least one minute per point, otherwise a point holds a handful of spans and the
+# percentiles jump around.
+for p in d.panels:
+    if p["type"] == "timeseries" and p["datasource"] is VTL:
+        p["interval"] = "1m"
 
 
 def lq_var(name, label, field, query, multi, current):
