@@ -80,6 +80,23 @@ securityContext:
   capabilities:
     drop: ["ALL"]
 
+# The chart's probes (1s timeout, no startup probe) restarted the collector twice while a node was being
+# replaced, and every restart loses the events of that moment (the receiver skips events older than its start):
+# exactly the node events this collector is for. Tolerate a slow start and short stalls.
+startupProbe:
+  httpGet: { port: 13133, path: / }
+  periodSeconds: 2
+  failureThreshold: 60
+livenessProbe:
+  httpGet: { port: 13133, path: / }
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+readinessProbe:
+  httpGet: { port: 13133, path: / }
+  periodSeconds: 10
+  timeoutSeconds: 5
+
 resources:
   requests: { cpu: 10m, memory: 48Mi }
   limits: { memory: 192Mi }
