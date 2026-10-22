@@ -2802,6 +2802,22 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              },
+              {
+                "id": "custom.width",
+                "value": 165
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Trace ID"
             },
             "properties": [
@@ -2816,19 +2832,31 @@
               },
               {
                 "id": "custom.width",
-                "value": 270
+                "value": 250
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Time"
+              "options": "Service"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 230
+                "value": 125
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 60
               }
             ]
           },
@@ -2848,19 +2876,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Status"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 70
+                "value": 85
               }
             ]
           }
@@ -2895,10 +2911,11 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "started": true
             },
             "indexByName": {
-              "at": 0,
+              "started_ms": 0,
               "trace_id": 1,
               "service": 2,
               "name": 3,
@@ -2906,7 +2923,7 @@
               "took": 5
             },
             "renameByName": {
-              "at": "Time",
+              "started_ms": "Time",
               "trace_id": "Trace ID",
               "service": "Service",
               "name": "Endpoint",
@@ -2922,7 +2939,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=shop \"resource_attr:service.name\":in($service) kind:=2 duration:>${min_duration:raw} | copy \"resource_attr:service.name\" as service | copy \"span_attr:http.response.status_code\" as code | format \"<_time>\" as at | stats by (at, trace_id, service, name, code) max(duration) took | sort by (took desc) | limit 50",
+          "expr": "\"resource_attr:service.namespace\":=shop \"resource_attr:service.name\":in($service) kind:=2 duration:>${min_duration:raw} | copy \"resource_attr:service.name\" as service | copy \"span_attr:http.response.status_code\" as code | stats by (trace_id, service, name, code) max(duration) took, max(start_time_unix_nano) started | math round(started/1e6) as started_ms | sort by (took desc) | limit 50",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -2957,6 +2974,22 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              },
+              {
+                "id": "custom.width",
+                "value": 165
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Trace ID"
             },
             "properties": [
@@ -2971,19 +3004,31 @@
               },
               {
                 "id": "custom.width",
-                "value": 270
+                "value": 250
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Time"
+              "options": "Service"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 230
+                "value": 125
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 60
               }
             ]
           },
@@ -3003,19 +3048,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Status"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 70
+                "value": 85
               }
             ]
           }
@@ -3050,10 +3083,11 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "started": true
             },
             "indexByName": {
-              "at": 0,
+              "started_ms": 0,
               "trace_id": 1,
               "service": 2,
               "name": 3,
@@ -3061,7 +3095,7 @@
               "took": 5
             },
             "renameByName": {
-              "at": "Time",
+              "started_ms": "Time",
               "trace_id": "Trace ID",
               "service": "Service",
               "name": "Endpoint",
@@ -3077,7 +3111,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=shop \"resource_attr:service.name\":in($service) kind:=2 \"span_attr:http.response.status_code\":~\"^5\" | copy \"resource_attr:service.name\" as service | copy \"span_attr:http.response.status_code\" as code | format \"<_time>\" as at | stats by (at, trace_id, service, name, code) max(duration) took | sort by (at desc) | limit 50",
+          "expr": "\"resource_attr:service.namespace\":=shop \"resource_attr:service.name\":in($service) kind:=2 \"span_attr:http.response.status_code\":~\"^5\" | copy \"resource_attr:service.name\" as service | copy \"span_attr:http.response.status_code\" as code | stats by (trace_id, service, name, code) max(duration) took, max(start_time_unix_nano) started | math round(started/1e6) as started_ms | sort by (started_ms desc) | limit 50",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"

@@ -746,19 +746,20 @@ d.add(lq_table("Calls to dependencies",
                sort=[{"displayName": "Calls", "desc": True}]), 12, 12)
 
 d.row("Traces — $service")
-REQUEST_COLUMNS = [("at", "Time"), ("trace_id", "Trace ID"), ("service", "Service"), ("name", "Endpoint"),
+REQUEST_COLUMNS = [("started_ms", "Time"), ("trace_id", "Trace ID"), ("service", "Service"), ("name", "Endpoint"),
                    ("code", "Status"), ("took", "Duration")]
-REQUEST_OVERRIDES = [LINKS_ON("Trace ID", TRACE_LINK, 270), by_name("Time", [{"id": "custom.width", "value": 230}]),
-                     NS_UNIT("Duration"), by_name("Status", [{"id": "custom.width", "value": 70}])]
-REQUESTS = (f"{SVC} | copy {CODE} as code | format \"<_time>\" as at "
-            "| stats by (at, trace_id, service, name, code) max(duration) took")
+REQUEST_OVERRIDES = [by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
+                     LINKS_ON("Trace ID", TRACE_LINK, 250), by_name("Service", [{"id": "custom.width", "value": 125}]),
+                     by_name("Status", [{"id": "custom.width", "value": 60}]), NS_UNIT("Duration", 85)]
+REQUESTS = (f"{SVC} | copy {CODE} as code | stats by (trace_id, service, name, code) max(duration) took, "
+            "max(start_time_unix_nano) started | math round(started/1e6) as started_ms")
 d.add(lq_table("Slowest requests (over ${min_duration:text})", f"{SERVER} duration:>${{min_duration:raw}} {REQUESTS} "
                "| sort by (took desc) | limit 50", REQUEST_COLUMNS,
                "Server spans slower than the threshold, slowest first. Click a trace ID to show the trace below.",
-               overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Duration", "desc": True}]), 12, 10)
-d.add(lq_table("Failed requests (5xx)", f"{SERVER} {IS_5XX} {REQUESTS} | sort by (at desc) | limit 50", REQUEST_COLUMNS,
-               "Server spans answered with a 5xx, newest first. Click a trace ID to show the trace below.",
-               overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Time", "desc": True}]), 12, 10)
+               overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Duration", "desc": True}], hide=("started",)), 12, 10)
+d.add(lq_table("Failed requests (5xx)", f"{SERVER} {IS_5XX} {REQUESTS} | sort by (started_ms desc) | limit 50",
+               REQUEST_COLUMNS, "Server spans answered with a 5xx, newest first. Click a trace ID to show the trace below.",
+               overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Time", "desc": True}], hide=("started",)), 12, 10)
 d.add({"type": "traces", "title": "Trace ${trace_id}", "datasource": VT,
        "description": "The trace selected in a table above (or pasted into the Trace ID variable): every span with its "
                       "timing, attributes and links to the logs and metrics of its service.",
