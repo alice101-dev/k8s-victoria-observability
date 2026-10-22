@@ -113,12 +113,13 @@ def backup_panels(y):
                 {"expr": f'max by (pod) (cnpg_collector_pg_wal{{value="size", {SEL}}})', "legendFormat": "pg_wal size {{pod}}"}],
                "none", 12, y + 12, "Segments waiting for the archiver (left) and the pg_wal directory size (right). "
                "Both rise together when archiving stalls.",
-               overrides=[{"matcher": {"id": "byRegexp", "options": "^pg_wal size"},
+               overrides=[{"matcher": {"id": "byFrameRefID", "options": "B"},
                            "properties": [{"id": "unit", "value": "bytes"},
                                           {"id": "custom.axisPlacement", "value": "right"}]}]),
         {"id": 9011, "type": "logs", "title": "Backup, retention and archiving events (Barman Cloud sidecar)",
          "description": "Base backups (start, completion, backup ID), retention runs and errors from the plugin sidecar. "
-                        "Routine \"Archived WAL file\" lines are left out.",
+                        "Routine \"Archived WAL file\" lines are left out. \"WAL file ... does not exist\" while a "
+                        "standby starts is expected: it asks the archive for WAL the primary has not archived yet.",
          "datasource": LOGS, "gridPos": {"h": 9, "w": 24, "x": 0, "y": y + 20},
          "options": {"showTime": True, "wrapLogMessage": True, "enableLogDetails": True, "sortOrder": "Descending",
                      "dedupStrategy": "none"},
