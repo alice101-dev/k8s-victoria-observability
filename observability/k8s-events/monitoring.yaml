@@ -82,9 +82,10 @@ spec:
             summary: "{{ $labels.process }} on {{ $labels.node }}: {{ $value }} OOM kill(s) in 5 minutes"
             description: The kernel killed a process at its container's memory limit (node-problem-detector). The Container restarts table of the Cluster — Events dashboard names the pod.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubecontaineroomkilled
+        # Once in back-off the kubelet retries the pull only every few minutes, so a 5-minute window may hold only
+        # "Back-off pulling image" or "ImagePullBackOff": all of them count, and no "for" (windows can be empty).
         - alert: KubeImagePullFailing
-          expr: '{service.name="kubernetes-events"} k8s.event.reason:=Failed _msg:"Failed to pull image" | copy k8s.namespace.name as namespace, k8s.object.name as pod | stats by (namespace, pod) count() as failures | filter failures:>0'
-          for: 5m
+          expr: '{service.name="kubernetes-events"} k8s.event.reason:in(Failed, BackOff) _msg:~"(?i)pull(ing)? image|ErrImagePull|ImagePullBackOff" | copy k8s.namespace.name as namespace, k8s.object.name as pod | stats by (namespace, pod) count() as failures | filter failures:>0'
           labels:
             severity: warning
           annotations:
