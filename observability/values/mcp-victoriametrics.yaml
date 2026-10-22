@@ -34,9 +34,9 @@ securityContext:
 
 # The VictoriaMetrics docs vector DB (`documentation` tool) takes ~500MB when loaded → a 512Mi
 # limit causes CrashLoop. To save memory, add `documentation` to mcp.disable.tools (the vector
-# DB is then not loaded at all).
+# DB is then not loaded at all). Request = measured usage (~700Mi) so the scheduler accounts for it.
 resources:
-  requests: { cpu: 10m, memory: 256Mi }
+  requests: { cpu: 10m, memory: 768Mi }
   limits: { memory: 1Gi }
 
 # Startup loads the embedded docs vector DB (can take > 40s); without a startupProbe the default

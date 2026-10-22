@@ -194,9 +194,10 @@ vmcluster:
             matchLabels:
               app.kubernetes.io/name: vmstorage
               app.kubernetes.io/instance: vmks
-      # Peak usage ~575Mi → request close to real usage so the node is not overcommitted.
+      # Requests follow the measured usage (6h peak working set ~850Mi incl. page cache, CPU p95 ~100m) so the
+      # scheduler spreads the heavy pods instead of stacking them on one node.
       resources:
-        requests: { cpu: 50m, memory: 384Mi }
+        requests: { cpu: 100m, memory: 768Mi }
         limits: { memory: 1Gi }
     vmselect:
       enabled: true
@@ -221,8 +222,9 @@ vmcluster:
             matchLabels:
               app.kubernetes.io/name: vmselect
               app.kubernetes.io/instance: vmks
+      # Peak ~500Mi with the dashboards and MCP queries.
       resources:
-        requests: { cpu: 50m, memory: 128Mi }
+        requests: { cpu: 50m, memory: 384Mi }
         limits: { memory: 1Gi }
     vminsert:
       enabled: true
@@ -237,9 +239,9 @@ vmcluster:
             matchLabels:
               app.kubernetes.io/name: vminsert
               app.kubernetes.io/instance: vmks
-      # 256Mi was OOMKilled while absorbing backlog bursts from 2 vmagents → 512Mi.
+      # 256Mi was OOMKilled while absorbing backlog bursts from 2 vmagents → 512Mi. Usual peak ~265Mi.
       resources:
-        requests: { cpu: 25m, memory: 128Mi }
+        requests: { cpu: 25m, memory: 256Mi }
         limits: { memory: 512Mi }
 
 vmsingle:
@@ -682,7 +684,7 @@ grafana:
   # The VictoriaLogs datasource plugin runs in this container: with the Shop logs and traces dashboards
   # open (refreshed every minute) Grafana reached its former 768Mi limit, slowed down and failed its probes.
   resources:
-    requests: { cpu: 100m, memory: 512Mi }
+    requests: { cpu: 100m, memory: 768Mi }
     limits: { memory: 1536Mi }
 
 # =============================================================================

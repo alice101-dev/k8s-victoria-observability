@@ -47,7 +47,8 @@ locals {
     controller = {
       replicas  = 1
       metrics   = { enabled = true }
-      resources = { requests = { cpu = "100m", memory = "256Mi" }, limits = { memory = "1Gi" } }
+      # Request = measured peak (~520Mi) so the scheduler accounts for it.
+      resources = { requests = { cpu = "100m", memory = "512Mi" }, limits = { memory = "1Gi" } }
     }
     repoServer = {
       replicas  = 1
