@@ -1161,7 +1161,7 @@
     {
       "type": "table",
       "title": "Container restarts",
-      "description": "Containers that restarted in the time range and why the last run ended: OOMKilled (memory limit), Error (non-zero exit, failed liveness probe) or Completed.",
+      "description": "Containers that restarted in the time range and why their runs ended: OOMKilled (memory limit), Error (non-zero exit, failed liveness probe) or Completed. Pods deleted since keep their row.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1199,12 +1199,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Last termination"
+              "options": "Termination reason"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 140
+                "value": 160
               }
             ]
           }
@@ -1241,7 +1241,7 @@
               "namespace": "Namespace",
               "pod": "Pod",
               "container": "Container",
-              "reason": "Last termination",
+              "reason": "Termination reason",
               "Value": "Restarts"
             }
           }
@@ -1253,7 +1253,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{namespace=~\"${namespace:regex}\"}) * on (namespace, pod, container) group_left () (sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[$__range]))) > 0) or on (namespace, pod, container) (sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[$__range]))) > 0)",
+          "expr": "max by (namespace, pod, container, reason) (max_over_time(kube_pod_container_status_last_terminated_reason{namespace=~\"${namespace:regex}\"}[$__range])) * on (namespace, pod, container) group_left () (sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[$__range]))) > 0) or on (namespace, pod, container) (sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[$__range]))) > 0)",
           "legendFormat": "",
           "refId": "A",
           "range": false,

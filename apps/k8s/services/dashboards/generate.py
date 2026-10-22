@@ -1196,16 +1196,16 @@ d.add(logsql_table("Warning events by object",
                    sort=[{"displayName": "Last seen", "desc": True}]), 24, 10)
 RESTARTS = f"sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{{{NS_RE}}}[$__range]))) > 0"
 d.add(table("Container restarts",
-            [vm(f"max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{{{NS_RE}}}) "
+            [vm(f"max by (namespace, pod, container, reason) (max_over_time(kube_pod_container_status_last_terminated_reason{{{NS_RE}}}[$__range])) "
                 f"* on (namespace, pod, container) group_left () ({RESTARTS}) or on (namespace, pod, container) ({RESTARTS})",
                 instant=True, fmt="table")],
             [{"id": "organize", "options": {"excludeByName": {"Time": True},
                                             "indexByName": {"namespace": 0, "pod": 1, "container": 2, "reason": 3, "Value": 4},
                                             "renameByName": {"namespace": "Namespace", "pod": "Pod", "container": "Container",
-                                                             "reason": "Last termination", "Value": "Restarts"}}}],
-            overrides=[COUNT("Restarts", 80), by_name("Last termination", [{"id": "custom.width", "value": 140}])],
-            desc="Containers that restarted in the time range and why the last run ended: OOMKilled (memory limit), "
-                 "Error (non-zero exit, failed liveness probe) or Completed.",
+                                                             "reason": "Termination reason", "Value": "Restarts"}}}],
+            overrides=[COUNT("Restarts", 80), by_name("Termination reason", [{"id": "custom.width", "value": 160}])],
+            desc="Containers that restarted in the time range and why their runs ended: OOMKilled (memory limit), "
+                 "Error (non-zero exit, failed liveness probe) or Completed. Pods deleted since keep their row.",
             sort=[{"displayName": "Restarts", "desc": True}]), 14, 8)
 d.add(ts("Pending pods", [vm(f'sum by (namespace) (kube_pod_status_phase{{phase="Pending", {NS_RE}}}) > 0', "{{namespace}}")],
          "short", stack=True, decimals=0, min_=0, legend_calcs=("max",),
