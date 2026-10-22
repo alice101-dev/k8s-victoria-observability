@@ -6126,7 +6126,8 @@
               "id": "organize",
               "options": {
                 "excludeByName": {
-                  "Time": true
+                  "Time": true,
+                  "queryid": true
                 },
                 "indexByName": {
                   "datname": 0,
@@ -6263,7 +6264,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (query) (rate(cnpg_pg_stat_statements_top_total_exec_seconds{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval]))",
+              "expr": "sum by (query) (rate(cnpg_pg_stat_statements_top_total_exec_seconds{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval])) > 0",
               "legendFormat": "{{query}}",
               "datasource": {
                 "type": "prometheus",
@@ -6318,7 +6319,7 @@
           },
           "targets": [
             {
-              "expr": "sum by (query) (rate(cnpg_pg_stat_statements_top_calls{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval]))",
+              "expr": "sum by (query) (rate(cnpg_pg_stat_statements_top_calls{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval])) > 0",
               "legendFormat": "{{query}}",
               "datasource": {
                 "type": "prometheus",

@@ -225,7 +225,7 @@ def efficiency_panels(y):
     ]
 
 
-def merged_table(pid, title, columns, by, y, h, desc, overrides=(), sort=None):
+def merged_table(pid, title, columns, by, y, h, desc, overrides=(), sort=None, hide=()):
     """Instant queries aggregated by the same labels, merged into one row per label set."""
     targets = [{"datasource": PROM, "refId": chr(65 + i), "expr": f"sum by ({by}) ({expr})", "instant": True,
                 "range": False, "format": "table"} for i, (_, expr) in enumerate(columns)]
@@ -238,7 +238,7 @@ def merged_table(pid, title, columns, by, y, h, desc, overrides=(), sort=None):
                             "overrides": list(overrides)},
             "options": {"showHeader": True, "cellHeight": "sm", **({"sortBy": [sort]} if sort else {})},
             "transformations": [{"id": "merge", "options": {}},
-                                {"id": "organize", "options": {"excludeByName": {"Time": True},
+                                {"id": "organize", "options": {"excludeByName": {"Time": True, **{h: True for h in hide}},
                                                                "indexByName": index, "renameByName": rename}}],
             "targets": targets}
 
@@ -271,13 +271,13 @@ def statement_panels(y):
                        unit("Rows", "short", 0, 80), unit("Cache hit", "percentunit", 1, 90),
                        unit("Temp written", "bytes", 0, 110), unit("datname", "string", width=70),
                        unit("queryid", "string", width=160)],
-            sort={"displayName": "Time", "desc": True}),
+            sort={"displayName": "Time", "desc": True}, hide=("queryid",)),
         series(9132, "Execution time per statement",
-               [{"expr": f"sum by (query) (rate({stmt('total_exec_seconds')}[$__rate_interval]))", "legendFormat": "{{query}}"}],
+               [{"expr": f"sum by (query) (rate({stmt('total_exec_seconds')}[$__rate_interval])) > 0", "legendFormat": "{{query}}"}],
                "s", 0, y + 9, "Database time spent per second on each top statement; the stacked total is the load "
                "the application puts on PostgreSQL.", stack=True),
         series(9133, "Calls per second per statement",
-               [{"expr": f"sum by (query) (rate({stmt('calls')}[$__rate_interval]))", "legendFormat": "{{query}}"}],
+               [{"expr": f"sum by (query) (rate({stmt('calls')}[$__rate_interval])) > 0", "legendFormat": "{{query}}"}],
                "ops", 12, y + 9, "Execution rate of each top statement."),
         merged_table(9134, "Table health (pg_stat_user_tables)", [
             ("Live rows", tbl("n_live_tup")),
