@@ -16,7 +16,7 @@
 ENV ?= staging
 WS  ?=
 # Dependencies are resolved by name (data sources), not remote state.
-APPLY_ORDER := services vpc cloud-nat firewall kubernetes-engine artifact-registry cloud-storage argocd-bootstrap
+APPLY_ORDER := services vpc cloud-nat firewall kubernetes-engine artifact-registry cloud-storage secret-manager argocd-bootstrap
 
 # GitOps repo URL: from .env, or the "origin" remote (SSH converted to HTTPS).
 ifeq ($(strip $(GITOPS_REPO_URL)),)

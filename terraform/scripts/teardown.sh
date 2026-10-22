@@ -19,6 +19,7 @@ TFVARS_GKE="$ROOT/environments/$ENV/kubernetes-engine/$ENV.tfvars"
 # (operators must still run to process their custom resource finalizers).
 CHILD_APPS=(shop-services shop-data plugin-barman-cloud cloudnative-pg cert-manager mcp-grafana mcp-victoriatraces mcp-victorialogs mcp-victoriametrics vm-stack observability-config vm-operator external-secrets)
 ROOT_APPS=(apps observability)
+# Kept: services (enabled APIs) and secret-manager (secret values added by hand, a few cents a month).
 DESTROY_ORDER=(argocd-bootstrap cloud-storage artifact-registry kubernetes-engine firewall cloud-nat vpc)
 
 tfvar() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$TFVARS_GKE"; }

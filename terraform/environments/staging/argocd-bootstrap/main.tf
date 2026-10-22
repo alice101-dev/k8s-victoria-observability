@@ -27,5 +27,7 @@ module "argocd" {
   root_app_values = {
     imageRegistry = local.image_registry
     backupBucket  = local.backup_bucket
+    # Secret Manager project for the External Secrets SecretStore (observability-config).
+    projectId = var.project_id
   }
 }

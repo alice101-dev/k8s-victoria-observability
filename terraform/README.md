@@ -10,7 +10,7 @@ terraform/
 ├── Makefile                    # init / validate / plan / apply / apply-all / teardown
 ├── scripts/teardown.sh         # ordered workload deletion (PVCs/disks included), then destroy
 ├── modules/
-│   ├── services/  vpc/  cloud-nat/  firewall/  artifact-registry/  cloud-storage/
+│   ├── services/  vpc/  cloud-nat/  firewall/  artifact-registry/  cloud-storage/  secret-manager/
 │   ├── kubernetes-engine/      # GKE Standard, private nodes, Dataplane V2, Workload Identity, Spot-only pools
 │   └── argocd-bootstrap/       # helm_release argo-cd + argocd-apps (AppProjects + root applications)
 └── environments/staging/
@@ -21,7 +21,8 @@ terraform/
     ├── kubernetes-engine/      # 5. staging-observability (zonal) + Spot e2-standard-2 pool (2–4 nodes)
     ├── artifact-registry/      # 6. staging-shop (Docker, immutable tags, cleanup policies)
     ├── cloud-storage/          # 7. <project>-staging-pg-backup (PostgreSQL backups, Workload Identity access)
-    └── argocd-bootstrap/       # 8. Argo CD + root applications → everything else is GitOps
+    ├── secret-manager/         # 8. staging-alertmanager-slack-webhook (value added with gcloud, read by External Secrets)
+    └── argocd-bootstrap/       # 9. Argo CD + root applications → everything else is GitOps
 ```
 
 Providers: `hashicorp/google ~> 7.35.0`, `hashicorp/helm ~> 3.1.0`.
@@ -42,6 +43,7 @@ The `services` workspace (applied first) enables every Google API the stack need
 | `logging.googleapis.com`, `monitoring.googleapis.com` | GKE system component logs/metrics |
 | `cloudresourcemanager.googleapis.com`, `serviceusage.googleapis.com` | Terraform project and API management |
 | `storage.googleapis.com` | PostgreSQL backup bucket |
+| `secretmanager.googleapis.com` | Alertmanager Slack webhook |
 
 `disable_on_destroy = false`: destroying the workspace never turns APIs off.
 
@@ -84,7 +86,7 @@ export `TF_VAR_project_id` yourself.
 
 ```bash
 make init
-make apply-all    # services → vpc → cloud-nat → firewall → kubernetes-engine → artifact-registry → argocd-bootstrap
+make apply-all    # services → vpc → cloud-nat → firewall → kubernetes-engine → artifact-registry → cloud-storage → secret-manager → argocd-bootstrap
 # or one workspace at a time: make plan WS=vpc && make apply WS=vpc
 ```
 
@@ -108,7 +110,8 @@ waits until every PVC is gone, then runs `terraform destroy` for argocd-bootstra
 → kubernetes-engine → firewall → cloud-nat → vpc, and finally lists any leftover `pvc-*` disks or IPs.
 
 Destroying the cluster directly would leave the persistent disks created for PVCs behind; they are
-not managed by Terraform and keep billing. The `services` workspace is intentionally left in place.
+not managed by Terraform and keep billing. The `services` and `secret-manager` workspaces are intentionally
+left in place: the secret values were added by hand and cost a few cents a month.
 
 ## Estimated cost (Jakarta, approximate)
 
