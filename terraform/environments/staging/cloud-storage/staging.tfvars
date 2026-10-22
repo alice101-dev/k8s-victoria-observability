@@ -18,9 +18,12 @@ buckets = {
       { action = "AbortIncompleteMultipartUpload", age_days = 1 },
     ]
     # PostgreSQL instance pods run as the Kubernetes ServiceAccount named after the Cluster.
+    # shop-db-restore: restore drills (apps/k8s/restore-drill) only read the backups.
     workload_identity = [
       { namespace = "shop", service_account = "shop-db", role = "roles/storage.objectAdmin" },
       { namespace = "shop", service_account = "shop-db", role = "roles/storage.legacyBucketReader" },
+      { namespace = "shop", service_account = "shop-db-restore", role = "roles/storage.objectViewer" },
+      { namespace = "shop", service_account = "shop-db-restore", role = "roles/storage.legacyBucketReader" },
     ]
   }
 }

@@ -1,0 +1,36 @@
+# Restore drill: a throwaway Cluster recovered from the shop-db backups (ObjectStore shop-backup) to a
+# point in time. Not managed by Argo CD; applied by hand, see "Restore drill" in apps/README.md.
+# Its pods run as the ServiceAccount shop-db-restore, which can only read the bucket (Terraform
+# cloud-storage workspace), and it has no WAL archiver: the drill never writes to the backups.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: shop-db-restore
+  namespace: shop
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie
+
+  bootstrap:
+    recovery:
+      source: shop-db
+      # Point in time to restore to, e.g. "2026-10-22 09:30:00+00". Remove recoveryTarget to replay
+      # every archived WAL (latest state).
+      recoveryTarget:
+        targetTime: "TARGET_TIME"
+
+  externalClusters:
+    - name: shop-db
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: shop-backup
+          serverName: shop-db
+
+  storage:
+    storageClass: standard-rwo
+    size: 10Gi
+
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }

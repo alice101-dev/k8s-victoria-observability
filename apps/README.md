@@ -103,6 +103,32 @@ Alerts shipped with the application (VMRule):
   `PostgresWalArchivingStalled`, `PostgresWalArchivingFailing`, `PostgresBackupTooOld`,
   `PostgresBackupFailed`.
 
+## Restore drill
+
+A backup only counts once it has been restored. `k8s/restore-drill/shop-db-restore.yaml` recovers the
+backups into a throwaway Cluster (not managed by Argo CD) at a point in time. Its pods run as the
+ServiceAccount `shop-db-restore`, which only has read access to the bucket, and it has no WAL archiver.
+
+```bash
+# 1. Point in time to restore to (UTC); it must be after the oldest backup in the recovery window
+TARGET="2026-10-22 02:13:45+00"
+sed "s|TARGET_TIME|$TARGET|" apps/k8s/restore-drill/shop-db-restore.yaml | kubectl apply -f -
+
+# 2. Wait for "Cluster in healthy state" (a recovery job replays base backup + WAL first)
+kubectl -n shop get cluster shop-db-restore -w
+
+# 3. Check the data, e.g. the newest order must be older than TARGET
+kubectl -n shop exec -it shop-db-restore-1 -c postgres -- psql -d app -c "SELECT count(*), max(created_at) FROM orders"
+
+# 4. Clean up (the PVC goes with the Cluster)
+kubectl -n shop delete cluster shop-db-restore
+```
+
+Last drill (2026-10-22): marker rows written 5 seconds before and after the target proved recovery to
+the second (the first present, the second absent), and the order, payment, user and product counts matched
+the source at the target time exactly. The restored instance was healthy 108 seconds after `kubectl apply`.
+In a real disaster the same `bootstrap.recovery` section creates the replacement cluster.
+
 ## Releasing images (GitOps)
 
 ```bash
