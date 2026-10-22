@@ -76,7 +76,10 @@ spec:
   enablePDB: true
 
   # Extra exporter metrics: top statements (pg_stat_statements) and table health (postgres-monitoring.yaml).
+  # The operator always puts its default queries first; listing them keeps Argo CD free of drift.
   monitoring:
     customQueriesConfigMap:
+      - name: cnpg-default-monitoring
+        key: queries
       - name: shop-db-monitoring
         key: queries.yaml
