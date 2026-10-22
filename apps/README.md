@@ -52,7 +52,8 @@ k8s/
 └── services/      # Helm chart — Argo CD app "shop-services" (wave 0)
     ├── values.yaml         # image tag, OpenTelemetry, resources, per-service env
     ├── templates/          # Deployment + Service + ServiceAccount + PDB per service, scrape, rules, traffic generator
-    └── dashboards/         # Grafana dashboards: SLO Overview, Service, Logs, Traces, Microservices Overview (generate.py)
+    └── dashboards/         # Grafana dashboards: SLO Overview, Service, Logs, Traces, Microservices Overview
+                            # (generate.py; one module per dashboard in generator/, checked by CI)
 ```
 
 - Each service requests `10m CPU / 32Mi` with a `128Mi` limit and runs 2 replicas spread across nodes
