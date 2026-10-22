@@ -699,7 +699,7 @@
     {
       "type": "table",
       "title": "Nodes",
-      "description": "Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether that was in the time range. Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its pods were rescheduled. On-demand nodes reboot only for upgrades or repairs. Cause: the most telling node event in the time range (autoscaler ScaleDown, Shutdown, Rebooted, RegisteredNode, NodeNotReady); a node removed by the autoscaler stays listed for a few minutes.",
+      "description": "Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether that was in the time range (a restart, or a new node). Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its pods were rescheduled. On-demand nodes reboot only for upgrades or repairs. Cause: the most telling node event in the time range (autoscaler ScaleDown, Shutdown, Rebooted, RegisteredNode, NodeNotReady); a node removed by the autoscaler stays listed for a few minutes.",
       "datasource": {
         "type": "datasource",
         "uid": "-- Mixed --"
@@ -824,12 +824,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Restarted in range"
+              "options": "Booted in range"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 150
+                "value": 130
               },
               {
                 "id": "custom.cellOptions",
@@ -965,6 +965,17 @@
                         "index": 1
                       }
                     }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "Removed",
+                        "color": "#808080",
+                        "index": 2
+                      }
+                    }
                   }
                 ]
               }
@@ -1025,7 +1036,7 @@
               "label_node_kubernetes_io_instance_type": "Machine type",
               "label_topology_kubernetes_io_zone": "Zone",
               "Value #A": "Booted",
-              "Value #B": "Restarted in range",
+              "Value #B": "Booted in range",
               "cause": "Cause (time range)",
               "cause_ms": "Last node event",
               "Value #C": "Ready"

@@ -1193,7 +1193,7 @@ d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="tabl
                                   "label_cloud_google_com_gke_preemptible": "Preemptible",
                                   "label_node_kubernetes_io_instance_type": "Machine type",
                                   "label_topology_kubernetes_io_zone": "Zone", "Value #A": "Booted",
-                                  "Value #B": "Restarted in range", "cause": "Cause (time range)",
+                                  "Value #B": "Booted in range", "cause": "Cause (time range)",
                                   "cause_ms": "Last node event", "Value #C": "Ready"}}}],
             overrides=[by_name("Node pool", [{"id": "custom.width", "value": 170}]),
                        by_name("Provisioning", [{"id": "custom.width", "value": 190}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
@@ -1205,7 +1205,7 @@ d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="tabl
                        by_name("Machine type", [{"id": "custom.width", "value": 130}]),
                        by_name("Zone", [{"id": "custom.width", "value": 150}]),
                        by_name("Booted", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 130}]),
-                       by_name("Restarted in range", [{"id": "custom.width", "value": 150}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+                       by_name("Booted in range", [{"id": "custom.width", "value": 130}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                                                       {"id": "mappings", "value": [{"type": "value", "options": {
                                                           "1": {"text": "Yes", "color": "orange", "index": 0},
                                                           "0": {"text": "No", "color": "text", "index": 1}}}]}]),
@@ -1218,9 +1218,11 @@ d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="tabl
                        by_name("Ready", [{"id": "custom.width", "value": 90}, {"id": "custom.cellOptions", "value": {"type": "color-background"}},
                                          {"id": "mappings", "value": [{"type": "value", "options": {
                                              "1": {"text": "Ready", "color": "green", "index": 0},
-                                             "0": {"text": "NotReady", "color": "red", "index": 1}}}]}])],
+                                             "0": {"text": "NotReady", "color": "red", "index": 1}}},
+                                             {"type": "special", "options": {"match": "null", "result": {
+                                                 "text": "Removed", "color": "#808080", "index": 2}}}]}])],
             desc="Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether "
-                 "that was in the time range. Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: "
+                 "that was in the time range (a restart, or a new node). Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: "
                  "a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its "
                  "pods were rescheduled. On-demand nodes reboot only for upgrades or repairs. Cause: the most telling "
                  "node event in the time range (autoscaler ScaleDown, Shutdown, Rebooted, RegisteredNode, NodeNotReady); "
