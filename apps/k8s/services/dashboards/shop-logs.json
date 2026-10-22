@@ -1061,7 +1061,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 150
+                "value": 175
               }
             ]
           },
@@ -1077,7 +1077,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 150
+                "value": 175
               }
             ]
           },
@@ -1374,7 +1374,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | delete _msg, err, _time, _stream, _stream_id, trace_id, span_id, output_stream, kubernetes.container_id, kubernetes.container_name, kubernetes.pod_ip, kubernetes.pod_namespace, kubernetes.pod_labels.pod-template-hash, kubernetes.pod_labels.app.kubernetes.io/name, kubernetes.pod_labels.app.kubernetes.io/part-of, kubernetes.pod_labels.app.kubernetes.io/component, kubernetes.pod_labels.app.kubernetes.io/managed-by, kubernetes.pod_labels.topology.kubernetes.io/region | facets 5 keep_const_fields | replace_regexp (\"^kubernetes\\\\.(pod_labels\\\\.)?([a-z]+\\\\.kubernetes\\\\.io/)?\", \"\") at field_name | stats by (field_name, field_value) sum(hits) lines | format if (field_name:=level) \"<lines>\" as level_lines | total_stats sum(level_lines) total | math round(lines*100/total, 0.1) as share | delete level_lines, total | filter -field_name:=level | sort by (share desc) | limit 60",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | delete _msg, err, _time, _stream, _stream_id, trace_id, span_id, output_stream, kubernetes.container_id, kubernetes.container_name, kubernetes.pod_ip, kubernetes.pod_namespace, kubernetes.pod_labels.pod-template-hash, kubernetes.pod_labels.app.kubernetes.io/name, kubernetes.pod_labels.app.kubernetes.io/part-of, kubernetes.pod_labels.app.kubernetes.io/component, kubernetes.pod_labels.app.kubernetes.io/managed-by, kubernetes.pod_labels.topology.kubernetes.io/region, kubernetes.pod_labels.topology.kubernetes.io/zone | facets 5 keep_const_fields | replace_regexp (\"^kubernetes\\\\.(pod_labels\\\\.)?([a-z]+\\\\.kubernetes\\\\.io/)?\", \"\") at field_name | stats by (field_name, field_value) sum(hits) lines | format if (field_name:=level) \"<lines>\" as level_lines | total_stats sum(level_lines) total | math round(lines*100/total, 0.1) as share | delete level_lines, total | filter -field_name:=level | sort by (share desc) | limit 60",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -1618,8 +1618,8 @@
       "gridPos": {
         "x": 0,
         "y": 43,
-        "w": 14,
-        "h": 9
+        "w": 24,
+        "h": 8
       }
     },
     {
@@ -1648,9 +1648,11 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": []
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
         },
         "tooltip": {
           "mode": "multi",
@@ -1672,10 +1674,10 @@
       ],
       "id": 18,
       "gridPos": {
-        "x": 14,
-        "y": 43,
-        "w": 10,
-        "h": 9
+        "x": 0,
+        "y": 51,
+        "w": 24,
+        "h": 7
       },
       "interval": "1m"
     },
@@ -1687,7 +1689,7 @@
       "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 58,
         "w": 24,
         "h": 1
       }
@@ -1714,7 +1716,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} trace_id:=\"${request:raw}\" trace_id:*",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} trace_id:=\"${request:raw}\" trace_id:* | format if (err:*) \"<_msg> — err: <err>\" as _msg | format \"[<service>] <_msg>\" as _msg",
           "queryType": "instant",
           "editorMode": "code",
           "refId": "A",
@@ -1724,9 +1726,9 @@
       "id": 20,
       "gridPos": {
         "x": 0,
-        "y": 53,
+        "y": 59,
         "w": 24,
-        "h": 12
+        "h": 9
       },
       "links": [
         {
@@ -1743,7 +1745,7 @@
       "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 65,
+        "y": 68,
         "w": 24,
         "h": 1
       }
@@ -1770,7 +1772,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level)",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | format if (err:*) \"<_msg> — err: <err>\" as _msg | format \"[<service>] <_msg>\" as _msg",
           "queryType": "instant",
           "editorMode": "code",
           "refId": "A",
@@ -1780,7 +1782,7 @@
       "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 66,
+        "y": 69,
         "w": 24,
         "h": 18
       }
@@ -1807,7 +1809,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"app\"} \"kubernetes.pod_labels.app.kubernetes.io/name\":in($service) -level:* _msg:~`(?i)\\Q${search:raw}\\E`",
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"app\"} \"kubernetes.pod_labels.app.kubernetes.io/name\":in($service) -level:* _msg:~`(?i)\\Q${search:raw}\\E` | format \"[<kubernetes.pod_name>] <_msg>\" as _msg",
           "queryType": "instant",
           "editorMode": "code",
           "refId": "A",
@@ -1817,7 +1819,7 @@
       "id": 23,
       "gridPos": {
         "x": 0,
-        "y": 84,
+        "y": 87,
         "w": 24,
         "h": 7
       }
@@ -1830,7 +1832,7 @@
       "id": 24,
       "gridPos": {
         "x": 0,
-        "y": 91,
+        "y": 94,
         "w": 24,
         "h": 1
       }
@@ -1838,7 +1840,7 @@
     {
       "type": "table",
       "title": "Last line per service",
-      "description": "A service that stops logging while it serves traffic has lost its log shipping (or hangs).",
+      "description": "When each service last logged. A service that logs per request and stops logging while it serves traffic has lost its log shipping or hangs (api-gateway logs only at start and on errors).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
@@ -1865,7 +1867,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 150
+                "value": 175
               }
             ]
           },
@@ -1950,7 +1952,7 @@
       "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 92,
+        "y": 95,
         "w": 6,
         "h": 8
       },
@@ -2016,7 +2018,7 @@
       "id": 26,
       "gridPos": {
         "x": 6,
-        "y": 92,
+        "y": 95,
         "w": 6,
         "h": 8
       },
@@ -2053,7 +2055,6 @@
               "group": "A"
             }
           },
-          "decimals": 2,
           "min": 0
         },
         "overrides": []
@@ -2107,7 +2108,7 @@
       "id": 27,
       "gridPos": {
         "x": 12,
-        "y": 92,
+        "y": 95,
         "w": 6,
         "h": 8
       },
@@ -2229,7 +2230,7 @@
       "id": 28,
       "gridPos": {
         "x": 18,
-        "y": 92,
+        "y": 95,
         "w": 6,
         "h": 8
       },

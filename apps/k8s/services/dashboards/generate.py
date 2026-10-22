@@ -507,6 +507,8 @@ ERR = "level:=ERROR"
 UNSTRUCTURED = ('{kubernetes.pod_namespace="shop", kubernetes.container_name="app"} '
                 f'"kubernetes.pod_labels.app.kubernetes.io/name":in($service) -level:* {SEARCH}')
 VERSION = '| copy "kubernetes.pod_labels.app.kubernetes.io/version" as version '
+# Log lines as shown: the service in front and the cause (err) appended, so a line reads on its own.
+READABLE = '| format if (err:*) "<_msg> — err: <err>" as _msg | format "[<service>] <_msg>" as _msg'
 SELF = "/d/shop-logs/shop-logs?${service:queryparam}&${level:queryparam}&${__url_time_range}"
 MESSAGE_LINK = [{"title": "Show only lines with this message", "url": SELF + "&var-search=${__data.fields.search_key:percentencode}"}]
 POD_LINK = [{"title": "Show this pod's lines in the explorer",
@@ -521,7 +523,7 @@ GAUGE = lambda name, unit="short", max_=None, width=150: by_name(name, [
     {"id": "unit", "value": unit}, {"id": "custom.width", "value": width}, {"id": "min", "value": 0},
     {"id": "custom.cellOptions", "value": {"type": "gauge", "mode": "basic", "valueDisplayMode": "text"}},
     {"id": "color", "value": {"mode": "continuous-BlYlRd"}}] + ([{"id": "max", "value": max_}] if max_ else []))
-WHEN = lambda name, unit: by_name(name, [{"id": "unit", "value": unit}, {"id": "custom.width", "value": 150}])
+WHEN = lambda name, unit: by_name(name, [{"id": "unit", "value": unit}, {"id": "custom.width", "value": 175}])
 
 
 def vl_stat(title, expr, unit, th, desc, sparkline=True, decimals=0, no_value="0"):
@@ -605,7 +607,8 @@ FACET_SKIP = ["_msg", "err", "_time", "_stream", "_stream_id", "trace_id", "span
               "kubernetes.container_id", "kubernetes.container_name", "kubernetes.pod_ip", "kubernetes.pod_namespace",
               "kubernetes.pod_labels.pod-template-hash", "kubernetes.pod_labels.app.kubernetes.io/name",
               "kubernetes.pod_labels.app.kubernetes.io/part-of", "kubernetes.pod_labels.app.kubernetes.io/component",
-              "kubernetes.pod_labels.app.kubernetes.io/managed-by", "kubernetes.pod_labels.topology.kubernetes.io/region"]
+              "kubernetes.pod_labels.app.kubernetes.io/managed-by", "kubernetes.pod_labels.topology.kubernetes.io/region",
+              "kubernetes.pod_labels.topology.kubernetes.io/zone"]
 FACETS = (f"{LOGS_LEVEL} | delete {', '.join(FACET_SKIP)} | facets 5 keep_const_fields "
           r'| replace_regexp ("^kubernetes\\.(pod_labels\\.)?([a-z]+\\.kubernetes\\.io/)?", "") at field_name '
           "| stats by (field_name, field_value) sum(hits) lines "
@@ -633,24 +636,24 @@ d.add(logsql_table("Lines by pod",
                    "rather than the code path. Click a pod to list its lines in the explorer.",
                    VL, overrides=[LINKS_ON("Pod", POD_LINK, 270), COUNT("Lines"), COUNT("Warnings"), COUNT("Errors"),
                                   PCT("Error ratio", 0.1, 1)],
-                   sort=[{"displayName": "Errors", "desc": True}]), 14, 9)
+                   sort=[{"displayName": "Errors", "desc": True}]), 24, 8)
 d.add(ts("Warnings and errors by version", [vl(f"{LOGS} level:in(ERROR, WARN) {VERSION}| stats by (version, level) count() lines",
                                                "statsRange", legend="{{version}} {{level}}")],
          "short", ds=VL, stack=True, bars=True, legend_calcs=("sum",),
          desc="Lines per image version (app.kubernetes.io/version). A new version bringing new errors shows here at "
-              "the rollout (blue annotation)."), 10, 9)
+              "the rollout (blue annotation)."), 24, 7)
 
 d.row("Request — ${request:text}")
-p = d.add(logs_panel("All lines of one request, oldest first", f'{APP_LOGS} trace_id:="${{request:raw}}" trace_id:*',
+p = d.add(logs_panel("All lines of one request, oldest first", f'{APP_LOGS} trace_id:="${{request:raw}}" trace_id:* {READABLE}',
                      "Every service's lines with the trace ID picked in the Request variable: the latest $level lines "
-                     "that match Message contains, newest first. The panel link opens the trace."), 24, 12)
+                     "that match Message contains, newest first. The panel link opens the trace."), 24, 9)
 p["options"]["sortOrder"] = "Ascending"
 p["links"] = [{"title": "Open the trace in Shop — Traces", "url": "/d/shop-traces/shop-traces?var-trace_id=${request}&${__url_time_range}"}]
 
 d.row("Log explorer")
-d.add(logs_panel("Lines — $level", LOGS_LEVEL, "Expand a line for its fields; trace_id links to the trace. Narrow with "
+d.add(logs_panel("Lines — $level", f"{LOGS_LEVEL} {READABLE}", "Expand a line for its fields; trace_id links to the trace. Narrow with "
                  "Message contains and Filters (any field)."), 24, 18)
-d.add(logs_panel("Lines outside the JSON logger", f"{UNSTRUCTURED}",
+d.add(logs_panel("Lines outside the JSON logger", f'{UNSTRUCTURED} | format "[<kubernetes.pod_name>] <_msg>" as _msg',
                  "Output without a level: library loggers (go-redis Sentinel), Go panics and crash output."), 24, 7)
 
 d.row("Log pipeline — is every line arriving?")
@@ -658,7 +661,8 @@ for p in (
     d.add(logsql_table("Last line per service", f"{APP_LOGS} service:in($service) | stats by (service) max(_time) last, count() lines "
                        "| math round(last/1e6) as last_ms | delete last",
                        [("service", "Service"), ("last_ms", "Last line"), ("lines", "Lines")],
-                       "A service that stops logging while it serves traffic has lost its log shipping (or hangs).",
+                       "When each service last logged. A service that logs per request and stops logging while it "
+                       "serves traffic has lost its log shipping or hangs (api-gateway logs only at start and on errors).",
                        VL, overrides=[WHEN("Last line", "dateTimeFromNow"), COUNT("Lines")],
                        sort=[{"displayName": "Last line", "desc": False}]), 6, 8),
     d.add(ts("Log bytes by service", [vl(f"{APP_LOGS} service:in($service) | stats by (service) sum_len(*) bytes",
@@ -669,7 +673,7 @@ for p in (
         vm(f'sum by (reason) (rate(vl_rows_dropped_total{{reason!="debug"}}{RI}))', "dropped: {{reason}}"),
         vm(f"sum(rate(vl_too_long_lines_skipped_total{RI}))", "skipped: too long", "B"),
         vm(f"sum(rate(vlagent_remotewrite_packets_dropped_total{RI}))", "collector dropped", "C")],
-        "short", min_=0, decimals=2, desc="Lines per second VictoriaLogs or the collector did not store (whole cluster). "
+        "short", min_=0, desc="Lines per second VictoriaLogs or the collector did not store (whole cluster). "
         "Should stay at 0."), 6, 8),
     d.add(ts("Collector backlog", [
         vm("sum(vlagent_remotewrite_pending_data_bytes)", "pending"),
