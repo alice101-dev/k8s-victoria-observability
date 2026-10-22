@@ -508,10 +508,6 @@ UNSTRUCTURED = ('{kubernetes.pod_namespace="shop", kubernetes.container_name="ap
                 f'"kubernetes.pod_labels.app.kubernetes.io/name":in($service) -level:* {SEARCH}')
 VERSION = '| copy "kubernetes.pod_labels.app.kubernetes.io/version" as version '
 SELF = "/d/shop-logs/shop-logs?${service:queryparam}&${level:queryparam}&${__url_time_range}"
-REQUEST_LINKS = [{"title": "Show the logs of this request (Request row)",
-                  "url": SELF + "&${search:queryparam}&var-request=${__value.raw}"},
-                 {"title": "Open the trace in Shop — Traces",
-                  "url": "/d/shop-traces/shop-traces?var-trace_id=${__value.raw}&${__url_time_range}"}]
 MESSAGE_LINK = [{"title": "Show only lines with this message", "url": SELF + "&var-search=${__data.fields.search_key:percentencode}"}]
 POD_LINK = [{"title": "Show this pod's lines in the explorer",
              "url": SELF + "&${search:queryparam}&var-filters=kubernetes.pod_name%7C%3D%7C${__value.raw}"}]
@@ -578,24 +574,24 @@ d.add({"type": "status-history", "title": "Errors per service", "datasource": VL
 
 d.row("Patterns — $level lines")
 # Numbers, IDs, IPs and timestamps collapse to placeholders, so messages and causes (err) that differ only in
-# such values form one pattern. search_key (the text before the first placeholder) feeds the message link.
+# such values form one pattern. search_key (the text before the first placeholder) feeds the message link. Every
+# text column is a by() field: the datasource reads the other stats results as numbers.
 PATTERNS = (f"{LOGS_LEVEL} | collapse_nums prettify | collapse_nums at err prettify "
             '| extract_regexp "^(?P<search_key>[^<]*)" from _msg '
-            "| stats by (service, level, _msg, err) count() lines, count_uniq(kubernetes.pod_name) pods, "
-            "min(_time) first, max(_time) last, max(trace_id) request, max(search_key) search_key "
+            "| stats by (service, level, _msg, err, search_key) count() lines, count_uniq(kubernetes.pod_name) pods, "
+            "min(_time) first, max(_time) last "
             "| total_stats sum(lines) total "
             "| math round(lines*100/total, 0.01) as share, round(first/1e6) as first_ms, round(last/1e6) as last_ms "
             "| delete total, first, last | sort by (lines desc) | limit 50")
 d.add(logsql_table("Message patterns", PATTERNS,
                    [("service", "Service"), ("level", "Level"), ("_msg", "Message"), ("err", "Cause"), ("lines", "Lines"),
                     ("share", "Share"), ("pods", "Pods"), ("first_ms", "First seen"), ("last_ms", "Last seen"),
-                    ("request", "Sample request"), ("search_key", "search_key")],
+                    ("search_key", "search_key")],
                    "What the selected lines say, grouped by pattern, with the cause (err) the service logged. Click a "
-                   "message to list only its lines, a sample request to see that request across services or its trace.",
+                   "message to keep only its lines: the explorer and the Request picker then show just those.",
                    VL, overrides=[LINKS_ON("Service", SERVICE_DASH, 150), LEVEL_CELL, LINKS_ON("Message", MESSAGE_LINK, 260),
                                   GAUGE("Lines"), GAUGE("Share", "percent", 100, 110), COUNT("Pods", 60),
                                   WHEN("First seen", "dateTimeAsLocal"), WHEN("Last seen", "dateTimeFromNow"),
-                                  LINKS_ON("Sample request", REQUEST_LINKS, 270),
                                   by_name("search_key", [{"id": "custom.hidden", "value": True}])],
                    sort=[{"displayName": "Lines", "desc": True}]), 24, 10)
 d.add(ts("Patterns over time", [vl(f"{LOGS_LEVEL} | collapse_nums prettify | stats by (service, _msg) count() lines",
@@ -646,8 +642,8 @@ d.add(ts("Warnings and errors by version", [vl(f"{LOGS} level:in(ERROR, WARN) {V
 
 d.row("Request — ${request:text}")
 p = d.add(logs_panel("All lines of one request, oldest first", f'{APP_LOGS} trace_id:="${{request:raw}}" trace_id:*',
-                     "Every service's lines with the trace ID picked in the Request variable (latest $level lines first) "
-                     "or clicked in Message patterns. The panel link opens the trace."), 24, 12)
+                     "Every service's lines with the trace ID picked in the Request variable: the latest $level lines "
+                     "that match Message contains, newest first. The panel link opens the trace."), 24, 12)
 p["options"]["sortOrder"] = "Ascending"
 p["links"] = [{"title": "Open the trace in Shop — Traces", "url": "/d/shop-traces/shop-traces?var-trace_id=${request}&${__url_time_range}"}]
 

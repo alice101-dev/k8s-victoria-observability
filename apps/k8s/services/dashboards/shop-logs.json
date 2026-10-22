@@ -856,7 +856,7 @@
     {
       "type": "table",
       "title": "Message patterns",
-      "description": "What the selected lines say, grouped by pattern, with the cause (err) the service logged. Click a message to list only its lines, a sample request to see that request across services or its trace.",
+      "description": "What the selected lines say, grouped by pattern, with the cause (err) the service logged. Click a message to keep only its lines: the explorer and the Request picker then show just those.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
@@ -1084,31 +1084,6 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Sample request"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "Show the logs of this request (Request row)",
-                    "url": "/d/shop-logs/shop-logs?${service:queryparam}&${level:queryparam}&${__url_time_range}&${search:queryparam}&var-request=${__value.raw}"
-                  },
-                  {
-                    "title": "Open the trace in Shop — Traces",
-                    "url": "/d/shop-traces/shop-traces?var-trace_id=${__value.raw}&${__url_time_range}"
-                  }
-                ]
-              },
-              {
-                "id": "custom.width",
-                "value": 270
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
               "options": "search_key"
             },
             "properties": [
@@ -1161,8 +1136,7 @@
               "pods": 6,
               "first_ms": 7,
               "last_ms": 8,
-              "request": 9,
-              "search_key": 10
+              "search_key": 9
             },
             "renameByName": {
               "service": "Service",
@@ -1174,7 +1148,6 @@
               "pods": "Pods",
               "first_ms": "First seen",
               "last_ms": "Last seen",
-              "request": "Sample request",
               "search_key": "search_key"
             }
           }
@@ -1186,7 +1159,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | collapse_nums prettify | collapse_nums at err prettify | extract_regexp \"^(?P<search_key>[^<]*)\" from _msg | stats by (service, level, _msg, err) count() lines, count_uniq(kubernetes.pod_name) pods, min(_time) first, max(_time) last, max(trace_id) request, max(search_key) search_key | total_stats sum(lines) total | math round(lines*100/total, 0.01) as share, round(first/1e6) as first_ms, round(last/1e6) as last_ms | delete total, first, last | sort by (lines desc) | limit 50",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | collapse_nums prettify | collapse_nums at err prettify | extract_regexp \"^(?P<search_key>[^<]*)\" from _msg | stats by (service, level, _msg, err, search_key) count() lines, count_uniq(kubernetes.pod_name) pods, min(_time) first, max(_time) last | total_stats sum(lines) total | math round(lines*100/total, 0.01) as share, round(first/1e6) as first_ms, round(last/1e6) as last_ms | delete total, first, last | sort by (lines desc) | limit 50",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -1722,7 +1695,7 @@
     {
       "type": "logs",
       "title": "All lines of one request, oldest first",
-      "description": "Every service's lines with the trace ID picked in the Request variable (latest $level lines first) or clicked in Message patterns. The panel link opens the trace.",
+      "description": "Every service's lines with the trace ID picked in the Request variable: the latest $level lines that match Message contains, newest first. The panel link opens the trace.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
