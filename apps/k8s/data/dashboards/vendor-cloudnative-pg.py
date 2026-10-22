@@ -11,6 +11,10 @@ variable expects that label to hold the CloudNativePG cluster name (set by the C
   operator's cumulative counter, which stays red until the operator restarts.
 - The Backups row is rebuilt (backup_panels): backup age and last attempt, recovery window, data at
   risk (RPO), WAL archiving throughput and backlog, and the Barman Cloud sidecar events from VictoriaLogs.
+- New rows after "Operational Stats": "Queries and errors" (slow statements and errors by SQLSTATE from the
+  PostgreSQL logs in VictoriaLogs) and "Database efficiency" (cache hit, rollback, temp files, conflicts).
+- Replication row: bytes behind the primary per standby and WAL retained by replication slots.
+- Annotations: instance (re)starts, role changes (failover/switchover) and firing critical alerts.
 - Export placeholders (__inputs, ${DS_EXPRESSION}) are resolved for file provisioning.
 """
 import json
@@ -40,9 +44,9 @@ def steps(*pairs):
     return {"mode": "absolute", "steps": [{"color": c, "value": v} for c, v in pairs]}
 
 
-def stat(pid, title, expr, unit, th, x, y, desc, mappings=(), decimals=1):
+def stat(pid, title, expr, unit, th, x, y, desc, mappings=(), decimals=1, w=4):
     return {"id": pid, "type": "stat", "title": title, "description": desc, "datasource": PROM,
-            "gridPos": {"h": 4, "w": 4, "x": x, "y": y},
+            "gridPos": {"h": 4, "w": w, "x": x, "y": y},
             "fieldConfig": {"defaults": {"unit": unit, "decimals": decimals, "thresholds": th,
                                          "mappings": list(mappings), "noValue": "–"}, "overrides": []},
             "options": {"colorMode": "background", "graphMode": "none", "textMode": "value", "justifyMode": "center",
@@ -50,18 +54,19 @@ def stat(pid, title, expr, unit, th, x, y, desc, mappings=(), decimals=1):
             "targets": [{"datasource": PROM, "expr": expr, "refId": "A", "instant": True, "range": False}]}
 
 
-def series(pid, title, targets, unit, x, y, desc, th=None, overrides=(), bars=False):
+def series(pid, title, targets, unit, x, y, desc, th=None, overrides=(), bars=False, ds=PROM, stack=False):
     custom = {"drawStyle": "bars" if bars else "line", "fillOpacity": 60 if bars else 10, "lineWidth": 1,
-              "showPoints": "never", "spanNulls": True}
+              "showPoints": "never", "spanNulls": True, "stacking": {"mode": "normal" if stack else "none"}}
     if th:
         custom["thresholdsStyle"] = {"mode": "dashed"}
-    return {"id": pid, "type": "timeseries", "title": title, "description": desc, "datasource": PROM,
+    return {"id": pid, "type": "timeseries", "title": title, "description": desc, "datasource": ds,
             "gridPos": {"h": 8, "w": 12, "x": x, "y": y},
             "fieldConfig": {"defaults": {"unit": unit, "custom": custom, **({"thresholds": th} if th else {})},
                             "overrides": list(overrides)},
             "options": {"legend": {"displayMode": "list", "placement": "bottom", "showLegend": True},
                         "tooltip": {"mode": "multi", "sort": "desc"}},
-            "targets": [dict(t, datasource=PROM, refId=chr(65 + i), range=True) for i, t in enumerate(targets)]}
+            "targets": [dict(t, datasource=ds, refId=chr(65 + i), **({"range": True} if ds is PROM else {}))
+                        for i, t in enumerate(targets)]}
 
 
 def color(name, value):
@@ -129,6 +134,140 @@ def backup_panels(y):
     ]
 
 
+# PostgreSQL server logs (JSON, shipped by vlagent) of the selected CloudNativePG cluster.
+PG_LOGS = ('{kubernetes.pod_namespace="$namespace", kubernetes.container_name="postgres"} '
+           '"kubernetes.pod_labels.cnpg.io/cluster":in($cluster)')
+DB_SEL = f'{SEL}, datname!~"template0|template1"'
+
+
+def rate(metric, by=""):
+    grouping = f" by ({by})" if by else ""
+    return f"sum{grouping} (rate({metric}{{{DB_SEL}}}[$__rate_interval]))"
+
+
+def log_panels(y):
+    """Which statements are slow and which errors PostgreSQL raises, from its own logs."""
+    slow = (f'{PG_LOGS} record.message:"duration:" '
+            '| extract "duration: <duration_ms> ms  <kind>: <statement>" from record.message '
+            '| stats by (statement) count() calls, max(duration_ms) max_ms, avg(duration_ms) avg_ms '
+            '| sort by (max_ms desc) | limit 20')
+    errors = f"{PG_LOGS} record.error_severity:in(ERROR, FATAL, PANIC)"
+    ms = lambda name: {"matcher": {"id": "byName", "options": name},
+                       "properties": [{"id": "unit", "value": "ms"}, {"id": "decimals", "value": 1},
+                                      {"id": "custom.width", "value": 110}]}
+    return [
+        {"id": 9101, "type": "table", "title": "Slow statements (over log_min_duration_statement)",
+         "description": "Statements slower than log_min_duration_statement (250ms), aggregated from the PostgreSQL "
+                        "logs over the selected range. Backup start/stop (pg_backup_start/stop) is expected here.",
+         "datasource": LOGS, "gridPos": {"h": 8, "w": 24, "x": 0, "y": y},
+         "fieldConfig": {"defaults": {"custom": {"cellOptions": {"type": "auto"}, "inspect": True}},
+                         "overrides": [ms("Max"), ms("Avg"),
+                                       {"matcher": {"id": "byName", "options": "Calls"},
+                                        "properties": [{"id": "custom.width", "value": 80}]}]},
+         "options": {"showHeader": True, "cellHeight": "sm", "sortBy": [{"displayName": "Max", "desc": True}]},
+         "transformations": [
+             {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
+             {"id": "merge", "options": {}},
+             {"id": "organize", "options": {
+                 "excludeByName": {"Time": True},
+                 "indexByName": {"statement": 0, "calls": 1, "max_ms": 2, "avg_ms": 3},
+                 "renameByName": {"statement": "Statement", "calls": "Calls", "max_ms": "Max", "avg_ms": "Avg"}}}],
+         "targets": [{"datasource": LOGS, "refId": "A", "queryType": "stats", "editorMode": "code", "expr": slow}]},
+        series(9102, "Errors by severity and SQLSTATE",
+               [{"expr": f"{errors} | stats by (record.error_severity, record.sql_state_code) count() errors",
+                 "queryType": "statsRange", "editorMode": "code",
+                 "legendFormat": "{{record.error_severity}} {{record.sql_state_code}}"}],
+               "short", 0, y + 8, "ERROR/FATAL/PANIC log lines. Common SQLSTATEs: 57P03 server starting up (restarts), "
+               "40P01 deadlock, 23505 unique violation, 53300 too many connections, 57014 statement timeout.",
+               bars=True, stack=True, ds=LOGS),
+        {"id": 9103, "type": "logs", "title": "Latest errors", "datasource": LOGS,
+         "description": "The newest ERROR/FATAL/PANIC lines; expand one for the SQLSTATE, user, database and query.",
+         "gridPos": {"h": 8, "w": 12, "x": 12, "y": y + 8},
+         "options": {"showTime": True, "wrapLogMessage": True, "enableLogDetails": True, "sortOrder": "Descending",
+                     "dedupStrategy": "none"},
+         "targets": [{"datasource": LOGS, "refId": "A", "queryType": "instant", "editorMode": "code", "maxLines": 100,
+                      "expr": f"{errors} | fields _time, record.error_severity, record.sql_state_code, record.message"}]},
+    ]
+
+
+def efficiency_panels(y):
+    """Signals that the database is short on memory or that the workload misbehaves."""
+    hit, read = "cnpg_pg_stat_database_blks_hit", "cnpg_pg_stat_database_blks_read"
+    commit, rollback = "cnpg_pg_stat_database_xact_commit", "cnpg_pg_stat_database_xact_rollback"
+    return [
+        stat(9111, "Cache hit ratio", f"{rate(hit)} / ({rate(hit)} + {rate(read)})", "percentunit",
+             steps(("red", None), ("orange", 0.9), ("green", 0.99)), 0, y,
+             "Share of block reads served from shared_buffers. Below 99% on a steady workload: the working set "
+             "does not fit, consider more shared_buffers/memory.", decimals=2, w=6),
+        stat(9112, "Rollback ratio", f"{rate(rollback)} / ({rate(commit)} + {rate(rollback)})", "percentunit",
+             steps(("green", None), ("orange", 0.05), ("red", 0.2)), 6, y,
+             "Share of transactions rolled back. A jump usually means application errors (constraint violations, "
+             "deadlocks, timeouts) — see Errors by SQLSTATE.", decimals=2, w=6),
+        stat(9113, "Temporary files", f"sum(increase(cnpg_pg_stat_database_temp_files{{{DB_SEL}}}[$__range]))", "none",
+             steps(("green", None), ("orange", 1)), 12, y,
+             "Sorts and hashes that spilled to disk in the selected range: those queries need more work_mem "
+             "(or an index).", decimals=0, w=6),
+        stat(9114, "Recovery conflicts", f"sum(increase(cnpg_pg_stat_database_conflicts{{{DB_SEL}}}[$__range]))", "none",
+             steps(("green", None), ("orange", 1)), 18, y,
+             "Queries cancelled on a standby because replayed changes conflicted with them, in the selected range.",
+             decimals=0, w=6),
+        series(9115, "Cache hit ratio by database",
+               [{"expr": f"{rate(hit, 'datname')} / ({rate(hit, 'datname')} + {rate(read, 'datname')})",
+                 "legendFormat": "{{datname}}"}],
+               "percentunit", 0, y + 4, "The dashed line is the 99% target.", th=steps(("red", None), ("green", 0.99))),
+        series(9116, "Commits and rollbacks per second",
+               [{"expr": rate(commit, "datname"), "legendFormat": "commit {{datname}}"},
+                {"expr": rate(rollback, "datname"), "legendFormat": "rollback {{datname}}"}],
+               "ops", 12, y + 4, "Transactions per second by database."),
+    ]
+
+
+def replication_panels(y):
+    """Lag in bytes stays meaningful when traffic is low (time-based lag then reads 0 or jumps)."""
+    stages = [{"expr": f"max by (application_name) (cnpg_pg_stat_replication_{s}_diff_bytes{{{SEL}}})",
+               "legendFormat": f"{{{{application_name}}}} {s}"} for s in ("sent", "write", "flush", "replay")]
+    return [
+        series(9121, "Bytes behind the primary", stages, "bytes", 0, y,
+               "WAL not yet sent, written, flushed or replayed by each standby, as seen by the primary."),
+        series(9122, "WAL retained by replication slots",
+               [{"expr": f"max by (slot_name) (cnpg_pg_replication_slots_pg_wal_lsn_diff{{{SEL}}})",
+                 "legendFormat": "{{slot_name}}"}],
+               "bytes", 12, y, "WAL kept on the primary for each slot. A slot whose consumer is gone retains WAL "
+               "forever and eventually fills the disk."),
+    ]
+
+
+def changes_annotation(name, metric, title, icon):
+    return {"name": name, "datasource": PROM, "enable": True, "iconColor": icon, "step": "1m",
+            "expr": f"changes(max by (pod) ({metric}{{{SEL}}})[1m]) > 0",
+            "titleFormat": title, "useValueForTime": False}
+
+
+ANNOTATIONS = [
+    changes_annotation("Instance (re)starts", "cnpg_pg_postmaster_start_time", "{{pod}} (re)started", "orange"),
+    changes_annotation("Role changes", "cnpg_pg_replication_in_recovery", "{{pod}} promoted or demoted", "purple"),
+    {"name": "Critical alerts", "datasource": PROM, "enable": True, "iconColor": "red", "step": "1m",
+     "expr": 'max by (alertname, job, pod, deployment, slo) '
+             '(ALERTS{alertname=~"Postgres.*|Shop.*|Redis.*", alertstate="firing", severity="critical"})',
+     "titleFormat": "{{alertname}}", "textFormat": "{{pod}}{{job}}{{deployment}} {{slo}}", "useValueForTime": False},
+]
+
+
+def insert_collapsed_rows(dash, before_title, rows):
+    """Insert collapsed rows (title, panels) right before the row titled before_title."""
+    anchor = next(p for p in dash["panels"] if p["type"] == "row" and p["title"] == before_title)
+    y0 = anchor["gridPos"]["y"]
+    for p in dash["panels"]:
+        if p["gridPos"]["y"] >= y0:
+            p["gridPos"]["y"] += len(rows)
+            for child in p.get("panels", []):
+                child["gridPos"]["y"] += len(rows)
+    for i, (pid, title, build) in enumerate(rows):
+        dash["panels"].append({"id": pid, "type": "row", "title": title, "collapsed": True,
+                               "gridPos": {"h": 1, "w": 24, "x": 0, "y": y0 + i}, "panels": build(y0 + i + 1)})
+    dash["panels"].sort(key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]))
+
+
 def walk(panels):
     for p in panels:
         yield p
@@ -164,6 +303,16 @@ for row in dash["panels"]:
     if row["type"] == "row" and row["title"] == "Backups":
         assert row.get("collapsed"), "the Backups row is expected to be collapsed (panels nested in it)"
         row["panels"] = backup_panels(row["gridPos"]["y"] + 1)
+    if row["type"] == "row" and row["title"] == "Replication":
+        assert row.get("collapsed"), "the Replication row is expected to be collapsed (panels nested in it)"
+        bottom = max(p["gridPos"]["y"] + p["gridPos"]["h"] for p in row["panels"])
+        row["panels"] += replication_panels(bottom)
+
+insert_collapsed_rows(dash, "Storage & I/O", [
+    (9100, "Queries and errors (PostgreSQL logs)", log_panels),
+    (9110, "Database efficiency", efficiency_panels),
+])
+dash["annotations"]["list"] += ANNOTATIONS
 
 with open(OUT, "w") as f:
     json.dump(dash, f, indent=2, ensure_ascii=False)

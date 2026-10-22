@@ -18,6 +18,46 @@
           "type": "dashboard"
         },
         "type": "dashboard"
+      },
+      {
+        "name": "Instance (re)starts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "step": "1m",
+        "expr": "changes(max by (pod) (cnpg_pg_postmaster_start_time{namespace=~\"$namespace\", pod=~\"$instances\"})[1m]) > 0",
+        "titleFormat": "{{pod}} (re)started",
+        "useValueForTime": false
+      },
+      {
+        "name": "Role changes",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "enable": true,
+        "iconColor": "purple",
+        "step": "1m",
+        "expr": "changes(max by (pod) (cnpg_pg_replication_in_recovery{namespace=~\"$namespace\", pod=~\"$instances\"})[1m]) > 0",
+        "titleFormat": "{{pod}} promoted or demoted",
+        "useValueForTime": false
+      },
+      {
+        "name": "Critical alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "${DS_PROMETHEUS}"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "step": "1m",
+        "expr": "max by (alertname, job, pod, deployment, slo) (ALERTS{alertname=~\"Postgres.*|Shop.*|Redis.*\", alertstate=\"firing\", severity=\"critical\"})",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{pod}}{{job}}{{deployment}} {{slo}}",
+        "useValueForTime": false
       }
     ]
   },
@@ -5636,6 +5676,657 @@
       "type": "timeseries"
     },
     {
+      "id": 9100,
+      "type": "row",
+      "title": "Queries and errors (PostgreSQL logs)",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 51
+      },
+      "panels": [
+        {
+          "id": 9101,
+          "type": "table",
+          "title": "Slow statements (over log_min_duration_statement)",
+          "description": "Statements slower than log_min_duration_statement (250ms), aggregated from the PostgreSQL logs over the selected range. Backup start/stop (pg_backup_start/stop) is expected here.",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 52
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Max"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Avg"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "ms"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Calls"
+                },
+                "properties": [
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "sortBy": [
+              {
+                "displayName": "Max",
+                "desc": true
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "labelsToFields",
+              "options": {
+                "mode": "columns",
+                "valueLabel": "__name__"
+              }
+            },
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "statement": 0,
+                  "calls": 1,
+                  "max_ms": 2,
+                  "avg_ms": 3
+                },
+                "renameByName": {
+                  "statement": "Statement",
+                  "calls": "Calls",
+                  "max_ms": "Max",
+                  "avg_ms": "Avg"
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "A",
+              "queryType": "stats",
+              "editorMode": "code",
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.message:\"duration:\" | extract \"duration: <duration_ms> ms  <kind>: <statement>\" from record.message | stats by (statement) count() calls, max(duration_ms) max_ms, avg(duration_ms) avg_ms | sort by (max_ms desc) | limit 20"
+            }
+          ]
+        },
+        {
+          "id": 9102,
+          "type": "timeseries",
+          "title": "Errors by severity and SQLSTATE",
+          "description": "ERROR/FATAL/PANIC log lines. Common SQLSTATEs: 57P03 server starting up (restarts), 40P01 deadlock, 23505 unique violation, 53300 too many connections, 57014 statement timeout.",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 60
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 60,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.error_severity:in(ERROR, FATAL, PANIC) | stats by (record.error_severity, record.sql_state_code) count() errors",
+              "queryType": "statsRange",
+              "editorMode": "code",
+              "legendFormat": "{{record.error_severity}} {{record.sql_state_code}}",
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "A"
+            }
+          ]
+        },
+        {
+          "id": 9103,
+          "type": "logs",
+          "title": "Latest errors",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "description": "The newest ERROR/FATAL/PANIC lines; expand one for the SQLSTATE, user, database and query.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 60
+          },
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending",
+            "dedupStrategy": "none"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "A",
+              "queryType": "instant",
+              "editorMode": "code",
+              "maxLines": 100,
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.error_severity:in(ERROR, FATAL, PANIC) | fields _time, record.error_severity, record.sql_state_code, record.message"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 9110,
+      "type": "row",
+      "title": "Database efficiency",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "panels": [
+        {
+          "id": 9111,
+          "type": "stat",
+          "title": "Cache hit ratio",
+          "description": "Share of block reads served from shared_buffers. Below 99% on a steady workload: the working set does not fit, consider more shared_buffers/memory.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 0,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 2,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.9
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.99
+                  }
+                ]
+              },
+              "mappings": [],
+              "noValue": "–"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum (rate(cnpg_pg_stat_database_blks_hit{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])) / (sum (rate(cnpg_pg_stat_database_blks_hit{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])) + sum (rate(cnpg_pg_stat_database_blks_read{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])))",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ]
+        },
+        {
+          "id": 9112,
+          "type": "stat",
+          "title": "Rollback ratio",
+          "description": "Share of transactions rolled back. A jump usually means application errors (constraint violations, deadlocks, timeouts) — see Errors by SQLSTATE.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 6,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "decimals": 2,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 0.05
+                  },
+                  {
+                    "color": "red",
+                    "value": 0.2
+                  }
+                ]
+              },
+              "mappings": [],
+              "noValue": "–"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum (rate(cnpg_pg_stat_database_xact_rollback{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])) / (sum (rate(cnpg_pg_stat_database_xact_commit{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])) + sum (rate(cnpg_pg_stat_database_xact_rollback{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])))",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ]
+        },
+        {
+          "id": 9113,
+          "type": "stat",
+          "title": "Temporary files",
+          "description": "Sorts and hashes that spilled to disk in the selected range: those queries need more work_mem (or an index).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 12,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [],
+              "noValue": "–"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(increase(cnpg_pg_stat_database_temp_files{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__range]))",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ]
+        },
+        {
+          "id": 9114,
+          "type": "stat",
+          "title": "Recovery conflicts",
+          "description": "Queries cancelled on a standby because replayed changes conflicted with them, in the selected range.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 6,
+            "x": 18,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "none",
+              "decimals": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "orange",
+                    "value": 1
+                  }
+                ]
+              },
+              "mappings": [],
+              "noValue": "–"
+            },
+            "overrides": []
+          },
+          "options": {
+            "colorMode": "background",
+            "graphMode": "none",
+            "textMode": "value",
+            "justifyMode": "center",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            }
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "expr": "sum(increase(cnpg_pg_stat_database_conflicts{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__range]))",
+              "refId": "A",
+              "instant": true,
+              "range": false
+            }
+          ]
+        },
+        {
+          "id": 9115,
+          "type": "timeseries",
+          "title": "Cache hit ratio by database",
+          "description": "The dashed line is the 99% target.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 57
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "percentunit",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "dashed"
+                }
+              },
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "red",
+                    "value": null
+                  },
+                  {
+                    "color": "green",
+                    "value": 0.99
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (datname) (rate(cnpg_pg_stat_database_blks_hit{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])) / (sum by (datname) (rate(cnpg_pg_stat_database_blks_hit{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])) + sum by (datname) (rate(cnpg_pg_stat_database_blks_read{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval])))",
+              "legendFormat": "{{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            }
+          ]
+        },
+        {
+          "id": 9116,
+          "type": "timeseries",
+          "title": "Commits and rollbacks per second",
+          "description": "Transactions per second by database.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 57
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (datname) (rate(cnpg_pg_stat_database_xact_commit{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval]))",
+              "legendFormat": "commit {{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            },
+            {
+              "expr": "sum by (datname) (rate(cnpg_pg_stat_database_xact_rollback{namespace=~\"$namespace\", pod=~\"$instances\", datname!~\"template0|template1\"}[$__rate_interval]))",
+              "legendFormat": "rollback {{datname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "B",
+              "range": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "collapsed": true,
       "datasource": {
         "uid": "prometheus"
@@ -5644,7 +6335,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 51
+        "y": 53
       },
       "id": 35,
       "panels": [
@@ -5686,7 +6377,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 52
+            "y": 54
           },
           "id": 424,
           "options": {
@@ -5777,7 +6468,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 52
+            "y": 54
           },
           "id": 426,
           "options": {
@@ -5866,7 +6557,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 60
+            "y": 62
           },
           "id": 564,
           "options": {
@@ -5968,7 +6659,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 67
+            "y": 69
           },
           "id": 44,
           "options": {
@@ -6120,7 +6811,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 67
+            "y": 69
           },
           "id": 46,
           "options": {
@@ -6227,7 +6918,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 75
+            "y": 77
           },
           "id": 22,
           "options": {
@@ -6325,7 +7016,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 75
+            "y": 77
           },
           "id": 2,
           "options": {
@@ -6378,7 +7069,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 54
       },
       "id": 37,
       "panels": [
@@ -6445,7 +7136,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 53
+            "y": 55
           },
           "id": 6,
           "options": {
@@ -6551,7 +7242,7 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 53
+            "y": 55
           },
           "id": 52,
           "options": {
@@ -6659,7 +7350,7 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 53
+            "y": 55
           },
           "id": 53,
           "options": {
@@ -6753,7 +7444,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 61
+            "y": 63
           },
           "id": 725,
           "options": {
@@ -6806,7 +7497,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 55
       },
       "id": 18,
       "panels": [
@@ -6878,7 +7569,7 @@
             "h": 8,
             "w": 6,
             "x": 0,
-            "y": 59
+            "y": 61
           },
           "id": 16,
           "options": {
@@ -6974,7 +7665,7 @@
             "h": 8,
             "w": 6,
             "x": 6,
-            "y": 59
+            "y": 61
           },
           "id": 14,
           "options": {
@@ -7071,7 +7762,7 @@
             "h": 8,
             "w": 6,
             "x": 12,
-            "y": 59
+            "y": 61
           },
           "id": 59,
           "options": {
@@ -7169,7 +7860,7 @@
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 59
+            "y": 61
           },
           "id": 20,
           "options": {
@@ -7201,6 +7892,146 @@
           ],
           "title": "Replay Lag",
           "type": "timeseries"
+        },
+        {
+          "id": 9121,
+          "type": "timeseries",
+          "title": "Bytes behind the primary",
+          "description": "WAL not yet sent, written, flushed or replayed by each standby, as seen by the primary.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 69
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "max by (application_name) (cnpg_pg_stat_replication_sent_diff_bytes{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "{{application_name}} sent",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            },
+            {
+              "expr": "max by (application_name) (cnpg_pg_stat_replication_write_diff_bytes{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "{{application_name}} write",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "B",
+              "range": true
+            },
+            {
+              "expr": "max by (application_name) (cnpg_pg_stat_replication_flush_diff_bytes{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "{{application_name}} flush",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "C",
+              "range": true
+            },
+            {
+              "expr": "max by (application_name) (cnpg_pg_stat_replication_replay_diff_bytes{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "{{application_name}} replay",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "D",
+              "range": true
+            }
+          ]
+        },
+        {
+          "id": 9122,
+          "type": "timeseries",
+          "title": "WAL retained by replication slots",
+          "description": "WAL kept on the primary for each slot. A slot whose consumer is gone retains WAL forever and eventually fills the disk.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 69
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "bytes",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "max by (slot_name) (cnpg_pg_replication_slots_pg_wal_lsn_diff{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "{{slot_name}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            }
+          ]
         }
       ],
       "targets": [
@@ -7223,7 +8054,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 56
       },
       "id": 231,
       "panels": [
@@ -7261,7 +8092,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 55
+            "y": 57
           },
           "heatmap": {},
           "hideZeroBuckets": false,
@@ -7402,7 +8233,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 57
           },
           "id": 235,
           "options": {
@@ -7454,7 +8285,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 57
       },
       "id": 239,
       "panels": [
@@ -7471,7 +8302,7 @@
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 56
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -7550,7 +8381,7 @@
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 56
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -7627,7 +8458,7 @@
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 56
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -7686,7 +8517,7 @@
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 56
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -7753,7 +8584,7 @@
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 56
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -7820,7 +8651,7 @@
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 56
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -7883,7 +8714,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 60
+            "y": 62
           },
           "fieldConfig": {
             "defaults": {
@@ -7894,6 +8725,9 @@
                 "lineWidth": 1,
                 "showPoints": "never",
                 "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                },
                 "thresholdsStyle": {
                   "mode": "dashed"
                 }
@@ -7951,7 +8785,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 60
+            "y": 62
           },
           "fieldConfig": {
             "defaults": {
@@ -7962,6 +8796,9 @@
                 "lineWidth": 1,
                 "showPoints": "never",
                 "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                },
                 "thresholdsStyle": {
                   "mode": "dashed"
                 }
@@ -8019,7 +8856,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 68
+            "y": 70
           },
           "fieldConfig": {
             "defaults": {
@@ -8029,7 +8866,10 @@
                 "fillOpacity": 60,
                 "lineWidth": 1,
                 "showPoints": "never",
-                "spanNulls": true
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
               }
             },
             "overrides": [
@@ -8112,7 +8952,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 68
+            "y": 70
           },
           "fieldConfig": {
             "defaults": {
@@ -8122,7 +8962,10 @@
                 "fillOpacity": 10,
                 "lineWidth": 1,
                 "showPoints": "never",
-                "spanNulls": true
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
               }
             },
             "overrides": [
@@ -8191,7 +9034,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 76
+            "y": 78
           },
           "options": {
             "showTime": true,
@@ -8235,7 +9078,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 58
       },
       "id": 293,
       "panels": [
@@ -8304,7 +9147,7 @@
             "h": 6,
             "w": 5,
             "x": 0,
-            "y": 57
+            "y": 59
           },
           "id": 295,
           "options": {
@@ -8418,7 +9261,7 @@
             "h": 6,
             "w": 5,
             "x": 5,
-            "y": 57
+            "y": 59
           },
           "id": 296,
           "options": {
@@ -8485,7 +9328,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 59
       },
       "id": 794,
       "panels": [
@@ -8555,7 +9398,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 81
+            "y": 83
           },
           "id": 792,
           "options": {
@@ -8643,7 +9486,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 60
       },
       "id": 696,
       "panels": [
@@ -8699,7 +9542,7 @@
             "h": 2,
             "w": 4,
             "x": 0,
-            "y": 64
+            "y": 66
           },
           "id": 697,
           "options": {
@@ -8800,7 +9643,7 @@
             "h": 2,
             "w": 4,
             "x": 4,
-            "y": 64
+            "y": 66
           },
           "id": 702,
           "options": {
@@ -8901,7 +9744,7 @@
             "h": 2,
             "w": 4,
             "x": 8,
-            "y": 64
+            "y": 66
           },
           "id": 698,
           "options": {
@@ -9002,7 +9845,7 @@
             "h": 2,
             "w": 4,
             "x": 12,
-            "y": 64
+            "y": 66
           },
           "id": 704,
           "options": {
@@ -9103,7 +9946,7 @@
             "h": 2,
             "w": 4,
             "x": 16,
-            "y": 64
+            "y": 66
           },
           "id": 703,
           "options": {
@@ -9225,7 +10068,7 @@
             "h": 8,
             "w": 4,
             "x": 0,
-            "y": 66
+            "y": 68
           },
           "id": 746,
           "options": {
@@ -9354,7 +10197,7 @@
             "h": 8,
             "w": 4,
             "x": 4,
-            "y": 66
+            "y": 68
           },
           "id": 767,
           "options": {
@@ -9482,7 +10325,7 @@
             "h": 8,
             "w": 4,
             "x": 8,
-            "y": 66
+            "y": 68
           },
           "id": 768,
           "options": {
@@ -9610,7 +10453,7 @@
             "h": 8,
             "w": 4,
             "x": 12,
-            "y": 66
+            "y": 68
           },
           "id": 790,
           "options": {
@@ -9740,7 +10583,7 @@
             "h": 8,
             "w": 4,
             "x": 16,
-            "y": 66
+            "y": 68
           },
           "id": 769,
           "options": {
