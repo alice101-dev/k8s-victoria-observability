@@ -1,7 +1,7 @@
 {
   "uid": "shop-service",
   "title": "Shop — Service",
-  "description": "One service end to end: SLO, RED, latency distribution, dependencies, saturation, logs and traces.",
+  "description": "One service end to end: SLO, RED, latency distribution, dependencies, database, saturation, logs and traces.",
   "tags": [
     "shop",
     "red"
@@ -1241,13 +1241,341 @@
     },
     {
       "type": "row",
-      "title": "Saturation",
+      "title": "Database — $service",
       "collapsed": false,
       "panels": [],
       "id": 21,
       "gridPos": {
         "x": 0,
         "y": 40,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Connection pool",
+      "description": "Connections of each pod's pool (DB_MAX_CONNS). In use at the maximum means requests queue for a connection.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (pod) (pgxpool_acquired_connections{namespace=\"shop\", job=\"$service\"})",
+          "legendFormat": "in use {{pod}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (pod) (pgxpool_idle_connections{namespace=\"shop\", job=\"$service\"})",
+          "legendFormat": "idle {{pod}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(pgxpool_max_connections{namespace=\"shop\", job=\"$service\"})",
+          "legendFormat": "max per pod",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 22,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open CloudNativePG dashboard",
+          "url": "/d/cloudnative-pg-shop/cloudnativepg?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Waiting for a connection",
+      "description": "Acquisitions that found no idle connection and waited (left, per second), how long they waited (right) and how many gave up because the request timed out first.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (pod) (rate(pgxpool_empty_acquires_total{namespace=\"shop\", job=\"$service\"}[$__rate_interval]))",
+          "legendFormat": "waits {{pod}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (pod) (rate(pgxpool_empty_acquire_wait_seconds_total{namespace=\"shop\", job=\"$service\"}[$__rate_interval])) / sum by (pod) (rate(pgxpool_empty_acquires_total{namespace=\"shop\", job=\"$service\"}[$__rate_interval]))",
+          "legendFormat": "average wait {{pod}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (pod) (rate(pgxpool_canceled_acquires_total{namespace=\"shop\", job=\"$service\"}[$__rate_interval]))",
+          "legendFormat": "gave up {{pod}}",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 23,
+      "gridPos": {
+        "x": 6,
+        "y": 41,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open CloudNativePG dashboard",
+          "url": "/d/cloudnative-pg-shop/cloudnativepg?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Sessions in PostgreSQL",
+      "description": "This service's sessions on the database by state. \"idle in transaction\" that persists is a transaction left open: it holds locks (ended by PostgreSQL after 30s for the services).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (state) (cnpg_backends_total{namespace=\"shop\", application_name=\"$service\"})",
+          "legendFormat": "{{state}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 24,
+      "gridPos": {
+        "x": 12,
+        "y": 41,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open CloudNativePG dashboard",
+          "url": "/d/cloudnative-pg-shop/cloudnativepg?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "PostgreSQL errors by SQLSTATE",
+      "description": "Errors PostgreSQL logged for this service's sessions: 55P03 lock timeout (another transaction holds the row), 57014 cancelled (statement_timeout, or the service gave up), 23505 duplicate key, 40P01 deadlock. Details in the CloudNativePG dashboard (Queries and errors, Locks and blocking).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"postgres\"} record.application_name:in($service) record.error_severity:in(ERROR, FATAL) | stats by (record.sql_state_code) count() errors",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{record.sql_state_code}}"
+        }
+      ],
+      "id": 25,
+      "gridPos": {
+        "x": 18,
+        "y": 41,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open CloudNativePG dashboard",
+          "url": "/d/cloudnative-pg-shop/cloudnativepg?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Saturation",
+      "collapsed": false,
+      "panels": [],
+      "id": 26,
+      "gridPos": {
+        "x": 0,
+        "y": 49,
         "w": 24,
         "h": 1
       }
@@ -1312,10 +1640,10 @@
           "instant": false
         }
       ],
-      "id": 22,
+      "id": 27,
       "gridPos": {
         "x": 0,
-        "y": 41,
+        "y": 50,
         "w": 6,
         "h": 8
       }
@@ -1379,10 +1707,10 @@
           "instant": false
         }
       ],
-      "id": 23,
+      "id": 28,
       "gridPos": {
         "x": 6,
-        "y": 41,
+        "y": 50,
         "w": 6,
         "h": 8
       }
@@ -1446,10 +1774,10 @@
           "instant": false
         }
       ],
-      "id": 24,
+      "id": 29,
       "gridPos": {
         "x": 12,
-        "y": 41,
+        "y": 50,
         "w": 6,
         "h": 8
       }
@@ -1505,10 +1833,10 @@
           "instant": false
         }
       ],
-      "id": 25,
+      "id": 30,
       "gridPos": {
         "x": 18,
-        "y": 41,
+        "y": 50,
         "w": 6,
         "h": 8
       }
@@ -1518,10 +1846,10 @@
       "title": "Logs — $service",
       "collapsed": false,
       "panels": [],
-      "id": 26,
+      "id": 31,
       "gridPos": {
         "x": 0,
-        "y": 49,
+        "y": 58,
         "w": 24,
         "h": 1
       }
@@ -1637,10 +1965,10 @@
           "legendFormat": "{{level}}"
         }
       ],
-      "id": 27,
+      "id": 32,
       "gridPos": {
         "x": 0,
-        "y": 50,
+        "y": 59,
         "w": 12,
         "h": 8
       }
@@ -1739,10 +2067,10 @@
           "refId": "A"
         }
       ],
-      "id": 28,
+      "id": 33,
       "gridPos": {
         "x": 12,
-        "y": 50,
+        "y": 59,
         "w": 12,
         "h": 8
       }
@@ -1776,10 +2104,10 @@
           "maxLines": 500
         }
       ],
-      "id": 29,
+      "id": 34,
       "gridPos": {
         "x": 0,
-        "y": 58,
+        "y": 67,
         "w": 24,
         "h": 10
       }
@@ -1789,10 +2117,10 @@
       "title": "Traces — $service",
       "collapsed": false,
       "panels": [],
-      "id": 30,
+      "id": 35,
       "gridPos": {
         "x": 0,
-        "y": 68,
+        "y": 77,
         "w": 24,
         "h": 1
       }
@@ -1843,10 +2171,10 @@
           "limit": 20
         }
       ],
-      "id": 31,
+      "id": 36,
       "gridPos": {
         "x": 0,
-        "y": 69,
+        "y": 78,
         "w": 12,
         "h": 9
       }
@@ -1897,10 +2225,10 @@
           "limit": 20
         }
       ],
-      "id": 32,
+      "id": 37,
       "gridPos": {
         "x": 12,
-        "y": 69,
+        "y": 78,
         "w": 12,
         "h": 9
       }

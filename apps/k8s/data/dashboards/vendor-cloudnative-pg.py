@@ -18,6 +18,8 @@ variable expects that label to hold the CloudNativePG cluster name (set by the C
   (pg_stat_statements top 10, pg_stat_user_tables).
 - Replication row: bytes behind the primary per standby and WAL retained by replication slots.
 - Annotations: instance (re)starts, role changes (failover/switchover) and firing critical alerts.
+- Links: the Shop dashboards (dropdown), and application names in the lock tables open that service's
+  Shop — Service dashboard.
 - Export placeholders (__inputs, ${DS_EXPRESSION}) are resolved for file provisioning.
 """
 import json
@@ -34,6 +36,9 @@ RECONCILE = re.compile(r"max\((controller_runtime_reconcile_total\{[^}]*\})\)")
 
 PROM = {"type": "prometheus", "uid": "${DS_PROMETHEUS}"}
 LOGS = {"type": "victoriametrics-logs-datasource", "uid": "VictoriaLogs"}
+# Shop sessions set application_name to their service, so it opens that service's dashboard.
+SERVICE_LINK = [{"title": "Open Shop — Service dashboard for ${__value.raw}",
+                 "url": "/d/shop-service/shop-service?var-service=${__value.raw}&${__url_time_range}"}]
 SEL = 'namespace=~"$namespace", pod=~"$instances"'
 LAST_BACKUP = f'max({{__name__=~"barman_cloud_cloudnative_pg_io_last_available_backup_timestamp|cnpg_collector_last_available_backup_timestamp", {SEL}}})'
 LAST_FAILED = f'max({{__name__=~"barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp|cnpg_collector_last_failed_backup_timestamp", {SEL}}})'
@@ -222,7 +227,8 @@ def lock_panels(y):
             "query_id is the queryid of its latest statement in Top statements.",
             overrides=[unit("Blocked", "short", 0, 80), unit("Longest wait", "s", 1, 110),
                        unit("Transaction age", "s", 0, 130), unit("pid", "string", width=80),
-                       unit("state", "string", width=160), unit("query_id", "string", width=190)],
+                       unit("state", "string", width=160), unit("query_id", "string", width=190),
+                       unit("application_name", "string", extra=[{"id": "links", "value": SERVICE_LINK}])],
             sort={"displayName": "Transaction age", "desc": True}),
         series(9145, "Sessions waiting on locks, by blocker",
                [{"expr": f"sum by (pid, usename, application_name, state) ({blocking('blocked_sessions')})",
@@ -258,7 +264,8 @@ def lock_panels(y):
          "fieldConfig": {"defaults": {"custom": {"cellOptions": {"type": "auto"}, "inspect": True}},
                          "overrides": [unit("Waits", "short", 0, 70), unit("Lock", "string", width=150),
                                        unit("On", "string", width=110), unit("Blocker pids", "string", width=110),
-                                       unit("Application", "string", width=140)]},
+                                       unit("Application", "string", width=140,
+                                            extra=[{"id": "links", "value": SERVICE_LINK}])]},
          "options": {"showHeader": True, "cellHeight": "sm", "sortBy": [{"displayName": "Waits", "desc": True}]},
          "transformations": [
              {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
@@ -483,6 +490,8 @@ insert_collapsed_rows(dash, "Storage & I/O", [
     (9110, "Database efficiency", efficiency_panels),
 ])
 dash["annotations"]["list"] += ANNOTATIONS
+dash["links"].append({"title": "Shop dashboards", "type": "dashboards", "tags": ["shop"], "asDropdown": True,
+                      "includeVars": False, "keepTime": True})
 
 with open(OUT, "w") as f:
     json.dump(dash, f, indent=2, ensure_ascii=False)

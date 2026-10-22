@@ -129,7 +129,8 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
   - *SLO Overview:* user-journey SLOs (checkout, browse) measured at the edge, then per-service SLOs:
     error budget, burn rates, time until the budget is gone and how much data the window holds.
   - *Service:* one service end to end (SLO, RED and latency SLI by route, latency heatmap, dependencies,
-    saturation, WARN/ERROR logs, slowest and failed traces).
+    database: connection pool, sessions and PostgreSQL errors of that service, saturation, WARN/ERROR logs,
+    slowest and failed traces).
   - Every Shop dashboard marks rollouts and firing critical Shop alerts on its graphs.
   - *Logs:* log volume, top messages and top pods, filterable by service, level and any field.
   - *Microservices Overview:* RED for all services side by side, plus business metrics.

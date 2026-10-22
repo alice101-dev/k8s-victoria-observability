@@ -78,6 +78,16 @@
       "tooltip": "",
       "type": "dashboards",
       "url": ""
+    },
+    {
+      "title": "Shop dashboards",
+      "type": "dashboards",
+      "tags": [
+        "shop"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
     }
   ],
   "liveNow": false,
@@ -6060,6 +6070,27 @@
                     "value": 190
                   }
                 ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "application_name"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "links",
+                    "value": [
+                      {
+                        "title": "Open Shop — Service dashboard for ${__value.raw}",
+                        "url": "/d/shop-service/shop-service?var-service=${__value.raw}&${__url_time_range}"
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           },
@@ -6435,6 +6466,15 @@
                   {
                     "id": "custom.width",
                     "value": 140
+                  },
+                  {
+                    "id": "links",
+                    "value": [
+                      {
+                        "title": "Open Shop — Service dashboard for ${__value.raw}",
+                        "url": "/d/shop-service/shop-service?var-service=${__value.raw}&${__url_time_range}"
+                      }
+                    ]
                   }
                 ]
               }
