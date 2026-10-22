@@ -4,7 +4,7 @@ The `Redis*` alerts of the `shop-data` VMRule (`apps/k8s/data/monitoring.yaml`) 
 Redis runs as the StatefulSet `redis-node` (3 pods, one per node), each pod with the containers `redis`,
 `sentinel` and `exporter` (`apps/k8s/data/redis.yaml`). Services find the master through
 `redis-sentinel:26379` (master name `shop`). Redis holds the product and user caches (keys with a TTL; a miss
-falls back to PostgreSQL) and the notification queue (Redis Stream `notifications`, consumer group `notifier`,
+falls back to PostgreSQL), payment idempotency keys and the notification queue (Redis Stream `notifications`, consumer group `notifier`,
 capped at about 10000 entries, no TTL).
 
 Commands below read the password from the pod's environment, so it never appears on the command line:

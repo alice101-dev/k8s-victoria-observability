@@ -4,6 +4,7 @@ namespace: shop
 resources:
   - postgres.yaml
   - postgres-monitoring.yaml
+  - postgres-mcp.yaml
   - redis.yaml
   - backup.yaml
   - networkpolicy.yaml

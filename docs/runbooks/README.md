@@ -17,6 +17,7 @@ that query the stack through the MCP servers.
 | Application and PostgreSQL logs | VictoriaLogs cluster | `VictoriaLogs` | `victorialogs` (query, stats_query, field_names) |
 | Traces | VictoriaTraces (Jaeger API) | `VictoriaTraces` | `victoriatraces` (services, traces, trace) |
 | Dashboards, annotations | Grafana | – | `grafana` (search_dashboards, get_dashboard_summary) |
+| Live sessions, locks, statistics | PostgreSQL (`shop-db`) | – | `postgres` (list_active_queries, list_locks, execute_sql; read-only, `pg_monitor`) |
 
 Dashboards (Grafana folder **Shop**): `shop-slo` (SLO Overview), `shop-service` (one service end to end),
 `shop-logs`, `shop-overview`, and `cloudnative-pg-shop` (CloudNativePG, one row per concern: Queries and
@@ -34,8 +35,8 @@ All of them mark rollouts and firing critical alerts as annotations.
 3. **The logs of that request.** App logs carry `trace_id`, so `trace_id:<id>` returns every service's lines
    for one request, with the error text in `err`.
 4. **The database side, at the same time.** PostgreSQL logs (errors with SQLSTATE, lock waits naming the
-   blocking pid, slow statements) and the CloudNativePG dashboard rows. Live sessions and locks through psql
-   ([postgres.md](postgres.md#live-diagnosis)).
+   blocking pid, slow statements) and the CloudNativePG dashboard rows. Live sessions and locks through the
+   `postgres` MCP server or psql ([postgres.md](postgres.md#live-diagnosis)).
 5. **Changes.** Rollout and restart annotations, Argo CD sync history, `kubectl get events`.
 
 ## Field reference

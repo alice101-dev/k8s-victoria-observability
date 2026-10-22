@@ -77,6 +77,21 @@ spec:
     requests: { cpu: 100m, memory: 256Mi }
     limits: { memory: 512Mi }
 
+  # Read-only diagnostics role for the Postgres MCP server (postgres-mcp.yaml): pg_monitor reads every
+  # session, lock and statistics view, but no table data, and cannot cancel or end sessions.
+  # Defaulted fields are listed so that Argo CD shows no drift.
+  managed:
+    roles:
+      - name: mcp_readonly
+        ensure: present
+        comment: Postgres MCP server (read-only diagnostics)
+        login: true
+        inherit: true
+        inRoles: [pg_monitor]
+        connectionLimit: 3
+        passwordSecret:
+          name: shop-db-mcp
+
   # PDBs for the primary and the standby; on a node drain the operator switches over first.
   enablePDB: true
 

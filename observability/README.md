@@ -103,7 +103,7 @@ kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-passwor
 
 ## AI assistants (MCP)
 
-Four read-only [Model Context Protocol](https://modelcontextprotocol.io) servers let AI assistants
+Read-only [Model Context Protocol](https://modelcontextprotocol.io) servers let AI assistants
 (Cursor, VS Code, JetBrains, …) query the stack in natural language — e.g. *"why did p95 latency of
 order-service rise in the last 10 minutes? check its error logs and slowest traces"*.
 
@@ -161,6 +161,21 @@ Write tools are disabled (`--disable-write`) and only the tool categories releva
 enabled (`--enabled-tools` in `values/mcp-grafana.yaml`). DNS-rebinding protection only accepts
 `Host: localhost:8093`, so keep that local port or change `--allowed-hosts`. To let an assistant create or edit
 dashboards, set `disableWrite: false` and the service account role to `Editor`.
+
+A fifth server runs next to the database it reads: `postgres-mcp` in the `shop` namespace
+([MCP Toolbox for Databases](https://github.com/googleapis/mcp-toolbox), `apps/k8s/data/postgres-mcp.yaml`).
+It answers what the metrics sample too coarsely: which sessions are running or waiting right now, who holds
+the locks, which transactions stay open (`list_active_queries`, `list_locks`, `long_running_transactions`,
+`list_query_stats`, `list_table_stats`, `database_overview`, `replication_stats` and one read-only statement at
+a time with `execute_sql`). It logs in as `mcp_readonly`, a CloudNativePG managed role that is only in
+`pg_monitor`: statistics, sessions and settings, no table data, no cancelling or ending sessions. Every session
+is read-only with a 10s statement timeout, and a NetworkPolicy admits no pod at all, so port-forwarding is
+the only way in:
+
+```bash
+kubectl -n shop port-forward svc/postgres-mcp 8094:5000 &
+# MCP client: { "postgres": { "type": "http", "url": "http://localhost:8094/mcp" } }
+```
 
 Query results (including log lines) are sent to the model provider of your AI client — keep that in
 mind for sensitive data. Disable tools with `mcp.disable.tools` (Victoria servers) or

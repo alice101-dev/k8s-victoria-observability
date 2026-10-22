@@ -47,6 +47,7 @@ k8s/
 │   ├── networkpolicy.yaml  # only shop pods (+ operator, + metrics scraper) can reach PostgreSQL/Redis
 │   ├── monitoring.yaml     # VMServiceScrape (Redis), VMPodScrape (CloudNativePG instances + operator), data-tier VMRule
 │   ├── postgres-monitoring.yaml  # custom exporter queries: top statements, table health, blocking sessions
+│   ├── postgres-mcp.yaml   # read-only Postgres MCP server (MCP Toolbox, role mcp_readonly in pg_monitor)
 │   └── dashboards/         # CloudNativePG dashboard, vendored from upstream with fixes (vendor-cloudnative-pg.py)
 └── services/      # Helm chart — Argo CD app "shop-services" (wave 0)
     ├── values.yaml         # image tag, OpenTelemetry, resources, per-service env

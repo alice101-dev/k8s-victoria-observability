@@ -1,4 +1,5 @@
-# The data tier is reachable only from shop app pods (+ operator and metrics scraper).
+# The data tier is reachable only from shop app pods (+ operator, metrics scraper and the read-only
+# Postgres MCP server).
 # Enforced by GKE Dataplane V2 (ADVANCED_DATAPATH).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -40,6 +41,13 @@ spec:
         - podSelector:
             matchLabels:
               app.kubernetes.io/part-of: shop
+      ports:
+        - { protocol: TCP, port: 5432 }
+    # Read-only Postgres MCP server (postgres-mcp.yaml), role mcp_readonly.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: postgres-mcp
       ports:
         - { protocol: TCP, port: 5432 }
     # Between instances (streaming replication & status) when instances > 1.

@@ -118,7 +118,7 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
 | Secrets | External Secrets password generator + CloudNativePG-generated credentials | No secret values in Git |
 | PostgreSQL 18 | CloudNativePG (`18.6-standard-trixie`) | Production-grade operator with a built-in metrics exporter |
 | Cluster | Zonal GKE Standard, private nodes, Dataplane V2, Workload Identity, Spot nodes | Low cost; Cloud Logging/Managed Prometheus disabled for workloads (no double ingest) |
-| AI assistants | Read-only MCP servers for metrics, logs, traces and Grafana | Ask questions in natural language from any MCP client (Cursor, VS Code, …) ([details](observability/README.md#ai-assistants-mcp)) |
+| AI assistants | Read-only MCP servers for metrics, logs, traces, Grafana and PostgreSQL | Ask questions in natural language from any MCP client (Cursor, VS Code, …) ([details](observability/README.md#ai-assistants-mcp)) |
 
 ## Correlating signals in Grafana
 

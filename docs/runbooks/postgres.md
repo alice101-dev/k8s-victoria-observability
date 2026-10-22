@@ -33,7 +33,8 @@ after 5 minutes idle in a transaction (`postgres.yaml`).
 
 ## Live diagnosis
 
-Run these in psql on the primary.
+Run these in psql on the primary, or through the read-only `postgres` MCP server (`execute_sql`; its role is
+in `pg_monitor`, so it sees every session but cannot cancel or end one).
 
 Who is blocked and by whom:
 

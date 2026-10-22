@@ -1,0 +1,242 @@
+# Read-only Postgres MCP server (MCP Toolbox for Databases) for AI assistants: live sessions, locks, long
+# transactions, statement and table statistics of shop-db, plus single read-only SQL statements.
+# Safety, in layers:
+# - Role mcp_readonly (managed by CloudNativePG, postgres.yaml) is only in pg_monitor: it reads every
+#   pg_stat_* view, pg_locks and the settings, but no table data, and cannot cancel or end sessions.
+# - Every session is read-only (default_transaction_read_only), statements stop after 10s and never
+#   wait more than 1s for a lock; at most 3 connections (role connection limit).
+# - No ingress at all (NetworkPolicy below): reachable only with kubectl port-forward, gated by GKE IAM.
+#   Like the other MCP servers it has no built-in auth: never expose it through an Ingress or a Gateway.
+# Password generated randomly once by External Secrets (no secret in Git).
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: shop-db-mcp-password
+spec:
+  length: 32
+  digits: 8
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+# basic-auth Secret as CloudNativePG expects for managed roles; cnpg.io/reload applies a rotation.
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: shop-db-mcp
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: shop-db-mcp
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: mcp_readonly
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: shop-db-mcp-password
+---
+# Built-in diagnostic tools of the Toolbox postgres source. EXPLAIN and column statistics need SELECT on
+# the tables, which this role does not have.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-mcp-tools
+data:
+  tools.yaml: |
+    kind: source
+    name: shop-db
+    type: postgres
+    host: shop-db-rw
+    port: "5432"
+    database: app
+    user: ${POSTGRES_USER}
+    password: ${POSTGRES_PASSWORD}
+    queryParams:
+      sslmode: require
+      application_name: postgres-mcp
+      options: -c default_transaction_read_only=on -c statement_timeout=10s -c lock_timeout=1s
+    ---
+    kind: tool
+    name: list_active_queries
+    type: postgres-list-active-queries
+    source: shop-db
+    description: Sessions currently running a statement, with user, application, state, wait event and duration.
+    ---
+    kind: tool
+    name: list_locks
+    type: postgres-list-locks
+    source: shop-db
+    description: Locks held and awaited by sessions, to find who blocks whom.
+    ---
+    kind: tool
+    name: long_running_transactions
+    type: postgres-long-running-transactions
+    source: shop-db
+    description: Transactions open longer than a limit (they hold locks and block vacuum).
+    ---
+    kind: tool
+    name: database_overview
+    type: postgres-database-overview
+    source: shop-db
+    description: Current state of the server (version, uptime, recovery role, connections).
+    ---
+    kind: tool
+    name: replication_stats
+    type: postgres-replication-stats
+    source: shop-db
+    description: Each standby's replication process, sync state and lag, as seen by the primary.
+    ---
+    kind: tool
+    name: list_query_stats
+    type: postgres-list-query-stats
+    source: shop-db
+    description: Statement statistics from pg_stat_statements (calls, total and mean time, rows).
+    ---
+    kind: tool
+    name: list_table_stats
+    type: postgres-list-table-stats
+    source: shop-db
+    description: Table statistics (live and dead rows, sequential and index scans, vacuum and analyze times).
+    ---
+    kind: tool
+    name: list_database_stats
+    type: postgres-list-database-stats
+    source: shop-db
+    description: Per-database activity (commits, rollbacks, cache hits, temp files, deadlocks, conflicts).
+    ---
+    kind: tool
+    name: list_pg_settings
+    type: postgres-list-pg-settings
+    source: shop-db
+    description: Server configuration parameters and their sources.
+    ---
+    kind: tool
+    name: list_tables
+    type: postgres-list-tables
+    source: shop-db
+    description: Table definitions (columns, constraints, indexes, owner) of the user schemas; no row data.
+    ---
+    kind: tool
+    name: list_indexes
+    type: postgres-list-indexes
+    source: shop-db
+    description: User indexes with their size and usage.
+    ---
+    kind: tool
+    name: list_installed_extensions
+    type: postgres-list-installed-extensions
+    source: shop-db
+    description: Installed extensions and their versions.
+    ---
+    kind: tool
+    name: execute_sql
+    type: postgres-execute-sql
+    source: shop-db
+    description: >-
+      Run one read-only SQL statement as a pg_monitor role (no table data; 10s timeout), e.g. on
+      pg_stat_activity, pg_locks, pg_blocking_pids(), pg_stat_statements or pg_stat_user_tables.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: postgres-mcp
+automountServiceAccountToken: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-mcp
+  labels:
+    app.kubernetes.io/name: postgres-mcp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres-mcp
+    spec:
+      serviceAccountName: postgres-mcp
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: toolbox
+          image: us-central1-docker.pkg.dev/database-toolbox/toolbox/toolbox:1.14.0
+          # Streamable HTTP MCP endpoint on /mcp. The tools file is reloaded when the ConfigMap changes.
+          args: ["--tools-file=/config/tools.yaml", "--address=0.0.0.0", "--port=5000", "--disable-version-check"]
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: shop-db-mcp
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: shop-db-mcp
+                  key: password
+          ports:
+            - name: http
+              containerPort: 5000
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tools
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: tools
+          configMap:
+            name: postgres-mcp-tools
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-mcp
+  labels:
+    app.kubernetes.io/name: postgres-mcp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: postgres-mcp
+  ports:
+    - name: http
+      port: 5000
+      targetPort: http
+---
+# No pod may connect to the MCP server; kubectl port-forward enters the pod's network namespace and is
+# not subject to NetworkPolicy.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres-mcp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres-mcp
+  policyTypes: [Ingress]
