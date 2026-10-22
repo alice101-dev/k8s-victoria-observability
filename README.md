@@ -100,6 +100,7 @@ flowchart LR
 | Metrics | VMAgent scrapes every target declared with VMServiceScrape / VMPodScrape and remote-writes through vmauth | VMCluster | MetricsQL (PromQL-compatible) | 14d |
 | Logs | VLAgent tails container stdout on every node and parses JSON fields, including `trace_id` | VLCluster | LogsQL | 7d, 8GiB per node |
 | Traces | OpenTelemetry SDK sends spans over OTLP/HTTP straight to vtinsert | VTCluster | Jaeger API | 7d, 8GiB per node |
+| Kubernetes events | An OpenTelemetry Collector (`k8s_events` receiver) watches the API server and sends them to vlinsert | VLCluster | LogsQL | 7d (the API server keeps 1h) |
 | Alerts | VMAlert evaluates MetricsQL and LogsQL rules; Alertmanager runs as a gossip cluster | – | – | – |
 
 Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached with
@@ -113,6 +114,7 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
 | Topology | **Cluster mode** for VMCluster, VLCluster and VTCluster (insert/select/storage ×2 on different nodes, PDBs) | Each tier scales out independently; durability comes from GCE persistent disks (no application-level replication); vmauth load-balances vminsert/vmselect |
 | Log collection | VLAgent `k8sCollector` DaemonSet | Native VictoriaLogs agent, automatic JSON parsing, checkpoints |
 | Trace ingestion | OpenTelemetry SDK → `vtinsert` (OTLP/HTTP) | No extra hop; the SDK batches and retries |
+| Kubernetes events | OpenTelemetry Collector (`k8s_events` receiver, one replica) → VictoriaLogs (OTLP) | vlagent reads container logs only; one small pod keeps every event (scheduling, probes, OOM kills, node restarts) for 7 days |
 | Grafana datasources | Prometheus + `victoriametrics-metrics-datasource`, `victoriametrics-logs-datasource`, built-in **Jaeger** for traces | Jaeger API is the documented VictoriaTraces integration |
 | GitOps | Argo CD app-of-apps with sync waves and an Application health check | Operators and CRDs become healthy before the resources that depend on them |
 | Secrets | External Secrets password generator + CloudNativePG-generated credentials | No secret values in Git |
@@ -131,7 +133,8 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
   - *Service:* one service end to end (SLO, RED and latency SLI by route, latency heatmap, dependencies,
     database: connection pool, sessions and PostgreSQL errors of that service, saturation, WARN/ERROR logs,
     slowest and failed traces).
-  - Every Shop dashboard marks rollouts and firing critical Shop alerts on its graphs.
+  - Every Shop dashboard marks rollouts, firing critical Shop alerts, node restarts (spot preemptions) and
+    shop container restarts with their reason (e.g. OOMKilled) on its graphs.
   - *Logs:* errors and error ratio per service over time, message patterns with their cause, what the
     failing lines have in common (field facets: product, user, pod, node, version), lines by pod and
     version, every line of one request across services, a message search, lines outside the JSON logger
@@ -144,8 +147,12 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
   - *CloudNativePG:* PostgreSQL health, replication, WAL and backups, plus slow statements and errors by
     SQLSTATE from the PostgreSQL logs, lock waits with the sessions holding the locks, top statements and
     table health.
+- **Cluster — Events (folder "Platform"):** Kubernetes events of every namespace: warnings by reason and
+  namespace, node restarts and spot preemptions, why pods fail (scheduling, probes, OOM kills, image pulls) with
+  container restarts and their last termination reason, pending pods and the event pipeline.
 - **Alerting:** SLO burn-rate alerts (multi-window, multi-burn-rate), a payment decline rule and
-  **log-based** rules (LogsQL), all evaluated by vmalert. Data-tier alerts link to their runbook
+  **log-based** rules (LogsQL, including Kubernetes events: unschedulable pods, OOM kills, failing image
+  pulls), all evaluated by vmalert. Data-tier and Kubernetes alerts link to their runbook
   ([docs/runbooks](docs/runbooks/README.md)), which also describes how to investigate across metrics, logs and
   traces.
 

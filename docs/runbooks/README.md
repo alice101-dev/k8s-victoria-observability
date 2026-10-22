@@ -4,6 +4,7 @@ Every data-tier alert links to its runbook section through the `runbook_url` ann
 
 - [postgres.md](postgres.md): CloudNativePG cluster `shop-db` (availability, replication, locks, disk, backups)
 - [redis.md](redis.md): Redis with Sentinel
+- [kubernetes.md](kubernetes.md): Kubernetes events, node restarts (spot preemptions), scheduling, OOM kills
 
 This page describes how to investigate in general: where each signal is stored, the field names to query,
 and the order that finds a root cause fastest. It is written for on-call engineers and for AI assistants
@@ -15,6 +16,7 @@ that query the stack through the MCP servers.
 |---|---|---|---|
 | Metrics, SLO recording rules, alerts | VictoriaMetrics cluster + vmalert | `VictoriaMetrics` | `victoriametrics` (query, query_range, alerts, rules) |
 | Application and PostgreSQL logs | VictoriaLogs cluster | `VictoriaLogs` | `victorialogs` (query, stats_query, field_names) |
+| Kubernetes events (stream `{service.name="kubernetes-events"}`) | VictoriaLogs cluster | `VictoriaLogs` | `victorialogs` |
 | Traces | VictoriaTraces (Jaeger API) | `VictoriaTraces` | `victoriatraces` (services, traces, trace, dependencies) |
 | Span analytics (LogsQL on spans) | VictoriaTraces | `VictoriaTracesLogsQL` | `victoriatraces-logsql` (stats_query, stats_query_range, field_values) |
 | Dashboards, annotations | Grafana | – | `grafana` (search_dashboards, get_dashboard_summary) |
@@ -24,7 +26,8 @@ Dashboards (Grafana folder **Shop**): `shop-slo` (SLO Overview), `shop-service` 
 `shop-logs` (message patterns, what failing lines have in common, one request across services),
 `shop-traces`, `shop-overview`, and `cloudnative-pg-shop` (CloudNativePG, one row per concern: Queries and
 errors, Locks and blocking, Top statements and table health, Database efficiency, Replication, Backups).
-All of them mark rollouts and firing critical alerts as annotations.
+All of them mark rollouts, firing critical alerts, node restarts and container restarts as annotations.
+`cluster-events` (folder **Platform**) shows the Kubernetes events of every namespace.
 
 ## Investigation order
 
@@ -40,7 +43,9 @@ All of them mark rollouts and firing critical alerts as annotations.
 4. **The database side, at the same time.** PostgreSQL logs (errors with SQLSTATE, lock waits naming the
    blocking pid, slow statements) and the CloudNativePG dashboard rows. Live sessions and locks through the
    `postgres` MCP server or psql ([postgres.md](postgres.md#live-diagnosis)).
-5. **Changes.** Rollout and restart annotations, Argo CD sync history, `kubectl get events`.
+5. **Changes and the platform.** Rollout and restart annotations, Argo CD sync history, and the Kubernetes
+   events (Cluster — Events dashboard, or LogsQL `{service.name="kubernetes-events"}`): scheduling failures,
+   probe failures, OOM kills, node restarts. The API server keeps events for one hour; VictoriaLogs for 7 days.
 
 ## Field reference
 

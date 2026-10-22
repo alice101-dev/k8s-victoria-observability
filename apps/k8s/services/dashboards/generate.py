@@ -1,12 +1,16 @@
-"""Generate the SRE dashboards (SLO overview, service drill-down, logs) for the shop app.
+"""Generate the SRE dashboards (SLO overview, service drill-down, logs, traces) for the shop app, and the
+cluster-wide Kubernetes events dashboard.
 
-usage: python3 apps/k8s/services/dashboards/generate.py
+usage: python3 apps/k8s/services/dashboards/generate.py [out_dir]
        (rewrites shop-slo.json, shop-service.json, shop-logs.json and shop-traces.json next to it, and the
-       links and annotations of shop-overview.json; the Helm chart ships every *.json in this folder)
+       links and annotations of shop-overview.json; the Helm chart ships every *.json in this folder.
+       cluster-events.json goes to observability/k8s-events/dashboards, shipped by the k8s-events app.)
 """
 import json, os, sys
 
-OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+OUT = sys.argv[1] if len(sys.argv) > 1 else HERE
+OUT_EVENTS = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "../../../../observability/k8s-events/dashboards")
 VM = {"type": "prometheus", "uid": "VictoriaMetrics"}
 VL = {"type": "victoriametrics-logs-datasource", "uid": "VictoriaLogs"}
 VT = {"type": "jaeger", "uid": "VictoriaTraces"}
@@ -21,7 +25,29 @@ LINKS = [
     {"title": "Explore traces", "type": "link", "url": "/explore?left={\"datasource\":\"VictoriaTraces\"}", "targetBlank": True},
     {"title": "Explore logs", "type": "link", "url": "/explore?left={\"datasource\":\"VictoriaLogs\"}", "targetBlank": True},
 ]
-# Rollouts (spec changes of shop Deployments/StatefulSets) and firing critical Shop alerts on every graph.
+# Boot time per node name (node-exporter reports the node IP, kube_node_info maps it to the name).
+NODE_BOOT = ('max by (node) (label_replace(node_boot_time_seconds, "internal_ip", "$1", "instance", "(.+):[0-9]+") '
+             '* on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info))')
+
+
+def restart_annotations(namespace):
+    """Node restarts (spot preemption, upgrade, repair) and container restarts with the last termination reason."""
+    return [
+        # True only in the first minute a new boot time shows (the node is gone for a few minutes in between).
+        {"name": "Node restarts", "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"}, "enable": True,
+         "iconColor": "purple", "step": "1m", "useValueForTime": False,
+         "expr": f"{NODE_BOOT} > max_over_time(({NODE_BOOT})[30m:1m] offset 1m)",
+         "titleFormat": "Node restarted: {{node}}", "textFormat": "Spot preemption, upgrade or repair: its pods were rescheduled"},
+        {"name": "Container restarts", "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"}, "enable": True,
+         "iconColor": "orange", "step": "1m", "useValueForTime": False,
+         "expr": f'(changes(kube_pod_container_status_restarts_total{{{namespace}}}[1m]) > 0) * on (namespace, pod, container) '
+                 f'group_left (reason) max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{{{namespace}}})',
+         "titleFormat": "Restart {{pod}}: {{reason}}", "textFormat": "Container {{container}} (OOMKilled: memory limit reached)"},
+    ]
+
+
+# Rollouts (spec changes of shop Deployments/StatefulSets), firing critical Shop alerts, node restarts and shop
+# container restarts on every graph.
 ANNOTATIONS = [
     {"name": "Rollouts", "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"}, "enable": True,
      "iconColor": "blue", "step": "1m", "useValueForTime": False,
@@ -33,7 +59,7 @@ ANNOTATIONS = [
      "iconColor": "red", "step": "1m", "useValueForTime": False,
      "expr": 'max by (alertname, job, deployment, slo) (ALERTS{alertname=~"Shop.*", alertstate="firing", severity="critical"})',
      "titleFormat": "{{alertname}}", "textFormat": "{{job}}{{deployment}} {{slo}}"},
-]
+] + restart_annotations('namespace="shop"')
 LEVEL_COLORS = {"ERROR": "red", "WARN": "orange", "INFO": "green", "DEBUG": "blue"}
 SVC_VAR_QUERY = f'label_values(http_server_requests_total{{{NS}}}, job)'
 
@@ -157,6 +183,17 @@ def table(title, targets, transformations, overrides=None, desc="", sort=None, d
     return p
 
 
+def status_history(title, target, desc, th, unit="short"):
+    """One row per series and a coloured cell per interval: when each started and stopped."""
+    return {"type": "status-history", "title": title, "datasource": target["datasource"], "maxDataPoints": 60,
+            "description": desc,
+            "fieldConfig": {"defaults": {"unit": unit, "decimals": 0, "color": {"mode": "thresholds"}, "thresholds": th,
+                                         "custom": {"fillOpacity": 80, "lineWidth": 1}}, "overrides": []},
+            "options": {"showValue": "auto", "rowHeight": 0.85, "colWidth": 0.95, "legend": {"showLegend": False},
+                        "tooltip": {"mode": "single", "sort": "none"}},
+            "targets": [target]}
+
+
 def logsql_table(title, expr, columns, desc, ds, overrides=(), sort=None, hide=()):
     """A LogsQL stats query as a table: one row per by(...) group, columns (field, header) in order."""
     return table(title, [vl(expr, "stats", ds=ds)],
@@ -195,8 +232,8 @@ def dashboard(uid, title, tags, panels, variables, desc, time_from="now-3h"):
             "panels": panels}
 
 
-def write(name, dash):
-    with open(os.path.join(OUT, name), "w") as f:
+def write(name, dash, out=None):
+    with open(os.path.join(out or OUT, name), "w") as f:
         json.dump(dash, f, indent=2, ensure_ascii=False)
         f.write("\n")
     print(f"{name}: {len(dash['panels'])} panels")
@@ -564,15 +601,11 @@ d.add(ts("Error ratio by service", [vl(f"{LOGS} | stats by (service) count() if 
                                        "statsRange", legend="{{service}}")],
          "percent", ds=VL, min_=0, soft_max=1, desc="Share of ERROR lines per service. A service that logs more "
          "lines (more traffic) does not look worse here; compare with the Errors per service timeline below."), 12, 8)
-d.add({"type": "status-history", "title": "Errors per service", "datasource": VL, "maxDataPoints": 60,
-       "description": "ERROR lines per service and interval: when each service started and stopped failing, and "
-                      "which failed first. Rollouts and critical alerts are marked on the graphs above.",
-       "fieldConfig": {"defaults": {"unit": "short", "decimals": 0, "color": {"mode": "thresholds"},
-                                    "thresholds": thresholds(("green", None), ("orange", 1), ("red", 10)),
-                                    "custom": {"fillOpacity": 80, "lineWidth": 1}}, "overrides": []},
-       "options": {"showValue": "auto", "rowHeight": 0.85, "colWidth": 0.95, "legend": {"showLegend": False},
-                   "tooltip": {"mode": "single", "sort": "none"}},
-       "targets": [vl(f"{LOGS} | stats by (service) count() if ({ERR}) errors", "statsRange", legend="{{service}}")]}, 24, 7)
+d.add(status_history("Errors per service",
+                     vl(f"{LOGS} | stats by (service) count() if ({ERR}) errors", "statsRange", legend="{{service}}"),
+                     "ERROR lines per service and interval: when each service started and stopped failing, and "
+                     "which failed first. Rollouts and critical alerts are marked on the graphs above.",
+                     thresholds(("green", None), ("orange", 1), ("red", 10))), 24, 7)
 
 d.row("Patterns — $level lines")
 # Numbers (ports, IDs, status codes, IP parts) become <N>, so messages and causes (err) that differ only in such
@@ -1063,3 +1096,161 @@ with open(p, "w") as f:
     json.dump(ov, f, indent=2, ensure_ascii=False)
     f.write("\n")
 print("shop-overview.json: links updated")
+
+# --------------------------------------------------------------------------------------------
+# 6. Kubernetes events (all namespaces): stored in VictoriaLogs by the k8s-events collector (k8s_events receiver)
+# --------------------------------------------------------------------------------------------
+# Events of cluster-scoped objects (nodes) have no namespace and are always included. The Type variable narrows
+# the event list and the explorer; the overview and trends split by type themselves.
+d = Dash()
+EV = '{service.name="kubernetes-events"}'
+EVENTS = f'{EV} (k8s.namespace.name:in($namespace) or k8s.namespace.name:="") {SEARCH}'
+EVENTS_TYPE = f"{EVENTS} severity_text:in($type)"
+WARNING = "severity_text:=Warning"
+NS_RE = 'namespace=~"${namespace:regex}"'
+NAMESPACE = '| copy k8s.namespace.name as namespace | format if (namespace:="") "(cluster)" as namespace '
+# Event lines as shown: "<Kind>/<name> <reason>: <message>", with the type as the log level.
+EVENT_LINE = ('| format "<k8s.object.kind>/<k8s.object.name> <k8s.event.reason>: <_msg>" as _msg '
+              '| format if (severity_text:=Warning) "warning" as level | format if (severity_text:=Normal) "info" as level')
+EV_SELF = "/d/cluster-events/cluster-events?${namespace:queryparam}&${type:queryparam}&${__url_time_range}"
+OBJECT_LINK = [{"title": "Show this object's events in the explorer",
+                "url": EV_SELF + "&var-filters=k8s.object.name%7C%3D%7C${__value.raw}"}]
+NODE_LINKS = [{"title": "Open Kubernetes / Views / Nodes", "url": "/d/k8s_views_nodes/kubernetes-views-nodes?${__url_time_range}"}]
+
+d.row("Overview — $namespace")
+for p in (
+    vl_stat("Warning events", f"{EVENTS} {WARNING} | stats count() events", "short",
+            thresholds(("green", None), ("orange", 1)), "Events of type Warning, including repeats of the same event."),
+    vl_stat("Pods that could not be scheduled", f"{EVENTS} k8s.event.reason:=FailedScheduling "
+            "| stats count_uniq(k8s.object.name) pods", "short", thresholds(("green", None), ("red", 1)),
+            "Pods the scheduler could not place: not enough CPU or memory, node affinity, taints or volumes. After a "
+            "spot preemption the remaining nodes may be too full.", sparkline=False),
+    vl_stat("Failed probes", f"{EVENTS} k8s.event.reason:=Unhealthy | stats count() events", "short",
+            thresholds(("green", None), ("orange", 1)), "Readiness and liveness probe failures (the pod leaves its "
+            "Service, or the container is restarted)."),
+    vl_stat("OOM kills", f'{EV} k8s.event.reason:=OOMKilling {SEARCH} | stats count_uniq(_msg) kills', "short",
+            thresholds(("green", None), ("red", 1)), "Processes the kernel killed at a container memory limit, reported "
+            "by node-problem-detector on the node (all namespaces; the event names the process, the pod shows under "
+            "Container restarts).", sparkline=False),
+    stat("Container restarts", f"sum(round(increase(kube_pod_container_status_restarts_total{{{NS_RE}}}[$__range])))",
+         "short", thresholds(("green", None), ("orange", 1)), "Container restarts in the time range; the reasons are "
+         "in the Container restarts table.", decimals=0, no_value="0"),
+    stat("Node restarts", f"count(time() - {NODE_BOOT} < $__range_s)", "short", thresholds(("green", None), ("orange", 1)),
+         "Nodes that booted in the time range: spot VM preemption, node upgrade or repair, or a new node. Their pods "
+         "were rescheduled; the Nodes row shows when.", decimals=0, no_value="0"),
+):
+    d.add(p, 4, 4)
+
+d.row("Trends")
+d.add(ts("Warning events by reason", [vl(f"{EVENTS} {WARNING} | stats by (k8s.event.reason) count() events",
+                                         "statsRange", legend="{{k8s.event.reason}}")],
+         "short", ds=VL, stack=True, bars=True, legend_calcs=("sum",),
+         desc="FailedScheduling: no node fits. Unhealthy: probe failed. BackOff: crash or image pull loop. Failed: "
+              "image pull or container start failed. OOMKilling: memory limit. Evicted / Preempting: node pressure "
+              "or a higher-priority pod."), 12, 8)
+d.add(status_history("Warning events per namespace",
+                     vl(f"{EVENTS} {WARNING} {NAMESPACE}| stats by (namespace) count() events", "statsRange",
+                        legend="{{namespace}}"),
+                     "When each namespace had warnings; (cluster) is nodes and other cluster-scoped objects.",
+                     thresholds(("green", None), ("orange", 1), ("red", 20))), 12, 8)
+
+d.row("Nodes — restarts and spot preemptions")
+d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="table"),
+                      vm('max by (node) (kube_node_status_condition{condition="Ready", status="true"})', ref="B",
+                         instant=True, fmt="table")],
+            [{"id": "merge", "options": {}},
+             {"id": "organize", "options": {"excludeByName": {"Time": True},
+                                            "renameByName": {"node": "Node", "Value #A": "Booted", "Value #B": "Ready"}}}],
+            overrides=[by_name("Booted", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 130}]),
+                       by_name("Ready", [{"id": "custom.width", "value": 90}, {"id": "custom.cellOptions", "value": {"type": "color-background"}},
+                                         {"id": "mappings", "value": [{"type": "value", "options": {
+                                             "1": {"text": "Ready", "color": "green", "index": 0},
+                                             "0": {"text": "NotReady", "color": "red", "index": 1}}}]}])],
+            desc="When each node last booted. A recent boot on a spot node usually is a preemption: Compute Engine "
+                 "reclaimed the VM, GKE recreated it and its pods were rescheduled.",
+            sort=[{"displayName": "Booted", "desc": True}]), 8, 8)
+d.add(ts("Ready nodes", [vm('sum(kube_node_status_condition{condition="Ready", status="true"})', "ready"),
+                         vm("count(kube_node_info)", "nodes", "B")],
+         "short", decimals=0, min_=0, legend_calcs=("min",),
+         desc="Ready nodes against all nodes: a dip is a node lost (preemption, upgrade) until it is back."), 6, 8)
+d.add(logs_panel("Node events", f"{EV} k8s.object.kind:=Node {SEARCH} {EVENT_LINE}",
+                 "Events on nodes: NodeNotReady, Rebooted, Starting (kubelet), RegisteredNode, OOMKilling and other "
+                 "node-problem-detector findings."), 10, 8)
+for p in d.panels[-3:]:
+    p["links"] = NODE_LINKS
+
+d.row("Pods and workloads — why they fail")
+d.add(logsql_table("Warning events by object",
+                   f"{EVENTS_TYPE} {NAMESPACE}"
+                   r'| replace_regexp ("\\b[0-9]+\\b", "<N>") at _msg '
+                   "| stats by (namespace, k8s.object.kind, k8s.object.name, k8s.event.reason, _msg) count() events, "
+                   "max(_time) last | math round(last/1e6) as last_ms | delete last | sort by (last_ms desc) | limit 100",
+                   [("namespace", "Namespace"), ("k8s.object.kind", "Kind"), ("k8s.object.name", "Object"),
+                    ("k8s.event.reason", "Reason"), ("_msg", "Message"), ("events", "Events"), ("last_ms", "Last seen")],
+                   "Events of the selected types per object and message (numbers collapsed), newest first. Click an "
+                   "object to list its events in the explorer.",
+                   VL, overrides=[by_name("Namespace", [{"id": "custom.width", "value": 130}]),
+                                  by_name("Kind", [{"id": "custom.width", "value": 110}]),
+                                  LINKS_ON("Object", OBJECT_LINK, 280), by_name("Reason", [{"id": "custom.width", "value": 140}]),
+                                  COUNT("Events", 70), WHEN("Last seen", "dateTimeFromNow")],
+                   sort=[{"displayName": "Last seen", "desc": True}]), 24, 10)
+RESTARTS = f"sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{{{NS_RE}}}[$__range]))) > 0"
+d.add(table("Container restarts",
+            [vm(f"max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{{{NS_RE}}}) "
+                f"* on (namespace, pod, container) group_left () ({RESTARTS}) or on (namespace, pod, container) ({RESTARTS})",
+                instant=True, fmt="table")],
+            [{"id": "organize", "options": {"excludeByName": {"Time": True},
+                                            "indexByName": {"namespace": 0, "pod": 1, "container": 2, "reason": 3, "Value": 4},
+                                            "renameByName": {"namespace": "Namespace", "pod": "Pod", "container": "Container",
+                                                             "reason": "Last termination", "Value": "Restarts"}}}],
+            overrides=[COUNT("Restarts", 80), by_name("Last termination", [{"id": "custom.width", "value": 140}])],
+            desc="Containers that restarted in the time range and why the last run ended: OOMKilled (memory limit), "
+                 "Error (non-zero exit, failed liveness probe) or Completed.",
+            sort=[{"displayName": "Restarts", "desc": True}]), 14, 8)
+d.add(ts("Pending pods", [vm(f'sum by (namespace) (kube_pod_status_phase{{phase="Pending", {NS_RE}}}) > 0', "{{namespace}}")],
+         "short", stack=True, decimals=0, min_=0, legend_calcs=("max",),
+         desc="Pods waiting for a node or for their images. Persisting after a preemption means the remaining "
+              "nodes are too full (see FailedScheduling)."), 10, 8)
+
+d.row("Event explorer")
+d.add(logs_panel("Events — $type", f"{EVENTS_TYPE} {EVENT_LINE}",
+                 "Every event as <Kind>/<name> <reason>: <message>. Expand an event for the object, namespace, node and "
+                 "count. Narrow with Message contains and Filters (any field)."), 24, 14)
+
+d.row("Event pipeline")
+for p in (
+    d.add(ts("Events collected", [
+        vm(f"sum(rate(otelcol_receiver_accepted_log_records{RI}))", "received from the API server"),
+        vm(f"sum(rate(otelcol_exporter_sent_log_records{RI}))", "stored in VictoriaLogs", "B"),
+        vm(f"sum(rate(otelcol_exporter_send_failed_log_records{RI}))", "failed to store", "C")],
+        "short", min_=0, desc="Events per second through the k8s-events collector. Failed sends are retried from "
+        "its queue; the KubeEventsExportFailing alert fires when they persist."), 12, 6),
+    d.add(ts("Collector queue and memory", [
+        vm("sum(otelcol_exporter_queue_size)", "queued events"),
+        vm("sum(otelcol_exporter_queue_capacity)", "queue capacity", "B"),
+        vm("sum(otelcol_process_memory_rss)", "memory", "C")],
+        "short", min_=0, overrides=[right_axis("C", "bytes")],
+        desc="Events waiting to be sent (left) and the collector's memory (right). A full queue drops events."), 12, 6),
+):
+    p["links"] = [{"title": "Open VictoriaLogs - cluster", "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"}]
+
+for p in d.panels:
+    if p["type"] in ("timeseries", "status-history") and p["datasource"] is VL:
+        p["interval"] = "1m"
+
+EV_NAMESPACE = {"name": "namespace", "label": "Namespace", "type": "query", "datasource": VL,
+                "query": {"type": "fieldValue", "field": "k8s.namespace.name", "query": f"{EV} k8s.namespace.name:*",
+                          "limit": 200, "refId": "namespace"},
+                "definition": f"k8s.namespace.name: {EV}", "refresh": 2, "sort": 1, "multi": True, "includeAll": True,
+                "current": {"selected": True, "text": ["All"], "value": ["$__all"]}}
+EV_TYPE = {"name": "type", "label": "Type", "type": "custom", "query": "Warning,Normal", "multi": True, "includeAll": True,
+           "current": {"selected": True, "text": ["Warning"], "value": ["Warning"]},
+           "options": [{"selected": v == "Warning", "text": v, "value": v} for v in ("Warning", "Normal")]}
+os.makedirs(OUT_EVENTS, exist_ok=True)
+events = dashboard("cluster-events", "Cluster — Events", ["kubernetes", "events"], d.panels,
+                   [EV_NAMESPACE, EV_TYPE, SEARCH_VAR, ADHOC],
+                   "Kubernetes events from VictoriaLogs (all namespaces): warnings by reason and namespace, node restarts "
+                   "and spot preemptions, why pods fail (scheduling, probes, OOM, image pulls), restarts and the event "
+                   "pipeline.", "now-6h")
+events["annotations"] = {"list": restart_annotations(NS_RE)}
+write("cluster-events.json", events, OUT_EVENTS)
