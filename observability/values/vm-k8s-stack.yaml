@@ -490,8 +490,9 @@ vtcluster:
               app.kubernetes.io/name: vtstorage
               app.kubernetes.io/instance: vmks
       # Service graph (experimental): a background task on each vtstorage derives the calls between
-      # services from parent/child spans every minute, served by /select/jaeger/api/dependencies
-      # (Grafana node graph, Shop — Traces dashboard).
+      # services from parent/child spans every minute, served by /select/jaeger/api/dependencies (the
+      # victoriatraces MCP dependencies tool, the Jaeger service graph in Explore). The Shop — Traces
+      # dashboard draws its own map from the spans, coloured by failures.
       extraArgs:
         servicegraph.enableTask: "true"
       resources:

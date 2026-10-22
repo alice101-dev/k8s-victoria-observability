@@ -594,6 +594,55 @@ d.add(lq_stat("Declined payments", f'{SPANS} "span_attr:payment.status":=decline
               thresholds(("blue", None)), "Business outcome, not a failure: payments the provider declined.",
               decimals=0), 4, 4)
 
+d.row("Service map")
+# Node graph built from the spans: nodes are the services (their server and consumer spans) plus PostgreSQL
+# and Redis (the client spans calling them), edges are client spans from caller to callee. The arc around a
+# node is its share of successful (green) and failed (red) spans, so a failing service turns red.
+TO_DEPENDENCY = ('| format if (kind:=3 "span_attr:db.system.name":=postgresql) "postgresql" as {f} '
+                 '| format if (kind:=3 "span_attr:db.system":=redis) "redis" as {f} ')
+MAP_NODES = ('"resource_attr:service.namespace":=shop (kind:=2 or kind:=5 or (kind:=3 ("span_attr:db.system.name":=postgresql '
+             'or "span_attr:db.system":=redis) -name:="pool.acquire")) | copy "resource_attr:service.name" as id '
+             + TO_DEPENDENCY.format(f="id")
+             + '| copy id as title | format if (id:=postgresql) "shop-db (PostgreSQL)" as title '
+               '| format if (id:=redis) "Redis" as title '
+             + f"| stats by (id, title) rate() mainstat, quantile(0.95, duration) secondarystat, count() detail__requests, "
+               f"count() if ({FAILED}) detail__failed "
+               "| math (detail__requests-detail__failed)/detail__requests as arc__success, "
+               "detail__failed/detail__requests as arc__errors")
+MAP_EDGES = ('"resource_attr:service.namespace":=shop kind:=3 -name:="pool.acquire" '
+             '| copy "resource_attr:service.name" as source, "span_attr:server.address" as target '
+             + TO_DEPENDENCY.format(f="target")
+             + '| filter target:* | format "<source>→<target>" as id '
+             + f"| stats by (id, source, target) rate() mainstat, count() detail__calls, count() if ({FAILED}) detail__failed "
+               "| math round(detail__failed*100/detail__calls, 0.01) as secondarystat")
+d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
+       "description": "Every service, PostgreSQL and Redis with requests per second and p95; the ring shows the share "
+                      "of successful (green) and failed (red) spans, business outcomes not counted as failures. Arrows "
+                      "carry calls per second and the share that failed. Hover a node or an arrow for the counts.",
+       "targets": [vl(MAP_NODES, "stats", "A", ds=VTL), vl(MAP_EDGES, "stats", "B", ds=VTL)],
+       "transformations": [
+           {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
+           {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "A"}},
+           {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "B"}},
+           {"id": "organize", "options": {"excludeByName": {"Time": True}}}],
+       "fieldConfig": {"defaults": {}, "overrides": [
+           by_name("arc__success", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]),
+           by_name("arc__errors", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}])]},
+       "options": {"nodes": {"mainStatUnit": "reqps", "secondaryStatUnit": "ns",
+                             "arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
+                   "edges": {"mainStatUnit": "reqps", "secondaryStatUnit": "percent"}}}, 14, 13)
+d.add(lq_table("Calls to dependencies",
+               f'"resource_attr:service.namespace":=shop kind:=3 -name:="pool.acquire" {SVC} | copy "span_attr:server.address" as peer '
+               '| format if ("span_attr:db.system":=redis) "redis" as peer | filter peer:* '
+               f"| stats by (service, peer) count() calls, count() if ({FAILED}) failed, count() if ({IS_4XX}) e4, "
+               "quantile(0.95, duration) p95 | sort by (calls desc) | limit 50",
+               [("service", "Caller"), ("peer", "Callee"), ("calls", "Calls"), ("failed", "Failed"), ("e4", "4xx"),
+                ("p95", "p95")],
+               "Client spans by caller and callee: other services, PostgreSQL (shop-db-rw) and Redis. p95 includes the "
+               "network and the callee's work.",
+               overrides=[COUNT("Calls"), COUNT("Failed"), COUNT("4xx"), NS_UNIT("p95")],
+               sort=[{"displayName": "Calls", "desc": True}]), 10, 13)
+
 d.row("Endpoints — $service")
 d.add(lq_table("Endpoints (server spans)",
                f"{SERVER} {SVC} | stats by (service, name) count() calls, rate() rps, count() if ({IS_5XX}) e5, "
@@ -728,23 +777,6 @@ d.add(ts("Payment outcomes", [vl(
                by_name("declined", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "orange"}}])],
     desc="Payment provider answers; declines are expected (about 10% in this demo)."), 12, 8)
 
-d.row("Service map — $service")
-d.add({"type": "nodeGraph", "title": "Service map", "datasource": VT,
-       "description": "Calls between services from parent/child spans (VictoriaTraces service graph, refreshed every "
-                      "minute; experimental). The database and Redis are in the table next to it.",
-       "options": {}, "targets": [{"datasource": VT, "refId": "A", "queryType": "dependencyGraph"}]}, 12, 12)
-d.add(lq_table("Calls to dependencies",
-               f'{SPANS} kind:=3 -name:="pool.acquire" {SVC} | copy "span_attr:server.address" as peer '
-               '| format if ("span_attr:db.system":=redis) "redis" as peer | filter peer:* '
-               f"| stats by (service, peer) count() calls, count() if ({FAILED}) failed, count() if ({IS_4XX}) e4, "
-               "quantile(0.95, duration) p95 | sort by (calls desc) | limit 50",
-               [("service", "Caller"), ("peer", "Callee"), ("calls", "Calls"), ("failed", "Failed"), ("e4", "4xx"),
-                ("p95", "p95")],
-               "Client spans by caller and callee: other services, PostgreSQL (shop-db-rw) and Redis. p95 includes the "
-               "network and the callee's work.",
-               overrides=[COUNT("Calls"), COUNT("Failed"), COUNT("4xx"), NS_UNIT("p95")],
-               sort=[{"displayName": "Calls", "desc": True}]), 12, 12)
-
 d.row("Traces — $service")
 REQUEST_COLUMNS = [("started_ms", "Time"), ("trace_id", "Trace ID"), ("service", "Service"), ("name", "Endpoint"),
                    ("code", "Status"), ("took", "Duration")]
@@ -760,9 +792,10 @@ d.add(lq_table("Slowest requests (over ${min_duration:text})", f"{SERVER} durati
 d.add(lq_table("Failed requests (5xx)", f"{SERVER} {IS_5XX} {REQUESTS} | sort by (started_ms desc) | limit 50",
                REQUEST_COLUMNS, "Server spans answered with a 5xx, newest first. Click a trace ID to show the trace below.",
                overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Time", "desc": True}], hide=("started",)), 12, 10)
-d.add({"type": "traces", "title": "Trace ${trace_id}", "datasource": VT,
-       "description": "The trace selected in a table above (or pasted into the Trace ID variable): every span with its "
-                      "timing, attributes and links to the logs and metrics of its service.",
+d.add({"type": "traces", "title": "Trace: ${trace_id:text}", "datasource": VT,
+       "description": "The slowest or failed request of the time range by default; pick another in the Trace variable "
+                      "(slowest first) or click a trace ID in the tables above. Every span with its timing, attributes "
+                      "and links to the logs and metrics of its service.",
        "options": {}, "targets": [{"datasource": VT, "refId": "A", "query": "${trace_id}"}]}, 24, 18)
 
 
@@ -782,6 +815,16 @@ def lq_var(name, label, field, query, multi, current):
     return v
 
 
+# Trace picker: the 30 slowest (or failed) requests of the time range, labelled "<ms> ms · HTTP <code> · <id>".
+# Sorted numerically (descending) on the label's first number, so the slowest trace is selected by default; the
+# regex keeps the trace ID as the value. Trace IDs from the table links are accepted as custom values.
+# field_values runs "sort | limit 30" on each vtstorage, so the values limit must cover all nodes' results.
+TRACE_PICK = (f"{SERVER} (duration:>${{min_duration:raw}} or {IS_5XX}) | stats by (trace_id) max(duration) d, max({CODE}) code "
+              '| sort by (d desc) | limit 30 | math round(d/1e6) as ms | format "<ms> ms · HTTP <code> · <trace_id>" as option')
+TRACE_VAR = {"name": "trace_id", "label": "Trace (slowest first)", "type": "query", "datasource": VTL,
+             "query": {"type": "fieldValue", "field": "option", "query": TRACE_PICK, "limit": 100, "refId": "trace_id"},
+             "definition": "option: slowest or failed requests", "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
+             "sort": 4, "refresh": 2, "multi": False, "includeAll": False, "allowCustomValue": True, "current": {}}
 custom = lambda name, label, pairs, current: {
     "name": name, "label": label, "type": "custom", "query": ",".join(f"{t} : {v}" for t, v in pairs),
     "current": {"selected": True, "text": current, "value": dict(pairs)[current]},
@@ -798,10 +841,9 @@ write("shop-traces.json", dashboard(
                "POST /api/orders"),
         custom("attribute", "Hot spots by", ATTRIBUTES, "product"),
         custom("min_duration", "Slow request threshold", DURATIONS, "250ms"),
-        {"name": "trace_id", "label": "Trace ID", "type": "textbox", "query": "",
-         "current": {"text": "", "value": ""}, "options": []}],
-    "Distributed tracing analytics from the spans (LogsQL on VictoriaTraces): endpoints, where the time goes inside "
-    "a request, database and Redis calls, failures, hot spots by attribute, the service map and single traces.",
+        TRACE_VAR],
+    "Distributed tracing analytics from the spans (LogsQL on VictoriaTraces): service map, endpoints, where the time "
+    "goes inside a request, database and Redis calls, failures, hot spots by attribute and single traces.",
     "now-1h"))
 
 # --------------------------------------------------------------------------------------------
