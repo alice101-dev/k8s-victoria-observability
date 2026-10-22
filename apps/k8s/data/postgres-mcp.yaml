@@ -181,7 +181,14 @@ spec:
         - name: toolbox
           image: us-central1-docker.pkg.dev/database-toolbox/toolbox/toolbox:1.14.0
           # Streamable HTTP MCP endpoint on /mcp. The tools file is reloaded when the ConfigMap changes.
-          args: ["--tools-file=/config/tools.yaml", "--address=0.0.0.0", "--port=5000", "--disable-version-check"]
+          # Only Host localhost/127.0.0.1 (port-forward) is served: DNS-rebinding protection, like grafana-mcp.
+          args:
+            - --tools-file=/config/tools.yaml
+            - --address=0.0.0.0
+            - --port=5000
+            - --allowed-hosts=localhost,127.0.0.1
+            - --allowed-origins=http://localhost:8094
+            - --disable-version-check
           env:
             - name: POSTGRES_USER
               valueFrom:
@@ -196,10 +203,18 @@ spec:
           ports:
             - name: http
               containerPort: 5000
+          # /healthz is exempt from the Host check.
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /healthz
               port: http
             periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
           resources:
             requests: { cpu: 10m, memory: 32Mi }
             limits: { memory: 128Mi }
