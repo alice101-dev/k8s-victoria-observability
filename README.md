@@ -133,6 +133,10 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
     slowest and failed traces).
   - Every Shop dashboard marks rollouts and firing critical Shop alerts on its graphs.
   - *Logs:* log volume, top messages and top pods, filterable by service, level and any field.
+  - *Traces:* distributed tracing analytics computed from the spans (LogsQL on VictoriaTraces): every
+    endpoint's latency and failures, where the time goes inside one endpoint's requests (each downstream
+    call, SQL statement and Redis command with its share), failures by message, hot spots by product, user,
+    pod, node or version, the service map, and the slowest or failed requests opening their trace.
   - *Microservices Overview:* RED for all services side by side, plus business metrics.
   - *CloudNativePG:* PostgreSQL health, replication, WAL and backups, plus slow statements and errors by
     SQLSTATE from the PostgreSQL logs, lock waits with the sessions holding the locks, top statements and

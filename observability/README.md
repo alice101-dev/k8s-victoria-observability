@@ -17,7 +17,7 @@ observability/
 │   ├── external-secrets.yaml
 │   ├── vm-operator.yaml
 │   ├── vm-k8s-stack.yaml       # main configuration: VMCluster / VLCluster / VTCluster / Grafana
-│   └── mcp-{victoriametrics,victorialogs,victoriatraces,grafana}.yaml   # MCP servers
+│   └── mcp-{victoriametrics,victorialogs,victoriatraces,victoriatraces-logsql,grafana}.yaml   # MCP servers
 └── manifests/                  # Kustomize: Grafana admin password generator + ExternalSecret
     └── mcp-grafana/            # Grafana service account token + caller token (ExternalSecrets), VMPodScrape
 ```
@@ -87,7 +87,10 @@ Endpoints (namespace `monitoring`):
 
 - Datasources: **VictoriaMetrics** (default, Prometheus type), **VictoriaMetrics (DS)**
   (`victoriametrics-metrics-datasource` 0.26.1), **VictoriaLogs** (`victoriametrics-logs-datasource`
-  0.33.1), **VictoriaTraces** (built-in Jaeger), **Alertmanager**.
+  0.33.1), **VictoriaTraces** (built-in Jaeger: trace search, trace view, service map), **VictoriaTraces
+  (LogsQL)** (the VictoriaLogs plugin on vtselect: VictoriaTraces stores spans like VictoriaLogs stores logs,
+  so LogsQL aggregates them, e.g. p95 and failures per endpoint, operation, SQL statement or attribute),
+  **Alertmanager**.
 - Correlation: `trace_id` in logs links to traces; spans link to logs (`trace_id:="<id>"`) and to the
   RED metrics of their service.
 - Dashboards: VictoriaMetrics/Logs/Traces cluster, vmagent, vmalert, operator, Kubernetes views,
@@ -112,6 +115,7 @@ order-service rise in the last 10 minutes? check its error logs and slowest trac
 | `vm-mcp` ([mcp-victoriametrics](https://github.com/VictoriaMetrics/mcp-victoriametrics)) | vmselect | `query`, `query_range`, `metrics`, `labels`, `series`, `rules`, `alerts`, `tsdb_status`, `explain_query` |
 | `vl-mcp` ([mcp-victorialogs](https://github.com/VictoriaMetrics/mcp-victorialogs)) | vlselect | `query` (LogsQL), `hits`, `stats_query_range`, `facets`, `field_values`, `streams` |
 | `vt-mcp` ([mcp-victoriatraces](https://github.com/VictoriaMetrics-Community/mcp-victoriatraces)) | vtselect | `services`, `traces`, `trace`, `dependencies` |
+| `vt-logsql-mcp` ([mcp-victorialogs](https://github.com/VictoriaMetrics/mcp-victorialogs) on vtselect) | vtselect (LogsQL) | `stats_query`, `stats_query_range`, `query`, `field_names`, `field_values` over spans: latency, failures and time share per service, endpoint, operation or attribute |
 | `grafana-mcp` ([mcp-grafana](https://github.com/grafana/mcp-grafana)) | Grafana API | `search_dashboards`, `get_dashboard_summary`, `run_panel_query`, `list_datasources`, `query_prometheus` (VictoriaMetrics), `query_loki_logs` / `query_loki_stats` (VictoriaLogs, LogsQL), `alerting_rules_read`, `generate_deeplink` |
 
 The Victoria servers query the databases directly and embed their product documentation
@@ -119,7 +123,7 @@ The Victoria servers query the databases directly and embed their product docume
 way users do, and its links open in your port-forwarded Grafana. Its Tempo tools do not apply to the
 Jaeger-based VictoriaTraces datasource, so traces go through `vt-mcp`.
 
-All four run in Streamable HTTP mode (`/mcp`) behind ClusterIP services. The Victoria servers have
+All five run in Streamable HTTP mode (`/mcp`) behind ClusterIP services. The Victoria servers have
 **no built-in authentication** and `grafana-mcp` requires a bearer token — keep them private and
 connect through port-forwarding:
 
@@ -127,6 +131,7 @@ connect through port-forwarding:
 kubectl -n monitoring port-forward svc/vm-mcp 8090:8080 &
 kubectl -n monitoring port-forward svc/vl-mcp 8091:8080 &
 kubectl -n monitoring port-forward svc/vt-mcp 8092:8080 &
+kubectl -n monitoring port-forward svc/vt-logsql-mcp 8095:8080 &
 kubectl -n monitoring port-forward svc/grafana-mcp 8093:8000 &
 # Bearer token required by grafana-mcp
 kubectl -n monitoring get secret mcp-grafana-server-token -o jsonpath='{.data.token}' | base64 -d; echo
@@ -141,6 +146,7 @@ per client):
     "victoriametrics": { "type": "http", "url": "http://localhost:8090/mcp" },
     "victorialogs":    { "type": "http", "url": "http://localhost:8091/mcp" },
     "victoriatraces":  { "type": "http", "url": "http://localhost:8092/mcp" },
+    "victoriatraces-logsql": { "type": "http", "url": "http://localhost:8095/mcp" },
     "grafana": {
       "type": "http",
       "url": "http://localhost:8093/mcp",

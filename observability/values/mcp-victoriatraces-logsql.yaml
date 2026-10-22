@@ -1,0 +1,46 @@
+# =============================================================================
+# victoria-logs-mcp — chart vm/victoria-logs-mcp 0.2.0, pointed at VictoriaTraces (vtselect)
+# VictoriaTraces stores spans like VictoriaLogs stores logs, so this second instance of the VictoriaLogs MCP
+# server runs LogsQL on spans: stats_query(_range) for latency/failure/time share per service, endpoint,
+# operation, SQL statement or attribute, field names and values, and raw span search. The
+# mcp-victoriatraces server keeps the Jaeger tools (trace by ID, search, dependencies).
+# =============================================================================
+fullnameOverride: vt-logsql-mcp
+
+image:
+  tag: v1.9.0
+
+vl:
+  entrypoint: http://vtselect-vmks.monitoring.svc:10471
+
+mcp:
+  # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via
+  # kubectl port-forward (gated by GKE IAM). Never expose via Ingress/HTTPRoute without auth.
+  mode: http
+
+service:
+  type: ClusterIP
+  port: 8080
+
+# MCP server metrics scraped by vmagent (VMServiceScrape).
+scrape:
+  enabled: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+# The embedded docs vector DB (`documentation` tool) is the largest memory consumer.
+resources:
+  requests: { cpu: 10m, memory: 128Mi }
+  limits: { memory: 512Mi }
+
+# Startup loads the embedded docs vector DB (can take > 40s); without a startupProbe the default
+# liveness probe (10s + 3 failures) kills the container before port 8080 opens (CrashLoopBackOff).
+startupProbe:
+  httpGet:
+    path: /health/liveness
+    port: http
+  periodSeconds: 10
+  failureThreshold: 30

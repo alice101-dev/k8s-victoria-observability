@@ -489,6 +489,11 @@ vtcluster:
             matchLabels:
               app.kubernetes.io/name: vtstorage
               app.kubernetes.io/instance: vmks
+      # Service graph (experimental): a background task on each vtstorage derives the calls between
+      # services from parent/child spans every minute, served by /select/jaeger/api/dependencies
+      # (Grafana node graph, Shop — Traces dashboard).
+      extraArgs:
+        servicegraph.enableTask: "true"
       resources:
         requests: { cpu: 50m, memory: 128Mi }
         limits: { memory: 1Gi }
@@ -532,6 +537,27 @@ vtcluster:
 # VictoriaTraces (built-in Jaeger), Alertmanager. Two-way log <-> trace correlation via trace_id.
 # =============================================================================
 defaultDatasources:
+  # VictoriaTraces stores spans the way VictoriaLogs stores logs, so the VictoriaLogs plugin runs LogsQL on
+  # them: span analytics (latency, failures and time share per endpoint, operation, SQL statement or
+  # attribute) for the Shop — Traces dashboard, computed from the spans at query time. The chart points every
+  # victoriatraces datasource at /select/jaeger, so this one is listed here with the plain vtselect URL.
+  extra:
+    - name: VictoriaTraces (LogsQL)
+      type: victoriametrics-logs-datasource
+      access: proxy
+      uid: VictoriaTracesLogsQL
+      url: http://vtselect-vmks.monitoring.svc.cluster.local.:10471
+      plugin: true
+      jsonData:
+        maxLines: 1000
+        # Span → trace: the trace_id field opens the whole trace in the VictoriaTraces (Jaeger) datasource.
+        derivedFields:
+          - name: trace_id
+            matcherType: label
+            matcherRegex: trace_id
+            url: '${__value.raw}'
+            urlDisplayLabel: View trace
+            datasourceUid: VictoriaTraces
   victoriametrics:
     datasources:
       - name: VictoriaMetrics

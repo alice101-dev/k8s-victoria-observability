@@ -1,11 +1,13 @@
 # Wave 1: MCP (Model Context Protocol) servers for AI assistants (Cursor, VS Code, ...):
-# read-only access to VictoriaMetrics, VictoriaLogs, VictoriaTraces and Grafana. Created after
+# read-only access to VictoriaMetrics, VictoriaLogs, VictoriaTraces (trace search and LogsQL span
+# analytics) and Grafana. Created after
 # vm-stack is healthy since they need vmselect/vlselect/vtselect, Grafana and the VMServiceScrape CRD.
 {{- $vm := "https://victoriametrics.github.io/helm-charts/" }}
 {{- range $app := list
   (dict "name" "mcp-victoriametrics" "repo" $vm "chart" "victoria-metrics-mcp" "version" $.Values.charts.vmMcp)
   (dict "name" "mcp-victorialogs" "repo" $vm "chart" "victoria-logs-mcp" "version" $.Values.charts.vlMcp)
   (dict "name" "mcp-victoriatraces" "repo" $vm "chart" "victoria-traces-mcp" "version" $.Values.charts.vtMcp)
+  (dict "name" "mcp-victoriatraces-logsql" "repo" $vm "chart" "victoria-logs-mcp" "version" $.Values.charts.vlMcp)
   (dict "name" "mcp-grafana" "repo" "https://grafana-community.github.io/helm-charts" "chart" "grafana-mcp" "version" $.Values.charts.grafanaMcp "manifests" "observability/manifests/mcp-grafana") }}
 ---
 apiVersion: argoproj.io/v1alpha1

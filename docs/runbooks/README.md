@@ -15,7 +15,8 @@ that query the stack through the MCP servers.
 |---|---|---|---|
 | Metrics, SLO recording rules, alerts | VictoriaMetrics cluster + vmalert | `VictoriaMetrics` | `victoriametrics` (query, query_range, alerts, rules) |
 | Application and PostgreSQL logs | VictoriaLogs cluster | `VictoriaLogs` | `victorialogs` (query, stats_query, field_names) |
-| Traces | VictoriaTraces (Jaeger API) | `VictoriaTraces` | `victoriatraces` (services, traces, trace) |
+| Traces | VictoriaTraces (Jaeger API) | `VictoriaTraces` | `victoriatraces` (services, traces, trace, dependencies) |
+| Span analytics (LogsQL on spans) | VictoriaTraces | `VictoriaTracesLogsQL` | `victoriatraces-logsql` (stats_query, stats_query_range, field_values) |
 | Dashboards, annotations | Grafana | – | `grafana` (search_dashboards, get_dashboard_summary) |
 | Live sessions, locks, statistics | PostgreSQL (`shop-db`) | – | `postgres` (list_active_queries, list_locks, execute_sql; read-only, `pg_monitor`) |
 
@@ -29,8 +30,9 @@ All of them mark rollouts and firing critical alerts as annotations.
 1. **Impact.** Which user journey or service burns its error budget? `slo:sli_error:ratio_rate5m` by
    `job, slo, kind` or the SLO Overview dashboard. A journey (`kind="journey"`: `checkout`, `browse`) is what
    users feel; a service SLI tells where it comes from.
-2. **A failing request.** Search traces of that service with an error or a long duration and follow the spans
-   down. Database spans (otelpgx) carry `db.query.text`, `db.operation.name`, the error and the duration;
+2. **A failing request.** The Shop — Traces dashboard shows which endpoint is slow or failing, which
+   operation inside its requests takes the time or fails first, and the failure messages; open one of its
+   slowest or failed requests and follow the spans down. Database spans (otelpgx) carry `db.query.text`, `db.operation.name`, the error and the duration;
    checkout spans carry `order.product_id` and `order.user_id`.
 3. **The logs of that request.** App logs carry `trace_id`, so `trace_id:<id>` returns every service's lines
    for one request, with the error text in `err`.
@@ -93,6 +95,23 @@ sum by (application_name, state) (cnpg_backends_total{namespace="shop"} * on (po
 max_over_time(cnpg_pg_blocking_blocked_sessions{namespace="shop"}[1h])
 ```
 
+**Spans** (LogsQL on VictoriaTraces): `resource_attr:service.name`, `name` (operation), `kind` (1 internal,
+2 server, 3 client, 4 producer, 5 consumer), `duration` (ns), `status_code` (2 = error), `status_message`,
+`trace_id`, `parent_span_id`, and attributes such as `span_attr:http.route`,
+`span_attr:http.response.status_code`, `span_attr:db.query.text`, `span_attr:server.address`,
+`span_attr:order.product_id`, `span_attr:payment.status`.
+
+```text
+# LogsQL on spans: p95 and 5xx share per endpoint
+_time:1h "resource_attr:service.namespace":=shop kind:=2
+  | stats by ("resource_attr:service.name", name) count() calls,
+      count() if ("span_attr:http.response.status_code":~"^5") e5, quantile(0.95, duration) p95
+
+# LogsQL on spans: every operation inside the traces of one endpoint, by total time
+_time:1h trace_id:in(_time:1h kind:=2 name:="POST /api/orders" | fields trace_id)
+  | stats by ("resource_attr:service.name", name) count() calls, sum(duration) total | sort by (total desc)
+```
+
 ## Pitfalls
 
 - LogsQL word filters match whole words: `"lock"` does not match `ShareLock`. Use a phrase
@@ -104,3 +123,8 @@ max_over_time(cnpg_pg_blocking_blocked_sessions{namespace="shop"}[1h])
 - `57014 canceling statement due to user request` is not a server timeout: the client cancelled the query,
   usually because the application's own timeout expired. The trace shows which call gave up.
 - Timestamps in Grafana, the MCP servers and the logs are UTC unless an offset is given.
+- A span with `status_code` 2 is not always a failure: HTTP client spans mark 4xx answers as errors (OTel
+  semantic conventions) and the payment provider span marks declined cards. The Traces dashboard counts
+  neither as failed.
+- In LogsQL `format` patterns, `<a:b>` reads `a` as a modifier: copy span attributes to a plain name first
+  (`| copy "span_attr:server.address" as peer | format "<peer>" as x`).

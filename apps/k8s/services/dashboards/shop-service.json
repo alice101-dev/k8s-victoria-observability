@@ -2177,7 +2177,13 @@
         "y": 78,
         "w": 12,
         "h": 9
-      }
+      },
+      "links": [
+        {
+          "title": "Open Shop — Traces for $service",
+          "url": "/d/shop-traces/shop-traces?var-service=$service&${__url_time_range}"
+        }
+      ]
     },
     {
       "type": "table",
@@ -2231,7 +2237,13 @@
         "y": 78,
         "w": 12,
         "h": 9
-      }
+      },
+      "links": [
+        {
+          "title": "Open Shop — Traces for $service",
+          "url": "/d/shop-traces/shop-traces?var-service=$service&${__url_time_range}"
+        }
+      ]
     }
   ]
 }
