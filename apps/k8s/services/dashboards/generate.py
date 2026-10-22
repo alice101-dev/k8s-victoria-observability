@@ -359,11 +359,13 @@ for kind, title, who in (("journey", "Journey SLIs", "checkout and browse, measu
                          ("service", "Service SLIs", "each service's own requests")):
     d.add(ts(f"{title} — 1h", [vm(f'1 - slo:sli_error:ratio_rate1h{{kind="{kind}"}}', "{{job}} · {{slo}}"),
                                vm(f'max by (slo) (slo:objective:ratio{{kind="{kind}"}})', "objective · {{slo}}", "B")],
-             "percentunit", decimals=2, soft_min=0.98, max_=1, fill=0, legend_calcs=("lastNotNull", "min"),
+             # Fixed 95-100%: an incident dipping to 50% would otherwise flatten the band around the objective.
+             "percentunit", decimals=2, min_=0.95, max_=1, fill=0, legend_calcs=("lastNotNull", "min"),
              overrides=[TARGET_LINE],
              desc=f"Share of good requests over the last hour ({who}): availability = not 5xx, latency = faster "
                   "than the threshold. The dashed lines are the objectives; below them the error budget is spent "
-                  "faster than planned. Definitions at the bottom."), 12, 8)
+                  "faster than planned. The axis stops at 95%: lines leaving it at the bottom are incidents (Min in "
+                  "the legend). Definitions at the bottom."), 12, 8)
 
 d.row("Budget and SLI trends")
 d.add(ts("Error budget remaining (30d)", [vm("slo:error_budget_remaining:ratio", "{{job}} · {{slo}}")], "percentunit",

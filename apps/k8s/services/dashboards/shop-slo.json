@@ -1655,7 +1655,7 @@
     {
       "type": "timeseries",
       "title": "Journey SLIs — 1h",
-      "description": "Share of good requests over the last hour (checkout and browse, measured at api-gateway): availability = not 5xx, latency = faster than the threshold. The dashed lines are the objectives; below them the error budget is spent faster than planned. Definitions at the bottom.",
+      "description": "Share of good requests over the last hour (checkout and browse, measured at api-gateway): availability = not 5xx, latency = faster than the threshold. The dashed lines are the objectives; below them the error budget is spent faster than planned. The axis stops at 95%: lines leaving it at the bottom are incidents (Min in the legend). Definitions at the bottom.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1671,10 +1671,10 @@
             "stacking": {
               "mode": "none",
               "group": "A"
-            },
-            "axisSoftMin": 0.98
+            }
           },
           "decimals": 2,
+          "min": 0.95,
           "max": 1
         },
         "overrides": [
@@ -1758,7 +1758,7 @@
     {
       "type": "timeseries",
       "title": "Service SLIs — 1h",
-      "description": "Share of good requests over the last hour (each service's own requests): availability = not 5xx, latency = faster than the threshold. The dashed lines are the objectives; below them the error budget is spent faster than planned. Definitions at the bottom.",
+      "description": "Share of good requests over the last hour (each service's own requests): availability = not 5xx, latency = faster than the threshold. The dashed lines are the objectives; below them the error budget is spent faster than planned. The axis stops at 95%: lines leaving it at the bottom are incidents (Min in the legend). Definitions at the bottom.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1774,10 +1774,10 @@
             "stacking": {
               "mode": "none",
               "group": "A"
-            },
-            "axisSoftMin": 0.98
+            }
           },
           "decimals": 2,
+          "min": 0.95,
           "max": 1
         },
         "overrides": [
