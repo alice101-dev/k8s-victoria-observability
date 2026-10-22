@@ -678,6 +678,16 @@
           "options": {
             "excludeByName": {
               "Time": true
+            },
+            "renameByName": {
+              "mainstat": "Requests per second",
+              "arc__success": "Success",
+              "arc__errors": "Failed",
+              "detail__requests": "Requests",
+              "detail__failed": "Failed requests",
+              "detail__calls": "Calls",
+              "detail__p95_ms": "p95 (ms)",
+              "detail__failed_pct": "Failed (%)"
             }
           }
         }

@@ -631,7 +631,12 @@ d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
            {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
            {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "A"}},
            {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "B"}},
-           {"id": "organize", "options": {"excludeByName": {"Time": True}}}],
+           # Rename sets the display name only: the panel still finds mainstat, arc__*, detail__* by field name,
+           # while the legend and tooltips read the display names.
+           {"id": "organize", "options": {"excludeByName": {"Time": True}, "renameByName": {
+               "mainstat": "Requests per second", "arc__success": "Success", "arc__errors": "Failed",
+               "detail__requests": "Requests", "detail__failed": "Failed requests", "detail__calls": "Calls",
+               "detail__p95_ms": "p95 (ms)", "detail__failed_pct": "Failed (%)"}}}],
        "options": {"nodes": {"mainStatUnit": "reqps",
                              "arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
                    "edges": {"mainStatUnit": "reqps"}}}, 14, 15)
