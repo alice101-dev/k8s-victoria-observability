@@ -1,0 +1,122 @@
+# Custom metrics for the CloudNativePG exporter (spec.monitoring.customQueriesConfigMap in postgres.yaml),
+# on top of the operator's default queries. Metric names: cnpg_<query>_<column>.
+# The label cnpg.io/reload makes the instances reload the queries when this ConfigMap changes.
+# Cardinality is bounded: top 10 statements, at most 50 tables.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shop-db-monitoring
+  labels:
+    cnpg.io/reload: ""
+data:
+  queries.yaml: |
+    # Most expensive statements by total execution time (cluster-wide view, application roles only:
+    # superuser statements such as the exporter's own queries are left out).
+    pg_stat_statements_top:
+      primary: true
+      query: |
+        SELECT d.datname,
+               s.queryid::text AS queryid,
+               left(regexp_replace(s.query, '\s+', ' ', 'g'), 120) AS query,
+               s.calls,
+               s.total_exec_time / 1000 AS total_exec_seconds,
+               s.mean_exec_time / 1000 AS mean_exec_seconds,
+               s.rows,
+               s.shared_blks_hit,
+               s.shared_blks_read,
+               s.temp_blks_written
+        FROM pg_stat_statements s
+        JOIN pg_database d ON d.oid = s.dbid
+        JOIN pg_roles r ON r.oid = s.userid
+        WHERE s.toplevel AND NOT r.rolsuper
+        ORDER BY s.total_exec_time DESC
+        LIMIT 10
+      metrics:
+        - datname:
+            usage: LABEL
+            description: Database
+        - queryid:
+            usage: LABEL
+            description: Statement ID (pg_stat_statements.queryid)
+        - query:
+            usage: LABEL
+            description: Normalized statement text, truncated to 120 characters
+        - calls:
+            usage: COUNTER
+            description: Number of executions
+        - total_exec_seconds:
+            usage: COUNTER
+            description: Total execution time
+        - mean_exec_seconds:
+            usage: GAUGE
+            description: Mean execution time
+        - rows:
+            usage: COUNTER
+            description: Rows returned or affected
+        - shared_blks_hit:
+            usage: COUNTER
+            description: Blocks served from shared_buffers
+        - shared_blks_read:
+            usage: COUNTER
+            description: Blocks read from disk or the OS cache
+        - temp_blks_written:
+            usage: COUNTER
+            description: Temporary blocks written (sorts and hashes that did not fit in work_mem)
+
+    # Table health: dead tuples (bloat, autovacuum lag) and sequential vs index scans.
+    pg_stat_user_tables:
+      primary: true
+      target_databases: ["*"]
+      query: |
+        SELECT current_database() AS datname,
+               schemaname,
+               relname,
+               n_live_tup,
+               n_dead_tup,
+               seq_scan,
+               coalesce(idx_scan, 0) AS idx_scan,
+               n_mod_since_analyze,
+               coalesce(extract(epoch FROM greatest(last_vacuum, last_autovacuum)), 0) AS last_vacuum_time,
+               coalesce(extract(epoch FROM greatest(last_analyze, last_autoanalyze)), 0) AS last_analyze_time,
+               vacuum_count + autovacuum_count AS vacuums,
+               pg_total_relation_size(relid) AS total_bytes
+        FROM pg_stat_user_tables
+        ORDER BY pg_total_relation_size(relid) DESC
+        LIMIT 50
+      metrics:
+        - datname:
+            usage: LABEL
+            description: Database
+        - schemaname:
+            usage: LABEL
+            description: Schema
+        - relname:
+            usage: LABEL
+            description: Table
+        - n_live_tup:
+            usage: GAUGE
+            description: Estimated live rows
+        - n_dead_tup:
+            usage: GAUGE
+            description: Estimated dead rows waiting for vacuum
+        - seq_scan:
+            usage: COUNTER
+            description: Sequential scans
+        - idx_scan:
+            usage: COUNTER
+            description: Index scans
+        - n_mod_since_analyze:
+            usage: GAUGE
+            description: Rows modified since the last analyze
+        - last_vacuum_time:
+            usage: GAUGE
+            description: Last manual or auto vacuum (epoch seconds, 0 = never)
+        - last_analyze_time:
+            usage: GAUGE
+            description: Last manual or auto analyze (epoch seconds, 0 = never)
+        - vacuums:
+            usage: COUNTER
+            description: Manual plus auto vacuums
+        - total_bytes:
+            usage: GAUGE
+            description: Table size including indexes and TOAST

@@ -3,6 +3,7 @@ kind: Kustomization
 namespace: shop
 resources:
   - postgres.yaml
+  - postgres-monitoring.yaml
   - redis.yaml
   - backup.yaml
   - networkpolicy.yaml

@@ -74,3 +74,9 @@ spec:
 
   # PDBs for the primary and the standby; on a node drain the operator switches over first.
   enablePDB: true
+
+  # Extra exporter metrics: top statements (pg_stat_statements) and table health (postgres-monitoring.yaml).
+  monitoring:
+    customQueriesConfigMap:
+      - name: shop-db-monitoring
+        key: queries.yaml
