@@ -43,8 +43,8 @@ their workloads (see `apps/k8s/data/monitoring.yaml` and `apps/k8s/services/temp
 | Metrics | VMSingle | 1 | 30Gi pd-balanced | 30d |
 | Scraping | VMAgent StatefulSet, deduplicated at 30s on VMSingle | 2 | 2 × 10Gi persistent queue (8GiB cap) | until delivered |
 | Alerting | VMAlert → VMAlertmanager (gossip cluster); alert state persisted to VictoriaMetrics | 2 / 2 | 2 × 10Gi (silences, notification log) | – |
-| Logs | VLSingle + VLAgent DaemonSet | 1 (+1 agent per node) | 20Gi pd-balanced | 90d, oldest days dropped beyond 16GiB |
-| Traces | VTSingle | 1 | 20Gi pd-balanced | 30d, oldest days dropped beyond 16GiB |
+| Logs | VLSingle + VLAgent DaemonSet | 1 (+1 agent per node) | 20Gi pd-balanced | 90d, oldest days dropped once the disk is 80% full |
+| Traces | VTSingle | 1 | 20Gi pd-balanced | 30d, oldest days dropped once the disk is 80% full |
 | UI | Grafana 13 | 1 | 10Gi for runtime state (dashboards and datasources provisioned from Git) | – |
 
 Each signal runs as one single-node process: simpler than a cluster (no insert/select/storage tiers, load
@@ -66,8 +66,10 @@ standard-rwo StorageClass allows volume expansion):
   month. The `DiskRunsOutOfSpaceIn3Days` alert (vmhealth rules) warns early; `storage.minFreeDiskSpaceBytes`
   stops ingestion before the disk is completely full.
 - VictoriaLogs and VictoriaTraces keep per-day partitions, so the disk holds the retention.
-  `retentionMaxDiskSpaceUsageBytes` (16GiB of 20Gi) drops the oldest days first: the effective retention is
-  shorter than 90 or 30 days while the disk is too small. Raise both numbers together.
+  `-retention.maxDiskUsagePercent=80` drops the oldest days once the filesystem is 80% full (the docs ask for
+  at least 20% free: usage is checked periodically, and a full disk turns them read-only before they can drop
+  anything). The effective retention is shorter than 90 or 30 days while the disk is too small; the limit
+  follows the disk size, so growing it means raising `storage` only.
 
 VMAgent runs in `statefulMode`, so its remote-write persistent queue lives on a PVC instead of an
 emptyDir. If VMSingle is unreachable, buffered samples (about 1.5 days at the current ~60KB/s per

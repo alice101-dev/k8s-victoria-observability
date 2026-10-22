@@ -321,10 +321,13 @@ vlsingle:
   enabled: true
   spec:
     retentionPeriod: 90d
-    # Per-day partitions: the disk holds the retention. Small disk to start with: once the data reaches
-    # this size the oldest days are dropped, so the effective retention is shorter than 90d until the disk
-    # grows (raise both numbers; standard-rwo allows volume expansion).
-    retentionMaxDiskSpaceUsageBytes: 16GiB
+    # Per-day partitions: the disk holds the retention. Small disk to start with, so retention.maxDiskUsagePercent
+    # drops the oldest days once the filesystem is 80% full (the docs ask for >= 20% free: usage is checked
+    # periodically, and a full disk turns VictoriaLogs read-only before it can drop anything). The effective
+    # retention is then shorter than 90d until the disk grows; the limit follows the disk size, so growing
+    # means raising `storage` only. Mutually exclusive with retentionMaxDiskSpaceUsageBytes.
+    extraArgs:
+      retention.maxDiskUsagePercent: "80"
     storage:
       storageClassName: standard-rwo
       accessModes: [ReadWriteOnce]
@@ -365,8 +368,7 @@ vtsingle:
   enabled: true
   spec:
     retentionPeriod: 30d
-    # Per-day partitions; the oldest days are dropped beyond this size (see the logs note).
-    retentionMaxDiskSpaceUsageBytes: 16GiB
+    # Per-day partitions; the oldest days are dropped once the filesystem is 80% full (see the logs note).
     storage:
       storageClassName: standard-rwo
       accessModes: [ReadWriteOnce]
@@ -379,6 +381,7 @@ vtsingle:
     # dependencies tool, the Jaeger service graph in Explore). The Shop — Traces dashboard draws its own
     # map from the spans, coloured by failures.
     extraArgs:
+      retention.maxDiskUsagePercent: "80"
       servicegraph.enableTask: "true"
     resources:
       requests: { cpu: 100m, memory: 256Mi }

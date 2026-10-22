@@ -101,8 +101,8 @@ flowchart LR
 | Signal | Collection | Storage | Query | Retention |
 |---|---|---|---|---|
 | Metrics | VMAgent scrapes every target declared with VMServiceScrape / VMPodScrape and remote-writes to VMSingle | VMSingle, 30Gi | MetricsQL (PromQL-compatible) | 30d |
-| Logs | VLAgent tails container stdout on every node and parses JSON fields, including `trace_id` | VLSingle, 20Gi | LogsQL | 90d (oldest days dropped beyond 16GiB until the disk grows) |
-| Traces | OpenTelemetry SDK sends spans over OTLP/HTTP straight to VTSingle | VTSingle, 20Gi | Jaeger API, LogsQL | 30d (same 16GiB guard) |
+| Logs | VLAgent tails container stdout on every node and parses JSON fields, including `trace_id` | VLSingle, 20Gi | LogsQL | 90d (oldest days dropped once the disk is 80% full) |
+| Traces | OpenTelemetry SDK sends spans over OTLP/HTTP straight to VTSingle | VTSingle, 20Gi | Jaeger API, LogsQL | 30d (same 80% guard) |
 | Kubernetes events | An OpenTelemetry Collector (`k8s_events` receiver) watches the API server and sends them to VLSingle | VLSingle | LogsQL | 90d (the API server keeps 1h) |
 | Alerts | VMAlert evaluates MetricsQL and LogsQL rules; Alertmanager runs as a gossip cluster | – | – | – |
 
@@ -225,8 +225,8 @@ production practices. To harden it for production:
 
 | Staging default | Production |
 |---|---|
-| One VMSingle, VLSingle and VTSingle: no query or ingestion HA (a Spot preemption means ~2 minutes without queries and alert evaluation; vmagent and vlagent buffer, spans beyond the SDK queue are lost) | Grow the disks first (`storage` and `retentionMaxDiskSpaceUsageBytes`); for HA run two independent copies (`VMDistributed`/`VLDistributed`) or move to cluster mode when one node runs out of CPU or memory |
-| Small disks: VMSingle 30Gi, VLSingle and VTSingle 20Gi (oldest log and trace days dropped beyond 16GiB) | Size for the retention (metrics: retention + 1 month of data, logs and traces: the retention) and expand online |
+| One VMSingle, VLSingle and VTSingle: no query or ingestion HA (a Spot preemption means ~2 minutes without queries and alert evaluation; vmagent and vlagent buffer, spans beyond the SDK queue are lost) | Grow the disks first (`storage`; the 80% limit follows); for HA run two independent copies (`VMDistributed`/`VLDistributed`) or move to cluster mode when one node runs out of CPU or memory |
+| Small disks: VMSingle 30Gi, VLSingle and VTSingle 20Gi (oldest log and trace days dropped once a disk is 80% full) | Size for the retention (metrics: retention + 1 month of data, logs and traces: the retention) and expand online |
 | All nodes are Spot VMs | Add a small on-demand node pool for stateful workloads (VMSingle, VLSingle, VTSingle, PostgreSQL) |
 | Zonal cluster | `regional_cluster = true` |
 | 100% trace sampling | Lower `otel.samplerArg` in `apps/k8s/services/values.yaml` (e.g. `0.1`) or add tail sampling with an OpenTelemetry Collector |
