@@ -13,3 +13,4 @@ charts:
   vlMcp: 0.2.0
   vtMcp: 0.2.0
   grafanaMcp: 0.27.2
+  otelCollector: 0.175.1  # Kubernetes events collector (k8s-events)

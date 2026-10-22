@@ -1,0 +1,84 @@
+# OpenTelemetry Collector (Kubernetes distribution) that watches Kubernetes events and ships them to
+# VictoriaLogs: scheduling failures, evictions, OOM kills (node-problem-detector), failed probes, image pulls,
+# node restarts and spot VM preemptions. vlagent collects container logs only, and the API server keeps
+# events for one hour, so without this they are gone before anyone looks.
+#
+# One replica: the k8s_events receiver keeps no shared state, so a second replica would store every event
+# twice. While the pod restarts, events are missed (the receiver skips events older than its start).
+mode: deployment
+replicaCount: 1
+fullnameOverride: k8s-events
+
+image:
+  repository: otel/opentelemetry-collector-k8s
+
+presets:
+  kubernetesEvents:
+    enabled: true
+    # k8s_events receiver: the event message becomes the log message; reason, type (severity), the object
+    # and its namespace become fields. RBAC (get/list/watch events) comes with the preset.
+    useK8sEventsReceiver: true
+
+config:
+  # Only the events pipeline: drop the chart's default receivers and pipelines.
+  receivers:
+    jaeger: null
+    otlp: null
+    prometheus: null
+    zipkin: null
+  processors:
+    resource:
+      attributes:
+        - key: service.name
+          value: kubernetes-events
+          action: upsert
+  exporters:
+    debug: null
+    otlphttp/victorialogs:
+      logs_endpoint: http://vlinsert-vmks.monitoring.svc.cluster.local.:9481/insert/opentelemetry/v1/logs
+      headers:
+        # One log stream per namespace. By default VictoriaLogs uses the resource attributes as the stream,
+        # and this receiver puts the object's name, UID and resource version there: a stream per event.
+        VL-Stream-Fields: service.name,k8s.namespace.name
+  service:
+    pipelines:
+      logs:
+        receivers: []  # k8s_events, added by the preset
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlphttp/victorialogs]
+      metrics: null
+      traces: null
+
+# The collector's own metrics (otelcol_*: events received, exported, failed) on 8888, scraped by the
+# VMPodScrape in observability/k8s-events. No other port is opened.
+ports:
+  otlp:
+    enabled: false
+  otlp-http:
+    enabled: false
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  metrics:
+    enabled: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests: { cpu: 10m, memory: 48Mi }
+  limits: { memory: 192Mi }

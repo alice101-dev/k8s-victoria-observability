@@ -36,6 +36,7 @@ app_projects = {
       "https://victoriametrics.github.io/helm-charts/",
       "https://charts.external-secrets.io",
       "https://grafana-community.github.io/helm-charts",
+      "https://open-telemetry.github.io/opentelemetry-helm-charts", # Kubernetes events collector
     ]
   }
   shop = {

@@ -1,0 +1,12 @@
+# The events collector's own metrics (otelcol_*): events received from the API server, sent to VictoriaLogs
+# and failed sends. vmagent discovers this VMPodScrape automatically (selectAllByDefault).
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: k8s-events
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: k8s-events
+  podMetricsEndpoints:
+    - port: metrics
