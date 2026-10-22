@@ -626,7 +626,7 @@
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
       },
-      "description": "Every service, PostgreSQL and Redis with requests per second and p95; the ring shows the share of successful (green) and failed (red) spans, business outcomes not counted as failures. Arrows carry calls per second and the share that failed. Hover a node or an arrow for the counts.",
+      "description": "Every service, PostgreSQL and Redis with requests per second and p95; the ring shows the share of successful (green) and failed (red) spans, business outcomes not counted as failures. Arrows carry calls per second and their p95. Hover a node or an arrow for the counts and the failed share.",
       "targets": [
         {
           "datasource": {
@@ -643,7 +643,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=shop kind:=3 -name:=\"pool.acquire\" | copy \"resource_attr:service.name\" as source, \"span_attr:server.address\" as target | format if (kind:=3 \"span_attr:db.system.name\":=postgresql) \"postgresql\" as target | format if (kind:=3 \"span_attr:db.system\":=redis) \"redis\" as target | filter target:* | format \"<source>→<target>\" as id | stats by (id, source, target) rate() mainstat, count() detail__calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:payment.status\":=declined) detail__failed | math round(detail__failed*100/detail__calls, 0.01) as secondarystat",
+          "expr": "\"resource_attr:service.namespace\":=shop kind:=3 -name:=\"pool.acquire\" | copy \"resource_attr:service.name\" as source, \"span_attr:server.address\" as target | format if (kind:=3 \"span_attr:db.system.name\":=postgresql) \"postgresql\" as target | format if (kind:=3 \"span_attr:db.system\":=redis) \"redis\" as target | filter target:* | format \"<source>→<target>\" as id | stats by (id, source, target) rate() mainstat, quantile(0.95, duration) secondarystat, count() detail__calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:payment.status\":=declined) detail__failed | math round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "B"
@@ -688,6 +688,46 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "mainstat"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "displayName",
+                "value": "requests/s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "secondarystat"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "displayName",
+                "value": "p95"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "arc__success"
             },
             "properties": [
@@ -697,6 +737,10 @@
                   "mode": "fixed",
                   "fixedColor": "green"
                 }
+              },
+              {
+                "id": "displayName",
+                "value": "succeeded"
               }
             ]
           },
@@ -712,6 +756,26 @@
                   "mode": "fixed",
                   "fixedColor": "red"
                 }
+              },
+              {
+                "id": "displayName",
+                "value": "failed"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "detail__failed_pct"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "displayName",
+                "value": "failed %"
               }
             ]
           }
@@ -719,8 +783,6 @@
       },
       "options": {
         "nodes": {
-          "mainStatUnit": "reqps",
-          "secondaryStatUnit": "ns",
           "arcs": [
             {
               "field": "arc__success",
@@ -732,17 +794,14 @@
             }
           ]
         },
-        "edges": {
-          "mainStatUnit": "reqps",
-          "secondaryStatUnit": "percent"
-        }
+        "edges": {}
       },
       "id": 9,
       "gridPos": {
         "x": 0,
         "y": 6,
         "w": 14,
-        "h": 13
+        "h": 15
       }
     },
     {
@@ -901,7 +960,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=shop kind:=3 -name:=\"pool.acquire\" | copy \"resource_attr:service.name\" as service | copy \"span_attr:server.address\" as peer | format if (\"span_attr:db.system\":=redis) \"redis\" as peer | filter peer:* | stats by (service, peer) count() calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:payment.status\":=declined) failed, count() if (\"span_attr:http.response.status_code\":~\"^4\") e4, quantile(0.95, duration) p95 | sort by (calls desc) | limit 50",
+          "expr": "\"resource_attr:service.namespace\":=shop kind:=3 -name:=\"pool.acquire\" | copy \"resource_attr:service.name\" as service | copy \"span_attr:server.address\" as peer | format if (\"span_attr:db.system.name\":=postgresql) \"shop-db (PostgreSQL)\" as peer | format if (\"span_attr:db.system\":=redis) \"Redis\" as peer | filter peer:* | stats by (service, peer) count() calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:payment.status\":=declined) failed, count() if (\"span_attr:http.response.status_code\":~\"^4\") e4, quantile(0.95, duration) p95 | sort by (calls desc) | limit 50",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -912,7 +971,7 @@
         "x": 14,
         "y": 6,
         "w": 10,
-        "h": 13
+        "h": 15
       }
     },
     {
@@ -923,7 +982,7 @@
       "id": 11,
       "gridPos": {
         "x": 0,
-        "y": 19,
+        "y": 21,
         "w": 24,
         "h": 1
       }
@@ -1247,7 +1306,7 @@
       "id": 12,
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 22,
         "w": 24,
         "h": 11
       }
@@ -1306,7 +1365,7 @@
       "id": 13,
       "gridPos": {
         "x": 0,
-        "y": 31,
+        "y": 33,
         "w": 12,
         "h": 8
       },
@@ -1366,7 +1425,7 @@
       "id": 14,
       "gridPos": {
         "x": 12,
-        "y": 31,
+        "y": 33,
         "w": 12,
         "h": 8
       },
@@ -1380,7 +1439,7 @@
       "id": 15,
       "gridPos": {
         "x": 0,
-        "y": 39,
+        "y": 41,
         "w": 24,
         "h": 1
       }
@@ -1598,7 +1657,7 @@
       "id": 16,
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 42,
         "w": 24,
         "h": 11
       }
@@ -1657,7 +1716,7 @@
       "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 53,
         "w": 12,
         "h": 9
       },
@@ -1717,7 +1776,7 @@
       "id": 18,
       "gridPos": {
         "x": 12,
-        "y": 51,
+        "y": 53,
         "w": 12,
         "h": 9
       },
@@ -1731,7 +1790,7 @@
       "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 60,
+        "y": 62,
         "w": 24,
         "h": 1
       }
@@ -1953,7 +2012,7 @@
       "id": 20,
       "gridPos": {
         "x": 0,
-        "y": 61,
+        "y": 63,
         "w": 24,
         "h": 8
       }
@@ -2123,7 +2182,7 @@
       "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 69,
+        "y": 71,
         "w": 12,
         "h": 8
       }
@@ -2193,7 +2252,7 @@
       "id": 22,
       "gridPos": {
         "x": 12,
-        "y": 69,
+        "y": 71,
         "w": 12,
         "h": 8
       },
@@ -2207,7 +2266,7 @@
       "id": 23,
       "gridPos": {
         "x": 0,
-        "y": 77,
+        "y": 79,
         "w": 24,
         "h": 1
       }
@@ -2266,7 +2325,7 @@
       "id": 24,
       "gridPos": {
         "x": 0,
-        "y": 78,
+        "y": 80,
         "w": 12,
         "h": 9
       },
@@ -2373,7 +2432,7 @@
       "id": 25,
       "gridPos": {
         "x": 12,
-        "y": 78,
+        "y": 80,
         "w": 12,
         "h": 9
       }
@@ -2410,7 +2469,7 @@
       "id": 26,
       "gridPos": {
         "x": 0,
-        "y": 87,
+        "y": 89,
         "w": 24,
         "h": 9
       }
@@ -2423,7 +2482,7 @@
       "id": 27,
       "gridPos": {
         "x": 0,
-        "y": 96,
+        "y": 98,
         "w": 24,
         "h": 1
       }
@@ -2618,7 +2677,7 @@
       "id": 28,
       "gridPos": {
         "x": 0,
-        "y": 97,
+        "y": 99,
         "w": 12,
         "h": 9
       }
@@ -2677,7 +2736,7 @@
       "id": 29,
       "gridPos": {
         "x": 12,
-        "y": 97,
+        "y": 99,
         "w": 12,
         "h": 9
       },
@@ -2783,7 +2842,7 @@
       "id": 30,
       "gridPos": {
         "x": 0,
-        "y": 106,
+        "y": 108,
         "w": 12,
         "h": 8
       },
@@ -2874,7 +2933,7 @@
       "id": 31,
       "gridPos": {
         "x": 12,
-        "y": 106,
+        "y": 108,
         "w": 12,
         "h": 8
       },
@@ -2888,7 +2947,7 @@
       "id": 32,
       "gridPos": {
         "x": 0,
-        "y": 114,
+        "y": 116,
         "w": 24,
         "h": 1
       }
@@ -3060,7 +3119,7 @@
       "id": 33,
       "gridPos": {
         "x": 0,
-        "y": 115,
+        "y": 117,
         "w": 12,
         "h": 10
       }
@@ -3232,7 +3291,7 @@
       "id": 34,
       "gridPos": {
         "x": 12,
-        "y": 115,
+        "y": 117,
         "w": 12,
         "h": 10
       }
@@ -3259,7 +3318,7 @@
       "id": 35,
       "gridPos": {
         "x": 0,
-        "y": 125,
+        "y": 127,
         "w": 24,
         "h": 18
       }

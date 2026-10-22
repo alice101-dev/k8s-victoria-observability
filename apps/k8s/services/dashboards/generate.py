@@ -613,27 +613,35 @@ MAP_EDGES = ('"resource_attr:service.namespace":=shop kind:=3 -name:="pool.acqui
              '| copy "resource_attr:service.name" as source, "span_attr:server.address" as target '
              + TO_DEPENDENCY.format(f="target")
              + '| filter target:* | format "<source>→<target>" as id '
-             + f"| stats by (id, source, target) rate() mainstat, count() detail__calls, count() if ({FAILED}) detail__failed "
-               "| math round(detail__failed*100/detail__calls, 0.01) as secondarystat")
+             + f"| stats by (id, source, target) rate() mainstat, quantile(0.95, duration) secondarystat, count() detail__calls, "
+               f"count() if ({FAILED}) detail__failed | math round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct")
 d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
        "description": "Every service, PostgreSQL and Redis with requests per second and p95; the ring shows the share "
                       "of successful (green) and failed (red) spans, business outcomes not counted as failures. Arrows "
-                      "carry calls per second and the share that failed. Hover a node or an arrow for the counts.",
+                      "carry calls per second and their p95. Hover a node or an arrow for the counts and the failed share.",
        "targets": [vl(MAP_NODES, "stats", "A", ds=VTL), vl(MAP_EDGES, "stats", "B", ds=VTL)],
        "transformations": [
            {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
            {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "A"}},
            {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "B"}},
            {"id": "organize", "options": {"excludeByName": {"Time": True}}}],
+       # Nodes and edges share the stat names, so one override per name formats both.
        "fieldConfig": {"defaults": {}, "overrides": [
-           by_name("arc__success", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}}]),
-           by_name("arc__errors", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}])]},
-       "options": {"nodes": {"mainStatUnit": "reqps", "secondaryStatUnit": "ns",
-                             "arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
-                   "edges": {"mainStatUnit": "reqps", "secondaryStatUnit": "percent"}}}, 14, 13)
+           by_name("mainstat", [{"id": "unit", "value": "reqps"}, {"id": "decimals", "value": 2},
+                                {"id": "displayName", "value": "requests/s"}]),
+           by_name("secondarystat", [{"id": "unit", "value": "ns"}, {"id": "decimals", "value": 1},
+                                     {"id": "displayName", "value": "p95"}]),
+           by_name("arc__success", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}},
+                                    {"id": "displayName", "value": "succeeded"}]),
+           by_name("arc__errors", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}},
+                                   {"id": "displayName", "value": "failed"}]),
+           by_name("detail__failed_pct", [{"id": "unit", "value": "percent"}, {"id": "displayName", "value": "failed %"}])]},
+       "options": {"nodes": {"arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
+                   "edges": {}}}, 14, 15)
 d.add(lq_table("Calls to dependencies",
                f'"resource_attr:service.namespace":=shop kind:=3 -name:="pool.acquire" {SVC} | copy "span_attr:server.address" as peer '
-               '| format if ("span_attr:db.system":=redis) "redis" as peer | filter peer:* '
+               '| format if ("span_attr:db.system.name":=postgresql) "shop-db (PostgreSQL)" as peer '
+               '| format if ("span_attr:db.system":=redis) "Redis" as peer | filter peer:* '
                f"| stats by (service, peer) count() calls, count() if ({FAILED}) failed, count() if ({IS_4XX}) e4, "
                "quantile(0.95, duration) p95 | sort by (calls desc) | limit 50",
                [("service", "Caller"), ("peer", "Callee"), ("calls", "Calls"), ("failed", "Failed"), ("e4", "4xx"),
@@ -641,7 +649,7 @@ d.add(lq_table("Calls to dependencies",
                "Client spans by caller and callee: other services, PostgreSQL (shop-db-rw) and Redis. p95 includes the "
                "network and the callee's work.",
                overrides=[COUNT("Calls"), COUNT("Failed"), COUNT("4xx"), NS_UNIT("p95")],
-               sort=[{"displayName": "Calls", "desc": True}]), 10, 13)
+               sort=[{"displayName": "Calls", "desc": True}]), 10, 15)
 
 d.row("Endpoints — $service")
 d.add(lq_table("Endpoints (server spans)",
