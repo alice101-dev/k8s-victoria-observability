@@ -679,10 +679,11 @@ grafana:
     resources:
       requests: { cpu: 10m, memory: 64Mi }
       limits: { memory: 128Mi }
-  # Peak ~500Mi during dashboard provisioning + plugin install → 768Mi limit.
+  # The VictoriaLogs datasource plugin runs in this container: with the Shop logs and traces dashboards
+  # open (refreshed every minute) Grafana reached its former 768Mi limit, slowed down and failed its probes.
   resources:
-    requests: { cpu: 50m, memory: 256Mi }
-    limits: { memory: 768Mi }
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { memory: 1536Mi }
 
 # =============================================================================
 # Exporters & scrape targets — tuned for GKE (Google-managed control plane).
