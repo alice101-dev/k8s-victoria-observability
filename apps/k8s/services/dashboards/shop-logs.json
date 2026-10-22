@@ -1,7 +1,7 @@
 {
   "uid": "shop-logs",
   "title": "Shop — Logs",
-  "description": "Application logs of the shop services from VictoriaLogs.",
+  "description": "Application logs of the shop services from VictoriaLogs: volume and error trends, message patterns, what failing lines have in common, pods and versions, one request across services, the explorer and the log pipeline.",
   "tags": [
     "shop",
     "logs"
@@ -23,14 +23,17 @@
         "label": "Service",
         "type": "query",
         "datasource": {
-          "type": "prometheus",
-          "uid": "VictoriaMetrics"
+          "type": "victoriametrics-logs-datasource",
+          "uid": "VictoriaLogs"
         },
         "query": {
-          "query": "label_values(http_server_requests_total{namespace=\"shop\"}, job)",
+          "type": "fieldValue",
+          "field": "service",
+          "query": "{kubernetes.pod_namespace=\"shop\"} service:*",
+          "limit": 100,
           "refId": "service"
         },
-        "definition": "label_values(http_server_requests_total{namespace=\"shop\"}, job)",
+        "definition": "service: {kubernetes.pod_namespace=\"shop\"} service:*",
         "refresh": 2,
         "sort": 1,
         "multi": true,
@@ -87,6 +90,17 @@
         ]
       },
       {
+        "name": "search",
+        "label": "Message contains",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "Case-insensitive text in the message"
+      },
+      {
         "name": "filters",
         "label": "Filters",
         "type": "adhoc",
@@ -94,6 +108,30 @@
           "type": "victoriametrics-logs-datasource",
           "uid": "VictoriaLogs"
         }
+      },
+      {
+        "name": "request",
+        "label": "Request (latest first)",
+        "type": "query",
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "VictoriaLogs"
+        },
+        "query": {
+          "type": "fieldValue",
+          "field": "option",
+          "query": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) trace_id:* | sort by (_time desc) | limit 30 | format \"<_time>\" as t | replace (\"T\", \" \") at t | replace_regexp (\"\\\\.[0-9]+Z$\", \" UTC\") at t | format \"<t> · <service> · <_msg> · <trace_id>\" as option",
+          "limit": 100,
+          "refId": "request"
+        },
+        "definition": "option: latest lines with a trace ID",
+        "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
+        "sort": 2,
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "allowCustomValue": true,
+        "current": {}
       }
     ]
   },
@@ -156,7 +194,7 @@
   "panels": [
     {
       "type": "row",
-      "title": "Volume",
+      "title": "Overview — $service",
       "collapsed": false,
       "panels": [],
       "id": 1,
@@ -168,8 +206,387 @@
       }
     },
     {
+      "type": "stat",
+      "title": "Log lines",
+      "description": "Lines the selected services logged in the time range (all levels).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` | stats count() lines",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warnings",
+      "description": "WARN lines. Here mostly business outcomes (unknown user, declined payment), see Patterns.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:=WARN | stats count() warnings",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Errors",
+      "description": "ERROR lines: a request failed for a technical reason.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:=ERROR | stats count() errors",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Error ratio",
+      "description": "Share of ERROR lines among all lines of the selected services.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` | stats count() if (level:=ERROR) errors, count() lines | math errors*100/lines as error_ratio | delete errors, lines",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Services logging errors",
+      "description": "Services with at least one ERROR line. More than one at the same time usually means a shared dependency (database, Redis, a called service).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:=ERROR | stats count_uniq(service) services",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Lines outside the JSON logger",
+      "description": "Lines without a level: library loggers that bypass slog (go-redis logs Sentinel discovery and master changes), Go panics and crash output. Listed under Log explorer.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"app\"} \"kubernetes.pod_labels.app.kubernetes.io/name\":in($service) -level:* _msg:~`(?i)\\Q${search:raw}\\E` | stats count() lines",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "row",
+      "title": "Trends",
+      "collapsed": false,
+      "panels": [],
+      "id": 8,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
       "type": "timeseries",
-      "title": "Log volume by level",
+      "title": "Lines by level",
       "description": "",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -271,25 +688,522 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) level:in($level) | stats by (level) count() logs",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` | stats by (level) count() lines",
           "queryType": "statsRange",
           "editorMode": "code",
           "refId": "A",
           "legendFormat": "{{level}}"
         }
       ],
-      "id": 2,
+      "id": 9,
       "gridPos": {
         "x": 0,
-        "y": 1,
+        "y": 6,
         "w": 12,
         "h": 8
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "timeseries",
+      "title": "Error ratio by service",
+      "description": "Share of ERROR lines per service. A service that logs more lines (more traffic) does not look worse here; compare with the Errors per service timeline below.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisSoftMax": 1
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` | stats by (service) count() if (level:=ERROR) errors, count() lines | math round(errors*100/lines, 0.01) as error_ratio | delete errors, lines",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "status-history",
+      "title": "Errors per service",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "maxDataPoints": 60,
+      "description": "ERROR lines per service and interval: when each service started and stopped failing, and which failed first. Rollouts and critical alerts are marked on the graphs above.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 10
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "rowHeight": 0.85,
+        "colWidth": 0.95,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` | stats by (service) count() if (level:=ERROR) errors",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 7
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "row",
+      "title": "Patterns — $level lines",
+      "collapsed": false,
+      "panels": [],
+      "id": 12,
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Message patterns",
+      "description": "What the selected lines say, grouped by pattern, with the cause (err) the service logged. Click a message to list only its lines, a sample request to see that request across services or its trace.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Shop — Service dashboard",
+                    "url": "/d/shop-service/shop-service?var-service=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Level"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "ERROR": {
+                        "color": "red",
+                        "index": 0
+                      },
+                      "WARN": {
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "INFO": {
+                        "color": "green",
+                        "index": 2
+                      },
+                      "DEBUG": {
+                        "color": "blue",
+                        "index": 3
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Message"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show only lines with this message",
+                    "url": "/d/shop-logs/shop-logs?${service:queryparam}&${level:queryparam}&${__url_time_range}&var-search=${__data.fields.search_key:percentencode}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 260
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lines"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Share"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlYlRd"
+                }
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pods"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "First seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sample request"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show the logs of this request (Request row)",
+                    "url": "/d/shop-logs/shop-logs?${service:queryparam}&${level:queryparam}&${__url_time_range}&${search:queryparam}&var-request=${__value.raw}"
+                  },
+                  {
+                    "title": "Open the trace in Shop — Traces",
+                    "url": "/d/shop-traces/shop-traces?var-trace_id=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "search_key"
+            },
+            "properties": [
+              {
+                "id": "custom.hidden",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Lines",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "service": 0,
+              "level": 1,
+              "_msg": 2,
+              "err": 3,
+              "lines": 4,
+              "share": 5,
+              "pods": 6,
+              "first_ms": 7,
+              "last_ms": 8,
+              "request": 9,
+              "search_key": 10
+            },
+            "renameByName": {
+              "service": "Service",
+              "level": "Level",
+              "_msg": "Message",
+              "err": "Cause",
+              "lines": "Lines",
+              "share": "Share",
+              "pods": "Pods",
+              "first_ms": "First seen",
+              "last_ms": "Last seen",
+              "request": "Sample request",
+              "search_key": "search_key"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | collapse_nums prettify | collapse_nums at err prettify | extract_regexp \"^(?P<search_key>[^<]*)\" from _msg | stats by (service, level, _msg, err) count() lines, count_uniq(kubernetes.pod_name) pods, min(_time) first, max(_time) last, max(trace_id) request, max(search_key) search_key | total_stats sum(lines) total | math round(lines*100/total, 0.01) as share, round(first/1e6) as first_ms, round(last/1e6) as last_ms | delete total, first, last | sort by (lines desc) | limit 50",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 24,
+        "h": 10
       }
     },
     {
       "type": "timeseries",
-      "title": "Log volume by service",
-      "description": "",
+      "title": "Patterns over time",
+      "description": "The same patterns per interval: a new pattern appearing, or one jumping, marks the start of a problem.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
@@ -329,38 +1243,195 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) level:in($level) | stats by (service) count() logs",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | collapse_nums prettify | stats by (service, _msg) count() lines",
           "queryType": "statsRange",
           "editorMode": "code",
           "refId": "A",
-          "legendFormat": "{{service}}"
+          "legendFormat": "{{service}}: {{_msg}}"
         }
       ],
-      "id": 3,
+      "id": 14,
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 12,
+        "h": 10
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "table",
+      "title": "What these lines have in common",
+      "description": "Most frequent values of each field in the selected lines and the share of lines carrying them. One product, user, pod, node or version near 100% points at the cause.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Field"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lines"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Share"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "custom.width",
+                "value": 160
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlYlRd"
+                }
+              },
+              {
+                "id": "max",
+                "value": 100
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Share",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "field_name": 0,
+              "field_value": 1,
+              "lines": 2,
+              "share": 3
+            },
+            "renameByName": {
+              "field_name": "Field",
+              "field_value": "Value",
+              "lines": "Lines",
+              "share": "Share"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | delete _msg, err, _time, _stream, _stream_id, trace_id, span_id, output_stream, kubernetes.container_id, kubernetes.container_name, kubernetes.pod_ip, kubernetes.pod_namespace, kubernetes.pod_labels.pod-template-hash, kubernetes.pod_labels.app.kubernetes.io/name, kubernetes.pod_labels.app.kubernetes.io/part-of, kubernetes.pod_labels.app.kubernetes.io/component, kubernetes.pod_labels.app.kubernetes.io/managed-by, kubernetes.pod_labels.topology.kubernetes.io/region | facets 5 keep_const_fields | replace_regexp (\"^kubernetes\\\\.(pod_labels\\\\.)?([a-z]+\\\\.kubernetes\\\\.io/)?\", \"\") at field_name | stats by (field_name, field_value) sum(hits) lines | format if (field_name:=level) \"<lines>\" as level_lines | total_stats sum(level_lines) total | math round(lines*100/total, 0.1) as share | delete level_lines, total | filter -field_name:=level | sort by (share desc) | limit 60",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 15,
       "gridPos": {
         "x": 12,
-        "y": 1,
+        "y": 32,
         "w": 12,
-        "h": 8
+        "h": 10
       }
     },
     {
       "type": "row",
-      "title": "Top sources",
+      "title": "Where — pods, nodes and versions",
       "collapsed": false,
       "panels": [],
-      "id": 4,
+      "id": 16,
       "gridPos": {
         "x": 0,
-        "y": 9,
+        "y": 42,
         "w": 24,
         "h": 1
       }
     },
     {
       "type": "table",
-      "title": "Top messages",
-      "description": "The most frequent messages for the selected services and levels.",
+      "title": "Lines by pod",
+      "description": "One pod, node or version with more errors than its peers points at the pod, the node or a rollout rather than the code path. Click a pod to list its lines in the explorer.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
@@ -374,7 +1445,135 @@
             }
           }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pod"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show this pod's lines in the explorer",
+                    "url": "/d/shop-logs/shop-logs?${service:queryparam}&${level:queryparam}&${__url_time_range}&${search:queryparam}&var-filters=kubernetes.pod_name%7C%3D%7C${__value.raw}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lines"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Warnings"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Errors"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error ratio"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.1
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
@@ -384,7 +1583,7 @@
         },
         "sortBy": [
           {
-            "displayName": "Count",
+            "displayName": "Errors",
             "desc": true
           }
         ]
@@ -393,7 +1592,8 @@
         {
           "id": "labelsToFields",
           "options": {
-            "mode": "columns"
+            "mode": "columns",
+            "valueLabel": "__name__"
           }
         },
         {
@@ -404,21 +1604,27 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true,
-              "__name__": true
+              "Time": true
             },
             "indexByName": {
-              "service": 0,
-              "level": 1,
-              "_msg": 2,
-              "Value": 3
+              "kubernetes.pod_name": 0,
+              "kubernetes.pod_node_name": 1,
+              "zone": 2,
+              "version": 3,
+              "lines": 4,
+              "warnings": 5,
+              "errors": 6,
+              "error_ratio": 7
             },
             "renameByName": {
-              "service": "Service",
-              "level": "Level",
-              "_msg": "Message",
-              "Value": "Count",
-              "hits": "Count"
+              "kubernetes.pod_name": "Pod",
+              "kubernetes.pod_node_name": "Node",
+              "zone": "Zone",
+              "version": "Version",
+              "lines": "Lines",
+              "warnings": "Warnings",
+              "errors": "Errors",
+              "error_ratio": "Error ratio"
             }
           }
         }
@@ -429,119 +1635,150 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) level:in($level) | stats by (service, level, _msg) count() hits | sort by (hits desc) | limit 15",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` | copy \"kubernetes.pod_labels.topology.kubernetes.io/zone\" as zone | copy \"kubernetes.pod_labels.app.kubernetes.io/version\" as version | stats by (kubernetes.pod_name, kubernetes.pod_node_name, zone, version) count() lines, count() if (level:=WARN) warnings, count() if (level:=ERROR) errors | math round(errors*100/lines, 0.01) as error_ratio | sort by (errors desc, warnings desc) | limit 30",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
         }
       ],
-      "id": 5,
+      "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 10,
+        "y": 43,
         "w": 14,
         "h": 9
       }
     },
     {
-      "type": "table",
-      "title": "Top pods",
-      "description": "A single pod at the top usually means a node or pod-local problem rather than a code bug.",
+      "type": "timeseries",
+      "title": "Warnings and errors by version",
+      "description": "Lines per image version (app.kubernetes.io/version). A new version bringing new errors shows here at the rollout (blue annotation).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
       },
       "fieldConfig": {
         "defaults": {
+          "unit": "short",
           "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
             }
           }
         },
         "overrides": []
       },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
         },
-        "sortBy": [
-          {
-            "displayName": "Count",
-            "desc": true
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        },
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "__name__": true
-            },
-            "indexByName": {
-              "kubernetes.pod_name": 0,
-              "Value": 1
-            },
-            "renameByName": {
-              "kubernetes.pod_name": "Pod",
-              "Value": "Count",
-              "hits": "Count"
-            }
-          }
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
         }
-      ],
+      },
       "targets": [
         {
           "datasource": {
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) level:in($level) | stats by (kubernetes.pod_name) count() hits | sort by (hits desc) | limit 10",
-          "queryType": "stats",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in(ERROR, WARN) | copy \"kubernetes.pod_labels.app.kubernetes.io/version\" as version | stats by (version, level) count() lines",
+          "queryType": "statsRange",
           "editorMode": "code",
-          "refId": "A"
+          "refId": "A",
+          "legendFormat": "{{version}} {{level}}"
         }
       ],
-      "id": 6,
+      "id": 18,
       "gridPos": {
         "x": 14,
-        "y": 10,
+        "y": 43,
         "w": 10,
         "h": 9
-      }
+      },
+      "interval": "1m"
     },
     {
       "type": "row",
-      "title": "Logs",
+      "title": "Request — ${request:text}",
       "collapsed": false,
       "panels": [],
-      "id": 7,
+      "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 19,
+        "y": 52,
         "w": 24,
         "h": 1
       }
     },
     {
       "type": "logs",
-      "title": "Logs",
-      "description": "Expand a line and follow trace_id to open the trace. Add field filters with the Filters variable.",
+      "title": "All lines of one request, oldest first",
+      "description": "Every service's lines with the trace ID picked in the Request variable (latest $level lines first) or clicked in Message patterns. The panel link opens the trace.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Ascending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} trace_id:=\"${request:raw}\" trace_id:*",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "x": 0,
+        "y": 53,
+        "w": 24,
+        "h": 12
+      },
+      "links": [
+        {
+          "title": "Open the trace in Shop — Traces",
+          "url": "/d/shop-traces/shop-traces?var-trace_id=${request}&${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Log explorer",
+      "collapsed": false,
+      "panels": [],
+      "id": 21,
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Lines — $level",
+      "description": "Expand a line for its fields; trace_id links to the trace. Narrow with Message contains and Filters (any field).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
@@ -560,20 +1797,479 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) level:in($level)",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level)",
           "queryType": "instant",
           "editorMode": "code",
           "refId": "A",
           "maxLines": 500
         }
       ],
-      "id": 8,
+      "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 66,
         "w": 24,
-        "h": 16
+        "h": 18
       }
+    },
+    {
+      "type": "logs",
+      "title": "Lines outside the JSON logger",
+      "description": "Output without a level: library loggers (go-redis Sentinel), Go panics and crash output.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"app\"} \"kubernetes.pod_labels.app.kubernetes.io/name\":in($service) -level:* _msg:~`(?i)\\Q${search:raw}\\E`",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 23,
+      "gridPos": {
+        "x": 0,
+        "y": 84,
+        "w": 24,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Log pipeline — is every line arriving?",
+      "collapsed": false,
+      "panels": [],
+      "id": 24,
+      "gridPos": {
+        "x": 0,
+        "y": 91,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Last line per service",
+      "description": "A service that stops logging while it serves traffic has lost its log shipping (or hangs).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last line"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Lines"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Last line",
+            "desc": false
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "service": 0,
+              "last_ms": 1,
+              "lines": 2
+            },
+            "renameByName": {
+              "service": "Service",
+              "last_ms": "Last line",
+              "lines": "Lines"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) | stats by (service) max(_time) last, count() lines | math round(last/1e6) as last_ms | delete last",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 25,
+      "gridPos": {
+        "x": 0,
+        "y": 92,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - cluster",
+          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Log bytes by service",
+      "description": "Uncompressed size of all fields per interval: who drives log volume (storage and cost).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) | stats by (service) sum_len(*) bytes",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "id": 26,
+      "gridPos": {
+        "x": 6,
+        "y": 92,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - cluster",
+          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+        }
+      ],
+      "interval": "1m"
+    },
+    {
+      "type": "timeseries",
+      "title": "Lines dropped or skipped",
+      "description": "Lines per second VictoriaLogs or the collector did not store (whole cluster). Should stay at 0.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 2,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (reason) (rate(vl_rows_dropped_total{reason!=\"debug\"}[$__rate_interval]))",
+          "legendFormat": "dropped: {{reason}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vl_too_long_lines_skipped_total[$__rate_interval]))",
+          "legendFormat": "skipped: too long",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vlagent_remotewrite_packets_dropped_total[$__rate_interval]))",
+          "legendFormat": "collector dropped",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 27,
+      "gridPos": {
+        "x": 12,
+        "y": 92,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - cluster",
+          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Collector backlog",
+      "description": "Data vlagent has collected but not yet delivered (left) and failed or retried sends per second (right). A growing backlog delays every log panel.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(vlagent_remotewrite_pending_data_bytes)",
+          "legendFormat": "pending",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vlagent_remotewrite_errors_total[$__rate_interval]))",
+          "legendFormat": "send errors",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vlagent_remotewrite_retries_count_total[$__rate_interval]))",
+          "legendFormat": "retries",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 28,
+      "gridPos": {
+        "x": 18,
+        "y": 92,
+        "w": 6,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - cluster",
+          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+        }
+      ]
     }
   ]
 }
