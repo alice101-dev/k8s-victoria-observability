@@ -575,10 +575,12 @@ d.add({"type": "status-history", "title": "Errors per service", "datasource": VL
        "targets": [vl(f"{LOGS} | stats by (service) count() if ({ERR}) errors", "statsRange", legend="{{service}}")]}, 24, 7)
 
 d.row("Patterns — $level lines")
-# Numbers, IDs, IPs and timestamps collapse to placeholders, so messages and causes (err) that differ only in
-# such values form one pattern. search_key (the text before the first placeholder) feeds the message link. Every
-# text column is a by() field: the datasource reads the other stats results as numbers.
-PATTERNS = (f"{LOGS_LEVEL} | collapse_nums prettify | collapse_nums at err prettify "
+# Numbers (ports, IDs, status codes, IP parts) become <N>, so messages and causes (err) that differ only in such
+# values form one pattern. Whole numbers only: collapse_nums also rewrites hex-looking words ("exceeded"). The
+# search_key (text before the first placeholder) feeds the message link. Every text column is a by() field: the
+# datasource reads the other stats results as numbers.
+NUMS = r'| replace_regexp ("\\b[0-9]+\\b", "<N>") at _msg | replace_regexp ("\\b[0-9]+\\b", "<N>") at err '
+PATTERNS = (f"{LOGS_LEVEL} {NUMS}"
             '| extract_regexp "^(?P<search_key>[^<]*)" from _msg '
             "| stats by (service, level, _msg, err, search_key) count() lines, count_uniq(kubernetes.pod_name) pods, "
             "min(_time) first, max(_time) last "
@@ -596,7 +598,7 @@ d.add(logsql_table("Message patterns", PATTERNS,
                                   WHEN("First seen", "dateTimeAsLocal"), WHEN("Last seen", "dateTimeFromNow"),
                                   by_name("search_key", [{"id": "custom.hidden", "value": True}])],
                    sort=[{"displayName": "Lines", "desc": True}]), 24, 10)
-d.add(ts("Patterns over time", [vl(f"{LOGS_LEVEL} | collapse_nums prettify | stats by (service, _msg) count() lines",
+d.add(ts("Patterns over time", [vl(f"{LOGS_LEVEL} {NUMS}| stats by (service, _msg) count() lines",
                                    "statsRange", legend="{{service}}: {{_msg}}")],
          "short", ds=VL, stack=True, bars=True, legend_calcs=("sum",),
          desc="The same patterns per interval: a new pattern appearing, or one jumping, marks the start of a problem."), 12, 10)

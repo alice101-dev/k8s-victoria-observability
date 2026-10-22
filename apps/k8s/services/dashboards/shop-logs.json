@@ -1159,7 +1159,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | collapse_nums prettify | collapse_nums at err prettify | extract_regexp \"^(?P<search_key>[^<]*)\" from _msg | stats by (service, level, _msg, err, search_key) count() lines, count_uniq(kubernetes.pod_name) pods, min(_time) first, max(_time) last | total_stats sum(lines) total | math round(lines*100/total, 0.01) as share, round(first/1e6) as first_ms, round(last/1e6) as last_ms | delete total, first, last | sort by (lines desc) | limit 50",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | replace_regexp (\"\\\\b[0-9]+\\\\b\", \"<N>\") at _msg | replace_regexp (\"\\\\b[0-9]+\\\\b\", \"<N>\") at err | extract_regexp \"^(?P<search_key>[^<]*)\" from _msg | stats by (service, level, _msg, err, search_key) count() lines, count_uniq(kubernetes.pod_name) pods, min(_time) first, max(_time) last | total_stats sum(lines) total | math round(lines*100/total, 0.01) as share, round(first/1e6) as first_ms, round(last/1e6) as last_ms | delete total, first, last | sort by (lines desc) | limit 50",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -1216,7 +1216,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | collapse_nums prettify | stats by (service, _msg) count() lines",
+          "expr": "{kubernetes.pod_namespace=\"shop\"} service:in($service) _msg:~`(?i)\\Q${search:raw}\\E` level:in($level) | replace_regexp (\"\\\\b[0-9]+\\\\b\", \"<N>\") at _msg | replace_regexp (\"\\\\b[0-9]+\\\\b\", \"<N>\") at err | stats by (service, _msg) count() lines",
           "queryType": "statsRange",
           "editorMode": "code",
           "refId": "A",
