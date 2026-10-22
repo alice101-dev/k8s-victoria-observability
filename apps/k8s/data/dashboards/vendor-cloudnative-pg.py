@@ -9,7 +9,8 @@ variable expects that label to hold the CloudNativePG cluster name (set by the C
   only that cluster's pods and PVCs instead of every "<name>-<n>" pod in the namespace.
 - Reconcile-error panels count errors within the time range (increase) instead of showing the
   operator's cumulative counter, which stays red until the operator restarts.
-- The "First Recoverability Point" graph is labeled with the cluster name.
+- The "First Recoverability Point" graph is labeled with the cluster name and shows the timestamp in
+  the legend: a flat timestamp series stretches the y axis from 1970, so the axis is hidden.
 - Export placeholders (__inputs, ${DS_EXPRESSION}) are resolved for file provisioning.
 """
 import json
@@ -57,6 +58,8 @@ for panel in walk(dash["panels"]):
             target["expr"] = RECONCILE.sub(rf"sum(increase(\1[{window}]))", expr)
         if "first_recoverability_point" in expr and panel["type"] == "timeseries":
             target["legendFormat"] = "$cluster"
+            panel["fieldConfig"]["defaults"]["custom"]["axisPlacement"] = "hidden"
+            panel["options"]["legend"].update(displayMode="list", placement="bottom", calcs=["lastNotNull"])
 
 with open(OUT, "w") as f:
     json.dump(dash, f, indent=2, ensure_ascii=False)
