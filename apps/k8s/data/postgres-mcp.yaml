@@ -170,8 +170,11 @@ spec:
     spec:
       serviceAccountName: postgres-mcp
       automountServiceAccountToken: false
+      # The distroless image names its user ("nonroot"); runAsNonRoot can only verify a numeric UID.
       securityContext:
         runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
         seccompProfile:
           type: RuntimeDefault
       containers:
