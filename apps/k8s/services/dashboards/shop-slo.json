@@ -1641,13 +1641,232 @@
     },
     {
       "type": "row",
-      "title": "Budget and SLI trends",
+      "title": "SLI against the objective — 1h",
       "collapsed": false,
       "panels": [],
       "id": 15,
       "gridPos": {
         "x": 0,
         "y": 41,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Journey SLIs — 1h",
+      "description": "Share of good requests over the last hour (checkout and browse, measured at api-gateway): availability = not 5xx, latency = faster than the threshold. The dashed lines are the objectives; below them the error budget is spent faster than planned. Definitions at the bottom.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisSoftMin": 0.98
+          },
+          "decimals": 2,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1 - slo:sli_error:ratio_rate1h{kind=\"journey\"}",
+          "legendFormat": "{{job}} · {{slo}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (slo) (slo:objective:ratio{kind=\"journey\"})",
+          "legendFormat": "objective · {{slo}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Service SLIs — 1h",
+      "description": "Share of good requests over the last hour (each service's own requests): availability = not 5xx, latency = faster than the threshold. The dashed lines are the objectives; below them the error budget is spent faster than planned. Definitions at the bottom.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 0,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisSoftMin": 0.98
+          },
+          "decimals": 2,
+          "max": 1
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "fill": "dash",
+                  "dash": [
+                    10,
+                    10
+                  ]
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 2
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "1 - slo:sli_error:ratio_rate1h{kind=\"service\"}",
+          "legendFormat": "{{job}} · {{slo}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (slo) (slo:objective:ratio{kind=\"service\"})",
+          "legendFormat": "objective · {{slo}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "x": 12,
+        "y": 42,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Budget and SLI trends",
+      "collapsed": false,
+      "panels": [],
+      "id": 18,
+      "gridPos": {
+        "x": 0,
+        "y": 50,
         "w": 24,
         "h": 1
       }
@@ -1722,10 +1941,10 @@
           "instant": false
         }
       ],
-      "id": 16,
+      "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 42,
+        "y": 51,
         "w": 12,
         "h": 9
       }
@@ -1782,10 +2001,10 @@
           "instant": false
         }
       ],
-      "id": 17,
+      "id": 20,
       "gridPos": {
         "x": 12,
-        "y": 42,
+        "y": 51,
         "w": 12,
         "h": 9
       }
@@ -1795,10 +2014,10 @@
       "title": "Alerts",
       "collapsed": false,
       "panels": [],
-      "id": 18,
+      "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 60,
         "w": 24,
         "h": 1
       }
@@ -1899,12 +2118,41 @@
           "format": "table"
         }
       ],
-      "id": 19,
+      "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 61,
         "w": 24,
         "h": 6
+      }
+    },
+    {
+      "type": "row",
+      "title": "SLI definitions",
+      "collapsed": false,
+      "panels": [],
+      "id": 23,
+      "gridPos": {
+        "x": 0,
+        "y": 67,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "options": {
+        "mode": "markdown",
+        "content": "| SLI | Good events | Valid events | Objective (30 days) |\n|---|---|---|---|\n| **Availability** | responses that are not 5xx (4xx are the client's mistake and count as good) | all HTTP requests | 99.5% |\n| **Latency** | responses faster than the latency threshold | all HTTP requests | 99% |\n\n**Where they are measured.** *Journeys* at the edge (api-gateway), so they include failures of every service behind it:\n**checkout** = `POST /api/orders` (threshold 500 ms); **browse** = `GET /api/products/ or /api/users/` (threshold 100 ms).\n*Services* on each service's own requests (threshold 100 ms;\napi-gateway, order-service, payment-service: 500 ms:\nthe checkout path includes the payment provider).\n\n**Error budget and burn rate.** Budget = 1 − objective over a rolling 30 days. Burn rate = error ratio / budget: 1 spends\nthe budget in exactly 30 days. Pages (critical): burn rate above 14.4 over 1h and 5m, or above 6 over 6h and 30m.\nTickets (warning): above 3 over 1d and 2h, or above 1 over 3d and 6h. Recording rules: `apps/k8s/services/templates/monitoring.yaml`."
+      },
+      "id": 24,
+      "gridPos": {
+        "x": 0,
+        "y": 68,
+        "w": 24,
+        "h": 9
       }
     }
   ]

@@ -6,7 +6,7 @@ usage: python3 apps/k8s/services/dashboards/generate.py [out_dir]
        links and annotations of shop-overview.json; the Helm chart ships every *.json in this folder.
        cluster-events.json goes to observability/k8s-events/dashboards, shipped by the k8s-events app.)
 """
-import json, os, sys
+import json, os, re, sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = sys.argv[1] if len(sys.argv) > 1 else HERE
@@ -350,6 +350,21 @@ d.add(ts("Burn rate — 6h window", [vm(f"slo:sli_error:ratio_rate6h {BURN}", "{
          th=thresholds(("green", None), ("orange", 1), ("red", 6)), decimals=2, min_=0, soft_max=1,
          desc="Pages when both the 6h and 30m burn rates exceed 6 (5% of the 30-day budget in six hours)."), 12, 9)
 
+# SLI over the last hour against its objective (dashed): what "99.2% against 99.5%" looks like over time.
+TARGET_LINE = {"matcher": {"id": "byFrameRefID", "options": "B"},
+               "properties": [{"id": "custom.lineStyle", "value": {"fill": "dash", "dash": [10, 10]}},
+                              {"id": "custom.lineWidth", "value": 2}, {"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}}]}
+d.row("SLI against the objective — 1h")
+for kind, title, who in (("journey", "Journey SLIs", "checkout and browse, measured at api-gateway"),
+                         ("service", "Service SLIs", "each service's own requests")):
+    d.add(ts(f"{title} — 1h", [vm(f'1 - slo:sli_error:ratio_rate1h{{kind="{kind}"}}', "{{job}} · {{slo}}"),
+                               vm(f'max by (slo) (slo:objective:ratio{{kind="{kind}"}})', "objective · {{slo}}", "B")],
+             "percentunit", decimals=2, soft_min=0.98, max_=1, fill=0, legend_calcs=("lastNotNull", "min"),
+             overrides=[TARGET_LINE],
+             desc=f"Share of good requests over the last hour ({who}): availability = not 5xx, latency = faster "
+                  "than the threshold. The dashed lines are the objectives; below them the error budget is spent "
+                  "faster than planned. Definitions at the bottom."), 12, 8)
+
 d.row("Budget and SLI trends")
 d.add(ts("Error budget remaining (30d)", [vm("slo:error_budget_remaining:ratio", "{{job}} · {{slo}}")], "percentunit",
          th=thresholds(("red", None), ("green", 0)), decimals=1, legend_calcs=("lastNotNull", "min"),
@@ -371,6 +386,34 @@ d.add(table(
                                           "pending": {"color": "orange", "index": 1}}}]}])],
     defaults={"custom": {"align": "auto", "cellOptions": {"type": "auto"}}, "noValue": "No Shop alerts"},
     desc="Alert state written by vmalert (ALERTS series). Burn-rate alerts carry the job and slo labels."), 24, 6)
+
+# SLI definitions, read from the chart values the SLO recording rules are rendered from (values.yaml), so the
+# text cannot drift from the rules.
+VALUES = open(os.path.join(HERE, "..", "values.yaml")).read().split("\nslo:\n", 1)[1].split("\n\n", 1)[0]
+val = lambda key: re.search(rf"^  {key}: \"?([0-9.]+)\"?", VALUES, re.M).group(1)
+pct_ = lambda v: f"{float(v) * 100:g}%"
+ms = lambda v: f"{float(v) * 1000:g} ms"
+overrides_ = re.findall(r"^    ([a-z-]+): \{ latencyThreshold: \"([0-9.]+)\" \}", VALUES, re.M)
+journeys_ = re.findall(r"^    ([a-z]+): \{ method: ([A-Z]+), route: \"?([^,\"]+)\"?, latencyThreshold: \"([0-9.]+)\" \}", VALUES, re.M)
+assert overrides_ and journeys_, "slo values not parsed"
+SLI_DOC = f"""
+| SLI | Good events | Valid events | Objective (30 days) |
+|---|---|---|---|
+| **Availability** | responses that are not 5xx (4xx are the client's mistake and count as good) | all HTTP requests | {pct_(val("availability"))} |
+| **Latency** | responses faster than the latency threshold | all HTTP requests | {pct_(val("latency"))} |
+
+**Where they are measured.** *Journeys* at the edge (api-gateway), so they include failures of every service behind it:
+{"; ".join(f"**{n}** = `{m} {r.replace('|', ' or ')}` (threshold {ms(t)})" for n, m, r, t in journeys_)}.
+*Services* on each service's own requests (threshold {ms(val("latencyThreshold"))};
+{"; ".join(", ".join(n for n, t in overrides_ if t == th) + f": {ms(th)}" for th in sorted({t for _, t in overrides_}))}:
+the checkout path includes the payment provider).
+
+**Error budget and burn rate.** Budget = 1 − objective over a rolling 30 days. Burn rate = error ratio / budget: 1 spends
+the budget in exactly 30 days. Pages (critical): burn rate above 14.4 over 1h and 5m, or above 6 over 6h and 30m.
+Tickets (warning): above 3 over 1d and 2h, or above 1 over 3d and 6h. Recording rules: `apps/k8s/services/templates/monitoring.yaml`.
+"""
+d.row("SLI definitions")
+d.add({"type": "text", "title": "", "transparent": True, "options": {"mode": "markdown", "content": SLI_DOC.strip()}}, 24, 9)
 
 write("shop-slo.json", dashboard(
     "shop-slo", "Shop — SLO Overview", ["shop", "slo"], d.panels, [],
