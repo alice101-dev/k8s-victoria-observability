@@ -9,11 +9,12 @@ import (
 
 	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-// Postgres creates a traced pgx pool (every query is a span) from DATABASE_URL (the "uri"
-// key of the CloudNativePG <cluster>-app Secret), waits for the database and runs idempotent
-// migrations under an advisory lock (safe with multiple replicas).
+// Postgres creates a traced pgx pool (every query is a span, pool stats on /metrics) from
+// DATABASE_URL (the "uri" key of the CloudNativePG <cluster>-app Secret), waits for the database
+// and runs idempotent migrations under an advisory lock (safe with multiple replicas).
 func (a *App) Postgres(ctx context.Context, migrations ...string) (*pgxpool.Pool, error) {
 	cfg, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
 	if err != nil {
@@ -31,6 +32,7 @@ func (a *App) Postgres(ctx context.Context, migrations ...string) (*pgxpool.Pool
 		return nil, fmt.Errorf("create pg pool: %w", err)
 	}
 	a.OnShutdown(func(context.Context) error { pool.Close(); return nil })
+	prometheus.MustRegister(poolCollector{pool})
 
 	if err := a.waitFor(ctx, "postgres", pool.Ping); err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
@@ -71,4 +72,41 @@ func instrument(route string, next http.Handler) http.Handler {
 		httpServerRequests.WithLabelValues(r.Method, route, code).Inc()
 		httpServerDuration.WithLabelValues(r.Method, route, code).Observe(time.Since(start).Seconds())
 	})
+}
+
+// Connection pool metrics, read from pgxpool.Stat() at scrape time. Empty acquires had to wait for a
+// connection: a pool too small for the load, or connections held too long (slow queries, lock waits).
+var (
+	poolAcquiredDesc      = prometheus.NewDesc("pgxpool_acquired_connections", "Connections currently in use.", nil, nil)
+	poolIdleDesc          = prometheus.NewDesc("pgxpool_idle_connections", "Idle connections in the pool.", nil, nil)
+	poolConstructingDesc  = prometheus.NewDesc("pgxpool_constructing_connections", "Connections being opened.", nil, nil)
+	poolMaxDesc           = prometheus.NewDesc("pgxpool_max_connections", "Maximum pool size (DB_MAX_CONNS).", nil, nil)
+	poolAcquiresDesc      = prometheus.NewDesc("pgxpool_acquires_total", "Successful connection acquisitions.", nil, nil)
+	poolAcquireTimeDesc   = prometheus.NewDesc("pgxpool_acquire_duration_seconds_total", "Time spent acquiring connections.", nil, nil)
+	poolEmptyAcquiresDesc = prometheus.NewDesc("pgxpool_empty_acquires_total", "Acquisitions that waited because no connection was idle.", nil, nil)
+	poolEmptyWaitDesc     = prometheus.NewDesc("pgxpool_empty_acquire_wait_seconds_total", "Time spent waiting in empty acquisitions.", nil, nil)
+	poolCanceledDesc      = prometheus.NewDesc("pgxpool_canceled_acquires_total", "Acquisitions abandoned by their context while waiting.", nil, nil)
+	poolNewConnsDesc      = prometheus.NewDesc("pgxpool_new_connections_total", "Connections opened.", nil, nil)
+)
+
+type poolCollector struct{ pool *pgxpool.Pool }
+
+func (c poolCollector) Describe(ch chan<- *prometheus.Desc) { prometheus.DescribeByCollect(c, ch) }
+
+func (c poolCollector) Collect(ch chan<- prometheus.Metric) {
+	s := c.pool.Stat()
+	gauge := func(d *prometheus.Desc, v float64) { ch <- prometheus.MustNewConstMetric(d, prometheus.GaugeValue, v) }
+	counter := func(d *prometheus.Desc, v float64) {
+		ch <- prometheus.MustNewConstMetric(d, prometheus.CounterValue, v)
+	}
+	gauge(poolAcquiredDesc, float64(s.AcquiredConns()))
+	gauge(poolIdleDesc, float64(s.IdleConns()))
+	gauge(poolConstructingDesc, float64(s.ConstructingConns()))
+	gauge(poolMaxDesc, float64(s.MaxConns()))
+	counter(poolAcquiresDesc, float64(s.AcquireCount()))
+	counter(poolAcquireTimeDesc, s.AcquireDuration().Seconds())
+	counter(poolEmptyAcquiresDesc, float64(s.EmptyAcquireCount()))
+	counter(poolEmptyWaitDesc, s.EmptyAcquireWaitTime().Seconds())
+	counter(poolCanceledDesc, float64(s.CanceledAcquireCount()))
+	counter(poolNewConnsDesc, float64(s.NewConnsCount()))
 }

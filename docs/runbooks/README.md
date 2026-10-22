@@ -59,6 +59,7 @@ as `product_id`, `user_id`, `step`.
 |---|---|---|
 | `slo:*` | SLO recording rules | `job`, `slo` (`availability`, `latency`), `kind` (`service`, `journey`) |
 | `http_server_*`, `http_client_*` | services | `job` (service), `route`, `code`, `peer` |
+| `pgxpool_*` | services' PostgreSQL connection pools | `job` (service), `pod` |
 | `cnpg_*` | CloudNativePG exporter, every instance | `pod`, `datname`, `usename`, `application_name`, `state` |
 | `cnpg_pg_stat_statements_top_*` | custom query, primary only | `queryid`, `query` (normalized text) |
 | `cnpg_pg_stat_user_tables_*` | custom query, primary only | `datname`, `relname` |
