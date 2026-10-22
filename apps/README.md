@@ -45,7 +45,8 @@ k8s/
 │   ├── postgres.yaml       # CloudNativePG Cluster "shop-db", PostgreSQL 18.6, primary + sync standby, 10Gi each
 │   ├── redis.yaml          # Redis 8 + Sentinel (3 pods, AOF) + redis_exporter + password ExternalSecret
 │   ├── networkpolicy.yaml  # only shop pods (+ operator, + metrics scraper) can reach PostgreSQL/Redis
-│   └── monitoring.yaml     # VMServiceScrape (Redis), VMPodScrape (CloudNativePG instances + operator), data-tier VMRule
+│   ├── monitoring.yaml     # VMServiceScrape (Redis), VMPodScrape (CloudNativePG instances + operator), data-tier VMRule
+│   └── dashboards/         # CloudNativePG dashboard, vendored from upstream with fixes (vendor-cloudnative-pg.py)
 └── services/      # Helm chart — Argo CD app "shop-services" (wave 0)
     ├── values.yaml         # image tag, OpenTelemetry, resources, per-service env
     ├── templates/          # Deployment + Service + ServiceAccount + PDB per service, scrape, rules, traffic generator

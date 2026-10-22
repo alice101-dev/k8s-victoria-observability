@@ -82,11 +82,7 @@ defaultDashboards:
       url: https://raw.githubusercontent.com/rfmoz/grafana-dashboards/b173daed1bb163ca320cc3624206e07832219113/prometheus/node-exporter-full.json
     kube-prometheus:
       url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/grafana-dashboardDefinitions.yaml
-    # Application data tier dashboards (CloudNativePG and Redis exporter).
-    # Pinned to a commit after cluster-v0.0.5: it also reads the Barman Cloud plugin backup metrics
-    # (barman_cloud_cloudnative_pg_io_*); the in-core cnpg_collector_* backup metrics stay 0 with the plugin.
-    cloudnative-pg:
-      url: https://raw.githubusercontent.com/cloudnative-pg/grafana-dashboards/7dd1bc255b5202530e1bae7b858a3bb41a2028c7/charts/cluster/grafana-dashboard.json
+    # Application data tier dashboards. CloudNativePG is vendored with fixes in apps/k8s/data/dashboards.
     redis-exporter:
       url: https://raw.githubusercontent.com/oliver006/redis_exporter/v1.93.0/contrib/grafana_prometheus_redis_dashboard.json
 
