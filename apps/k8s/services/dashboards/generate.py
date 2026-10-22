@@ -605,39 +605,36 @@ MAP_NODES = ('"resource_attr:service.namespace":=shop (kind:=2 or kind:=5 or (ki
              + TO_DEPENDENCY.format(f="id")
              + '| copy id as title | format if (id:=postgresql) "shop-db (PostgreSQL)" as title '
                '| format if (id:=redis) "Redis" as title '
-             + f"| stats by (id, title) rate() mainstat, quantile(0.95, duration) secondarystat, count() detail__requests, "
-               f"count() if ({FAILED}) detail__failed "
+             # The node graph panel formats only its main stat (options, no field config), so p95 and the failed
+             # share go into the subtitle text: a second stats turns that text into a label.
+             + f"| stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, count() if ({FAILED}) failed "
+               "| math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct "
+               '| format "p95 <p95_ms> ms · <failed_pct>% failed" as subtitle '
+               "| stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed "
                "| math (detail__requests-detail__failed)/detail__requests as arc__success, "
                "detail__failed/detail__requests as arc__errors")
 MAP_EDGES = ('"resource_attr:service.namespace":=shop kind:=3 -name:="pool.acquire" '
              '| copy "resource_attr:service.name" as source, "span_attr:server.address" as target '
              + TO_DEPENDENCY.format(f="target")
              + '| filter target:* | format "<source>→<target>" as id '
-             + f"| stats by (id, source, target) rate() mainstat, quantile(0.95, duration) secondarystat, count() detail__calls, "
-               f"count() if ({FAILED}) detail__failed | math round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct")
+             + f"| stats by (id, source, target) rate() mainstat, quantile(0.95, duration) p95, count() detail__calls, "
+               f"count() if ({FAILED}) detail__failed "
+               "| math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct "
+               "| delete p95")
 d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
-       "description": "Every service, PostgreSQL and Redis with requests per second and p95; the ring shows the share "
-                      "of successful (green) and failed (red) spans, business outcomes not counted as failures. Arrows "
-                      "carry calls per second and their p95. Hover a node or an arrow for the counts and the failed share.",
+       "description": "Every service, PostgreSQL and Redis: requests per second in the circle, p95 and the failed share "
+                      "below the name. The ring shows the share of successful (green) and failed (red) spans, business "
+                      "outcomes not counted as failures. Hover an arrow for its calls per second, p95 and failed share."
+                      " Click a node for its details.",
        "targets": [vl(MAP_NODES, "stats", "A", ds=VTL), vl(MAP_EDGES, "stats", "B", ds=VTL)],
        "transformations": [
            {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
            {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "A"}},
            {"id": "merge", "options": {}, "filter": {"id": "byRefId", "options": "B"}},
            {"id": "organize", "options": {"excludeByName": {"Time": True}}}],
-       # Nodes and edges share the stat names, so one override per name formats both.
-       "fieldConfig": {"defaults": {}, "overrides": [
-           by_name("mainstat", [{"id": "unit", "value": "reqps"}, {"id": "decimals", "value": 2},
-                                {"id": "displayName", "value": "requests/s"}]),
-           by_name("secondarystat", [{"id": "unit", "value": "ns"}, {"id": "decimals", "value": 1},
-                                     {"id": "displayName", "value": "p95"}]),
-           by_name("arc__success", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "green"}},
-                                    {"id": "displayName", "value": "succeeded"}]),
-           by_name("arc__errors", [{"id": "color", "value": {"mode": "fixed", "fixedColor": "red"}},
-                                   {"id": "displayName", "value": "failed"}]),
-           by_name("detail__failed_pct", [{"id": "unit", "value": "percent"}, {"id": "displayName", "value": "failed %"}])]},
-       "options": {"nodes": {"arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
-                   "edges": {}}}, 14, 15)
+       "options": {"nodes": {"mainStatUnit": "reqps",
+                             "arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
+                   "edges": {"mainStatUnit": "reqps"}}}, 14, 15)
 d.add(lq_table("Calls to dependencies",
                f'"resource_attr:service.namespace":=shop kind:=3 -name:="pool.acquire" {SVC} | copy "span_attr:server.address" as peer '
                '| format if ("span_attr:db.system.name":=postgresql) "shop-db (PostgreSQL)" as peer '
