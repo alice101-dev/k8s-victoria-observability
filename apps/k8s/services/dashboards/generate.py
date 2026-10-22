@@ -328,7 +328,14 @@ d.add({"type": "bargauge", "title": "Ready pods per service", "datasource": VM,
                    "namePlacement": "left", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}},
        "targets": [vm(f'max by (deployment) (kube_deployment_status_replicas_available{{{DEPLOY}}})'
                       f' / max by (deployment) (kube_deployment_spec_replicas{{{DEPLOY}}})', "{{deployment}}", instant=True)]},
-      12, 6)
+      8, 6)
+# The SLO closest to violation, named: the first place to look when budgets are being spent.
+p = d.add(stat("Lowest error budget", "bottomk(1, slo:error_budget_remaining:ratio)", "percentunit",
+               thresholds(("red", None), ("orange", 0), ("green", 0.25)), decimals=1,
+               desc="The journey or service SLO with the least error budget left in the 30-day window. Below 0 it is "
+                    "violated; under 25% only a short incident remains before it is."), 4, 6)
+p["targets"][0]["legendFormat"] = "{{job}} · {{slo}}"
+p["options"].update(textMode="value_and_name", colorMode="background")
 d.add(stat("SLO data in window", "max(slo:sli_window:seconds)", "s", thresholds(("orange", None), ("green", 2592000)), decimals=1,
            desc="How much data the 30-day window really holds. Below 30 days (e.g. a recently created cluster), "
                 "budget figures describe only this period and a short incident looks much larger."), 4, 6)
