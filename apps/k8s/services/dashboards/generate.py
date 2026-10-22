@@ -1164,22 +1164,37 @@ PROVISIONING = "label_cloud_google_com_gke_provisioning"
 NODE_LABELS = (f"max by (node, {POOL}, {PROVISIONING}, label_cloud_google_com_gke_preemptible, "
                "label_node_kubernetes_io_instance_type, label_topology_kubernetes_io_zone) (kube_node_labels)")
 BY_POOL = f'* on (node) group_left ({POOL}) max by (node, {POOL}) (kube_node_labels{{{POOL}!=""}})'
+# Why a node went away or came back, from its events in the time range. Several of them often share one second
+# (NodeNotReady and Rebooted), so the most telling one wins, not the latest: 5 autoscaler scale-down, 4 shutdown
+# (spot preemption or maintenance), 3 reboot, 2 joined the cluster, 1 NotReady. The table maps the code to text.
+NODE_CAUSE = (f"{EV} k8s.object.kind:=Node k8s.event.reason:in(ScaleDown, Shutdown, NodeShutdown, Rebooted, RegisteredNode, "
+              "NodeNotReady) | copy k8s.object.name as node "
+              '| format if (k8s.event.reason:=NodeNotReady) "1" as cause | format if (k8s.event.reason:=RegisteredNode) "2" as cause '
+              '| format if (k8s.event.reason:=Rebooted) "3" as cause | format if (k8s.event.reason:in(Shutdown, NodeShutdown)) "4" as cause '
+              '| format if (k8s.event.reason:=ScaleDown) "5" as cause '
+              "| stats by (node) max(cause) cause, max(_time) last | math round(last/1e6) as cause_ms | delete last")
+CAUSES = {"5": ("Autoscaler scale-down", "blue"), "4": ("Shutdown: spot preemption or maintenance", "orange"),
+          "3": ("Rebooted: preemption, repair or reset", "orange"), "2": ("Joined: scale-up or recreated VM", "green"),
+          "1": ("NotReady", "red")}
 d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="table"),
                       vm(f"time() - {NODE_BOOT} < bool $__range_s", ref="B", instant=True, fmt="table"),
                       vm('max by (node) (kube_node_status_condition{condition="Ready", status="true"})', ref="C",
                          instant=True, fmt="table"),
-                      vm(NODE_LABELS, ref="D", instant=True, fmt="table")],
-            [{"id": "merge", "options": {}},
+                      vm(NODE_LABELS, ref="D", instant=True, fmt="table"),
+                      vl(NODE_CAUSE, "stats", ref="E")],
+            [{"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
+             {"id": "merge", "options": {}},
              {"id": "organize", "options": {
                  "excludeByName": {"Time": True, "Value #D": True},
                  "indexByName": {POOL: 0, "node": 1, PROVISIONING: 2, "label_cloud_google_com_gke_preemptible": 3,
                                  "label_node_kubernetes_io_instance_type": 4, "label_topology_kubernetes_io_zone": 5,
-                                 "Value #A": 6, "Value #B": 7, "Value #C": 8},
+                                 "Value #A": 6, "Value #B": 7, "cause": 8, "cause_ms": 9, "Value #C": 10},
                  "renameByName": {POOL: "Node pool", "node": "Node", PROVISIONING: "Provisioning",
                                   "label_cloud_google_com_gke_preemptible": "Preemptible",
                                   "label_node_kubernetes_io_instance_type": "Machine type",
                                   "label_topology_kubernetes_io_zone": "Zone", "Value #A": "Booted",
-                                  "Value #B": "Restarted in range", "Value #C": "Ready"}}}],
+                                  "Value #B": "Restarted in range", "cause": "Cause (time range)",
+                                  "cause_ms": "Last node event", "Value #C": "Ready"}}}],
             overrides=[by_name("Node pool", [{"id": "custom.width", "value": 170}]),
                        by_name("Provisioning", [{"id": "custom.width", "value": 190}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                                                 {"id": "mappings", "value": [{"type": "value", "options": {
@@ -1194,6 +1209,12 @@ d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="tabl
                                                       {"id": "mappings", "value": [{"type": "value", "options": {
                                                           "1": {"text": "Yes", "color": "orange", "index": 0},
                                                           "0": {"text": "No", "color": "text", "index": 1}}}]}]),
+                       by_name("Cause (time range)", [{"id": "custom.width", "value": 290}, {"id": "noValue", "value": "No node event"},
+                                                      {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+                                                      {"id": "mappings", "value": [{"type": "value", "options": {
+                                                          code: {"text": text, "color": color, "index": i}
+                                                          for i, (code, (text, color)) in enumerate(CAUSES.items())}}]}]),
+                       by_name("Last node event", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 130}]),
                        by_name("Ready", [{"id": "custom.width", "value": 90}, {"id": "custom.cellOptions", "value": {"type": "color-background"}},
                                          {"id": "mappings", "value": [{"type": "value", "options": {
                                              "1": {"text": "Ready", "color": "green", "index": 0},
@@ -1201,8 +1222,11 @@ d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="tabl
             desc="Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether "
                  "that was in the time range. Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: "
                  "a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its "
-                 "pods were rescheduled. On-demand nodes reboot only for upgrades or repairs.",
+                 "pods were rescheduled. On-demand nodes reboot only for upgrades or repairs. Cause: the most telling "
+                 "node event in the time range (autoscaler ScaleDown, Shutdown, Rebooted, RegisteredNode, NodeNotReady); "
+                 "a node removed by the autoscaler stays listed for a few minutes.",
             sort=[{"displayName": "Node pool", "desc": False}]), 24, 7)
+d.panels[-1]["datasource"] = {"type": "datasource", "uid": "-- Mixed --"}
 d.add(ts("Ready nodes by node pool",
          [vm(f'sum by ({POOL}) (kube_node_status_condition{{condition="Ready", status="true"}} {BY_POOL})', f"{{{{{POOL}}}}} ready"),
           vm(f"count by ({POOL}) (kube_node_info {BY_POOL})", f"{{{{{POOL}}}}} nodes", "B")],

@@ -699,10 +699,10 @@
     {
       "type": "table",
       "title": "Nodes",
-      "description": "Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether that was in the time range. Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its pods were rescheduled. On-demand nodes reboot only for upgrades or repairs.",
+      "description": "Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether that was in the time range. Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its pods were rescheduled. On-demand nodes reboot only for upgrades or repairs. Cause: the most telling node event in the time range (autoscaler ScaleDown, Shutdown, Rebooted, RegisteredNode, NodeNotReady); a node removed by the autoscaler stays listed for a few minutes.",
       "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
+        "type": "datasource",
+        "uid": "-- Mixed --"
       },
       "fieldConfig": {
         "defaults": {
@@ -862,6 +862,79 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Cause (time range)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 290
+              },
+              {
+                "id": "noValue",
+                "value": "No node event"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "5": {
+                        "text": "Autoscaler scale-down",
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "4": {
+                        "text": "Shutdown: spot preemption or maintenance",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "3": {
+                        "text": "Rebooted: preemption, repair or reset",
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "2": {
+                        "text": "Joined: scale-up or recreated VM",
+                        "color": "green",
+                        "index": 3
+                      },
+                      "1": {
+                        "text": "NotReady",
+                        "color": "red",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last node event"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Ready"
             },
             "properties": [
@@ -914,6 +987,13 @@
       },
       "transformations": [
         {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
           "id": "merge",
           "options": {}
         },
@@ -933,7 +1013,9 @@
               "label_topology_kubernetes_io_zone": 5,
               "Value #A": 6,
               "Value #B": 7,
-              "Value #C": 8
+              "cause": 8,
+              "cause_ms": 9,
+              "Value #C": 10
             },
             "renameByName": {
               "label_cloud_google_com_gke_nodepool": "Node pool",
@@ -944,6 +1026,8 @@
               "label_topology_kubernetes_io_zone": "Zone",
               "Value #A": "Booted",
               "Value #B": "Restarted in range",
+              "cause": "Cause (time range)",
+              "cause_ms": "Last node event",
               "Value #C": "Ready"
             }
           }
@@ -997,6 +1081,16 @@
           "range": false,
           "instant": true,
           "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} k8s.object.kind:=Node k8s.event.reason:in(ScaleDown, Shutdown, NodeShutdown, Rebooted, RegisteredNode, NodeNotReady) | copy k8s.object.name as node | format if (k8s.event.reason:=NodeNotReady) \"1\" as cause | format if (k8s.event.reason:=RegisteredNode) \"2\" as cause | format if (k8s.event.reason:=Rebooted) \"3\" as cause | format if (k8s.event.reason:in(Shutdown, NodeShutdown)) \"4\" as cause | format if (k8s.event.reason:=ScaleDown) \"5\" as cause | stats by (node) max(cause) cause, max(_time) last | math round(last/1e6) as cause_ms | delete last",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "E"
         }
       ],
       "id": 12,
