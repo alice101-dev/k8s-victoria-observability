@@ -5929,6 +5929,282 @@
       },
       "panels": [
         {
+          "id": 9144,
+          "type": "table",
+          "title": "Blocking sessions (selected range)",
+          "description": "Sessions that held a lock other sessions waited for, with the peak values seen in the selected range (sampled every 20-30s, so waits of a few seconds are only in the logs below). \"idle in transaction\" is a client that opened a transaction and stopped talking. End one with pg_terminate_backend(pid); query_id is the queryid of its latest statement in Top statements.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 24,
+            "x": 0,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Blocked"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Longest wait"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Transaction age"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 130
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "pid"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "state"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 160
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "query_id"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 190
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "sortBy": [
+              {
+                "displayName": "Transaction age",
+                "desc": true
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "pod": 0,
+                  "pid": 1,
+                  "usename": 2,
+                  "application_name": 3,
+                  "state": 4,
+                  "query_id": 5,
+                  "Value #A": 6,
+                  "Value #B": 7,
+                  "Value #C": 8
+                },
+                "renameByName": {
+                  "Value #A": "Blocked",
+                  "Value #B": "Longest wait",
+                  "Value #C": "Transaction age"
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "expr": "sum by (pod, pid, usename, application_name, state, query_id) (max_over_time(cnpg_pg_blocking_blocked_sessions{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "B",
+              "expr": "sum by (pod, pid, usename, application_name, state, query_id) (max_over_time(cnpg_pg_blocking_max_wait_seconds{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "C",
+              "expr": "sum by (pod, pid, usename, application_name, state, query_id) (max_over_time(cnpg_pg_blocking_xact_age_seconds{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 9145,
+          "type": "timeseries",
+          "title": "Sessions waiting on locks, by blocker",
+          "description": "Sessions waiting for a lock held by each blocking session, and all sessions waiting on locks.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 59
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 60,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (pid, usename, application_name, state) (cnpg_pg_blocking_blocked_sessions{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "pid {{pid}} {{usename}} {{application_name}} ({{state}})",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            },
+            {
+              "expr": "sum(cnpg_backends_waiting_total{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "all lock waits",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "B",
+              "range": true
+            }
+          ]
+        },
+        {
           "id": 9141,
           "type": "timeseries",
           "title": "Lock events",
@@ -5940,8 +6216,8 @@
           "gridPos": {
             "h": 8,
             "w": 12,
-            "x": 0,
-            "y": 53
+            "x": 12,
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -6028,9 +6304,9 @@
           "description": "Newest waits (with the pids holding the lock), acquisitions after a wait, lock timeouts, deadlocks and idle-in-transaction terminations. Search a blocker's other log lines with record.process_id:<pid> in Explore.",
           "gridPos": {
             "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 53
+            "w": 24,
+            "x": 0,
+            "y": 75
           },
           "options": {
             "showTime": true,
@@ -6057,7 +6333,7 @@
           "id": 9142,
           "type": "table",
           "title": "Lock waits by statement and blocker",
-          "description": "Waits over 1s in the selected range, grouped by the waiting application and statement, the lock mode, what it waits on (a row's transaction, a relation, an advisory lock) and the pids holding the lock. The blocker's user and application are in its own log lines (record.process_id:<pid>).",
+          "description": "Waits over 1s in the selected range, grouped by the waiting application and statement, the lock mode, what it waits on (a row's transaction, a relation, an advisory lock) and the pids holding the lock. The blocker's user, application and state are in \"Blocking sessions\" (same pid) or in its own log lines (record.process_id:<pid>).",
           "datasource": {
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
@@ -6066,7 +6342,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 61
+            "y": 67
           },
           "fieldConfig": {
             "defaults": {

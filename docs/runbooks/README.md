@@ -62,6 +62,7 @@ as `product_id`, `user_id`, `step`.
 | `cnpg_*` | CloudNativePG exporter, every instance | `pod`, `datname`, `usename`, `application_name`, `state` |
 | `cnpg_pg_stat_statements_top_*` | custom query, primary only | `queryid`, `query` (normalized text) |
 | `cnpg_pg_stat_user_tables_*` | custom query, primary only | `datname`, `relname` |
+| `cnpg_pg_blocking_*` | custom query, primary only: sessions holding a lock others wait for | `pid`, `usename`, `application_name`, `state`, `query_id` |
 | `barman_cloud_cloudnative_pg_io_*` | Barman Cloud plugin | `pod` |
 | `redis_*` | redis_exporter | `pod`, `role` |
 
@@ -85,6 +86,9 @@ _time:1h {kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"}
 # MetricsQL: sessions per service and state on the primary
 sum by (application_name, state) (cnpg_backends_total{namespace="shop"} * on (pod) group_left
   (cnpg_pg_replication_in_recovery{namespace="shop"} == 0))
+
+# MetricsQL: sessions holding locks others wait for (no series while nothing waits)
+max_over_time(cnpg_pg_blocking_blocked_sessions{namespace="shop"}[1h])
 ```
 
 ## Pitfalls

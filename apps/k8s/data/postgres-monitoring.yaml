@@ -1,7 +1,7 @@
 # Custom metrics for the CloudNativePG exporter (spec.monitoring.customQueriesConfigMap in postgres.yaml),
 # on top of the operator's default queries. Metric names: cnpg_<query>_<column>.
 # The label cnpg.io/reload makes the instances reload the queries when this ConfigMap changes.
-# Cardinality is bounded: top 10 statements, at most 50 tables.
+# Cardinality is bounded: top 10 statements, at most 50 tables, at most 5 blocking sessions.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -120,3 +120,57 @@ data:
         - total_bytes:
             usage: GAUGE
             description: Table size including indexes and TOAST
+
+    # Sessions that hold a lock others wait for: who (pid, user, application), in which state (an "idle in
+    # transaction" blocker is a client that stopped talking) and for how long. No rows while nothing waits.
+    # pg_blocking_pids() briefly locks the lock manager, so it only runs for sessions waiting on a lock.
+    # query_id joins with pg_stat_statements_top; raw query text is left out (it may contain literals).
+    pg_blocking:
+      primary: true
+      query: |
+        WITH waiting AS MATERIALIZED (
+          SELECT pid, query_start FROM pg_stat_activity WHERE wait_event_type = 'Lock'
+        )
+        SELECT coalesce(b.datname, '') AS datname,
+               b.pid::text AS pid,
+               coalesce(b.usename, '') AS usename,
+               coalesce(nullif(b.application_name, ''), 'unknown') AS application_name,
+               coalesce(b.state, '') AS state,
+               coalesce(b.query_id::text, '') AS query_id,
+               count(*) AS blocked_sessions,
+               max(extract(epoch FROM now() - w.query_start)) AS max_wait_seconds,
+               coalesce(extract(epoch FROM now() - b.xact_start), 0) AS xact_age_seconds
+        FROM waiting w
+        CROSS JOIN LATERAL unnest(pg_blocking_pids(w.pid)) AS bp(pid)
+        JOIN pg_stat_activity b ON b.pid = bp.pid
+        GROUP BY b.datname, b.pid, b.usename, b.application_name, b.state, b.query_id, b.xact_start
+        ORDER BY count(*) DESC
+        LIMIT 5
+      metrics:
+        - datname:
+            usage: LABEL
+            description: Database of the blocking session
+        - pid:
+            usage: LABEL
+            description: Process ID of the blocking session (record.process_id in the PostgreSQL logs)
+        - usename:
+            usage: LABEL
+            description: Role of the blocking session
+        - application_name:
+            usage: LABEL
+            description: application_name of the blocking session (the service name for the shop services)
+        - state:
+            usage: LABEL
+            description: State of the blocking session (active, idle in transaction, ...)
+        - query_id:
+            usage: LABEL
+            description: Identifier of the blocking session's latest statement (pg_stat_statements queryid)
+        - blocked_sessions:
+            usage: GAUGE
+            description: Sessions waiting for a lock this session holds
+        - max_wait_seconds:
+            usage: GAUGE
+            description: Longest-running statement among the waiting sessions
+        - xact_age_seconds:
+            usage: GAUGE
+            description: Age of the blocking session's transaction

@@ -184,8 +184,9 @@ owner.
 **Impact.** Application statements give up after 2 seconds (`lock_timeout`), so a sustained wait is usually a
 migration or manual DDL waiting for an exclusive lock, and every statement on that table queues behind it.
 
-**Diagnose.** [Who is blocked and by whom](#live-diagnosis); dashboard row Locks and blocking; PostgreSQL logs
-`record.message:"still waiting for"` name the pids holding the lock.
+**Diagnose.** Dashboard row Locks and blocking, "Blocking sessions": pid, user, application, state and
+transaction age of each blocker (`cnpg_pg_blocking_*`); [who is blocked and by whom](#live-diagnosis) for the
+current picture; PostgreSQL logs `record.message:"still waiting for"` name the pids holding the lock.
 
 **Fix.** End the blocker (or the waiting DDL, if the queue behind it hurts more). Run DDL with a short
 `lock_timeout` and retry it, instead of letting it wait.
@@ -201,8 +202,9 @@ latency SLO burn usually follow.
 **Diagnose.**
 1. Locks and blocking row, "Lock waits by statement and blocker": the waiting statement, the lock (`ShareLock on
    transaction` means a row lock held by another transaction) and the pids holding it.
-2. Who is the blocker: [live diagnosis](#live-diagnosis) while it lasts, or its own log lines afterwards
-   (`record.process_id:<pid>`: user, application, its slow statement with duration).
+2. Who is the blocker: "Blocking sessions" in the same row (pid, user, application, state, transaction age;
+   kept for the selected range), [live diagnosis](#live-diagnosis) while it lasts, or its own log lines
+   (`record.process_id:<pid>`).
 3. Which rows: traces of the failing requests (database span with error, `order.product_id` on checkout).
 
 **Fix.** A long transaction holding the lock: end it ([PostgresLongRunningTransaction](#postgreslongrunningtransaction)).

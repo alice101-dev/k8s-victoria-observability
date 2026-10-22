@@ -12,8 +12,8 @@ variable expects that label to hold the CloudNativePG cluster name (set by the C
 - The Backups row is rebuilt (backup_panels): backup age and last attempt, recovery window, data at
   risk (RPO), WAL archiving throughput and backlog, and the Barman Cloud sidecar events from VictoriaLogs.
 - New rows after "Operational Stats": "Queries and errors" (slow statements and errors by SQLSTATE from the
-  PostgreSQL logs in VictoriaLogs), "Locks and blocking" (lock waits with their blockers, lock timeouts,
-  deadlocks) and "Database efficiency" (cache hit, rollback, temp files, conflicts).
+  PostgreSQL logs in VictoriaLogs), "Locks and blocking" (blocking sessions from the pg_blocking exporter
+  query; lock waits with their blockers, lock timeouts and deadlocks from the logs) and "Database efficiency" (cache hit, rollback, temp files, conflicts).
 - "Top statements and table health" row from the custom exporter queries in postgres-monitoring.yaml
   (pg_stat_statements top 10, pg_stat_user_tables).
 - Replication row: bytes behind the primary per standby and WAL retained by replication slots.
@@ -197,8 +197,10 @@ def log_panels(y):
 
 
 def lock_panels(y):
-    """Who waits for whom, from the PostgreSQL logs: log_lock_waits logs every wait longer than
-    deadlock_timeout (1s) with the waiting statement and the pids holding the lock."""
+    """Who waits for whom: blocking sessions from the exporter (pg_blocking in postgres-monitoring.yaml), and
+    from the PostgreSQL logs every wait longer than deadlock_timeout (1s) with the pids holding the lock."""
+    blocking = lambda m: f"cnpg_pg_blocking_{m}{{{SEL}}}"
+    peak = lambda m: f"max_over_time({blocking(m)}[$__range])"
     waits = f'{PG_LOGS} record.message:"still waiting for"'
     events = (f'{PG_LOGS} (record.message:~"^process [0-9]+ (still waiting for|acquired) " '
               'or record.sql_state_code:in(55P03, 40P01, 25P03))')
@@ -209,11 +211,30 @@ def lock_panels(y):
                '| stats by (record.application_name, record.query, lock_mode, lock_object, blockers) count() waits '
                '| sort by (waits desc) | limit 20')
     return [
+        merged_table(9144, "Blocking sessions (selected range)", [
+            ("Blocked", peak("blocked_sessions")),
+            ("Longest wait", peak("max_wait_seconds")),
+            ("Transaction age", peak("xact_age_seconds")),
+        ], "pod, pid, usename, application_name, state, query_id", y, 6,
+            "Sessions that held a lock other sessions waited for, with the peak values seen in the selected range "
+            "(sampled every 20-30s, so waits of a few seconds are only in the logs below). \"idle in transaction\" is "
+            "a client that opened a transaction and stopped talking. End one with pg_terminate_backend(pid); "
+            "query_id is the queryid of its latest statement in Top statements.",
+            overrides=[unit("Blocked", "short", 0, 80), unit("Longest wait", "s", 1, 110),
+                       unit("Transaction age", "s", 0, 130), unit("pid", "string", width=80),
+                       unit("state", "string", width=160), unit("query_id", "string", width=190)],
+            sort={"displayName": "Transaction age", "desc": True}),
+        series(9145, "Sessions waiting on locks, by blocker",
+               [{"expr": f"sum by (pid, usename, application_name, state) ({blocking('blocked_sessions')})",
+                 "legendFormat": "pid {{pid}} {{usename}} {{application_name}} ({{state}})"},
+                {"expr": f"sum(cnpg_backends_waiting_total{{{SEL}}})", "legendFormat": "all lock waits"}],
+               "short", 0, y + 6, "Sessions waiting for a lock held by each blocking session, and all sessions "
+               "waiting on locks.", bars=True),
         series(9141, "Lock events",
                [count(waits, "waits over 1s"), count(f"{PG_LOGS} record.sql_state_code:55P03", "lock timeouts (55P03)"),
                 count(f"{PG_LOGS} record.sql_state_code:40P01", "deadlocks (40P01)"),
                 count(f"{PG_LOGS} record.sql_state_code:25P03", "idle-in-transaction timeouts (25P03)")],
-               "short", 0, y, "Lock waits longer than deadlock_timeout (1s), statements cancelled by lock_timeout, "
+               "short", 12, y + 6, "Lock waits longer than deadlock_timeout (1s), statements cancelled by lock_timeout, "
                "deadlocks and sessions terminated by idle_in_transaction_session_timeout. Application sessions use "
                "lock_timeout 2s, so contention on a hot row shows as lock timeouts and checkout errors.",
                bars=True, stack=True, ds=LOGS),
@@ -221,7 +242,7 @@ def lock_panels(y):
          "description": "Newest waits (with the pids holding the lock), acquisitions after a wait, lock timeouts, "
                         "deadlocks and idle-in-transaction terminations. Search a blocker's other log lines with "
                         "record.process_id:<pid> in Explore.",
-         "gridPos": {"h": 8, "w": 12, "x": 12, "y": y},
+         "gridPos": {"h": 8, "w": 24, "x": 0, "y": y + 22},
          "options": {"showTime": True, "wrapLogMessage": True, "enableLogDetails": True, "sortOrder": "Descending",
                      "dedupStrategy": "none"},
          "targets": [{"datasource": LOGS, "refId": "A", "queryType": "instant", "editorMode": "code", "maxLines": 100,
@@ -231,9 +252,9 @@ def lock_panels(y):
         {"id": 9142, "type": "table", "title": "Lock waits by statement and blocker",
          "description": "Waits over 1s in the selected range, grouped by the waiting application and statement, the "
                         "lock mode, what it waits on (a row's transaction, a relation, an advisory lock) and the pids "
-                        "holding the lock. The blocker's user and application are in its own log lines "
-                        "(record.process_id:<pid>).",
-         "datasource": LOGS, "gridPos": {"h": 8, "w": 24, "x": 0, "y": y + 8},
+                        "holding the lock. The blocker's user, application and state are in \"Blocking sessions\" "
+                        "(same pid) or in its own log lines (record.process_id:<pid>).",
+         "datasource": LOGS, "gridPos": {"h": 8, "w": 24, "x": 0, "y": y + 14},
          "fieldConfig": {"defaults": {"custom": {"cellOptions": {"type": "auto"}, "inspect": True}},
                          "overrides": [unit("Waits", "short", 0, 70), unit("Lock", "string", width=150),
                                        unit("On", "string", width=110), unit("Blocker pids", "string", width=110),
