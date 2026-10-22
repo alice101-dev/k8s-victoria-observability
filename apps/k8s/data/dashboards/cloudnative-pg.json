@@ -5910,7 +5910,7 @@
               "queryType": "instant",
               "editorMode": "code",
               "maxLines": 100,
-              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.error_severity:in(ERROR, FATAL, PANIC) | fields _time, record.error_severity, record.sql_state_code, record.message"
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.error_severity:in(ERROR, FATAL, PANIC) | format \"<record.error_severity> <record.sql_state_code> [<kubernetes.pod_name>]: <record.message>\" as _msg | copy record.error_severity as level"
             }
           ]
         }

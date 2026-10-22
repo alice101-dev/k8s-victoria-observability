@@ -186,7 +186,8 @@ def log_panels(y):
          "options": {"showTime": True, "wrapLogMessage": True, "enableLogDetails": True, "sortOrder": "Descending",
                      "dedupStrategy": "none"},
          "targets": [{"datasource": LOGS, "refId": "A", "queryType": "instant", "editorMode": "code", "maxLines": 100,
-                      "expr": f"{errors} | fields _time, record.error_severity, record.sql_state_code, record.message"}]},
+                      "expr": f'{errors} | format "<record.error_severity> <record.sql_state_code> [<kubernetes.pod_name>]: '
+                              f'<record.message>" as _msg | copy record.error_severity as level'}]},
     ]
 
 
