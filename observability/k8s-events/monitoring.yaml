@@ -42,6 +42,16 @@ spec:
             summary: The Kubernetes events collector is down
             description: No Kubernetes events reach VictoriaLogs; the API server keeps them for one hour only. Check the k8s-events Deployment in monitoring.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubeeventscollectordown
+        # The collector can stop receiving events without any error (upstream bug, see restart.yaml).
+        - alert: KubeEventsCollectorStalled
+          expr: sum(increase(otelcol_receiver_accepted_log_records[30m])) == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The Kubernetes events collector has received no event for 30 minutes
+            description: The collector runs but its watch on the API server has stalled (or the cluster is unusually quiet). Restart it; the k8s-events-restarter CronJob does so every 20 minutes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubeeventscollectorstalled
         - alert: KubeEventsExportFailing
           expr: sum(rate(otelcol_exporter_send_failed_log_records[5m])) > 0
           for: 10m

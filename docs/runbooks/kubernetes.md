@@ -77,6 +77,20 @@ Argo CD application `k8s-events`.
 
 **Fix.** Restart or resync it. Events from the outage are lost once the API server drops them (after one hour).
 
+## KubeEventsCollectorStalled
+
+**Meaning.** The collector has accepted no event for 30 minutes. Kubernetes always emits some events, so the
+receiver's watch has most likely stalled: a known upstream bug
+([opentelemetry-collector-contrib#51982](https://github.com/open-telemetry/opentelemetry-collector-contrib/issues/51982))
+where the watch ends after the API server's timeout (30-60 minutes) and is never resumed, with no error logged.
+
+**Diagnose.** Event pipeline row (received drops to 0 while the pod runs), `kubectl -n monitoring get cronjob
+k8s-events-restarter` and its last jobs.
+
+**Fix.** `kubectl -n monitoring rollout restart deployment/k8s-events`. The CronJob does this every 20 minutes;
+if the alert fires, check why its jobs fail (RBAC, image pull). Remove the CronJob once a collector release
+contains the fix.
+
 ## KubeEventsExportFailing
 
 **Meaning.** For 10 minutes the collector failed to send events to VictoriaLogs (`vlinsert`).

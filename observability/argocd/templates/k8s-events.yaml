@@ -28,4 +28,11 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring
+  # The k8s-events-restarter CronJob restarts the collector (kubectl rollout restart): not a drift.
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: k8s-events
+      jsonPointers:
+        - /spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt
   {{- include "app.syncPolicy" . | nindent 2 }}

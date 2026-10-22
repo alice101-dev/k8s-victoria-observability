@@ -5,6 +5,7 @@
 #
 # One replica: the k8s_events receiver keeps no shared state, so a second replica would store every event
 # twice. While the pod restarts, events are missed (the receiver skips events older than its start).
+# The receiver's watch can stall silently (upstream bug): observability/k8s-events/restart.yaml restarts it.
 mode: deployment
 replicaCount: 1
 fullnameOverride: k8s-events
