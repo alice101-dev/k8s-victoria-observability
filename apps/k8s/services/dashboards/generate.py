@@ -806,7 +806,8 @@ d.add({"type": "traces", "title": "Trace: ${trace_id:text}", "datasource": VT,
        "description": "The slowest or failed request of the time range by default; pick another in the Trace variable "
                       "(slowest first) or click a trace ID in the tables above. Every span with its timing, attributes "
                       "and links to the logs and metrics of its service.",
-       "options": {}, "targets": [{"datasource": VT, "refId": "A", "query": "${trace_id}"}]}, 24, 18)
+       # Tall enough for a whole checkout trace (about 16 spans) without scrolling inside the panel.
+       "options": {}, "targets": [{"datasource": VT, "refId": "A", "query": "${trace_id}"}]}, 24, 28)
 
 
 # Span graphs: at least one minute per point, otherwise a point holds a handful of spans and the
