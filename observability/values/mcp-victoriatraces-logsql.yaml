@@ -1,5 +1,5 @@
 # =============================================================================
-# victoria-logs-mcp — chart vm/victoria-logs-mcp 0.2.0, pointed at VictoriaTraces (vtselect)
+# victoria-logs-mcp — chart vm/victoria-logs-mcp 0.2.0, pointed at VictoriaTraces (VTSingle)
 # VictoriaTraces stores spans like VictoriaLogs stores logs, so this second instance of the VictoriaLogs MCP
 # server runs LogsQL on spans: stats_query(_range) for latency/failure/time share per service, endpoint,
 # operation, SQL statement or attribute, field names and values, and raw span search. The
@@ -11,7 +11,7 @@ image:
   tag: v1.9.0
 
 vl:
-  entrypoint: http://vtselect-vmks.monitoring.svc:10471
+  entrypoint: http://vtsingle-vmks.monitoring.svc:10428
 
 mcp:
   # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via

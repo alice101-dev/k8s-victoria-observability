@@ -13,7 +13,7 @@ environment: staging
 
 # OpenTelemetry — standard OTel SDK env vars (read automatically by go.opentelemetry.io/otel).
 otel:
-  tracesEndpoint: http://vtinsert-vmks.monitoring.svc:10481/insert/opentelemetry/v1/traces
+  tracesEndpoint: http://vtsingle-vmks.monitoring.svc:10428/insert/opentelemetry/v1/traces
   # 100% sampling for the demo. Production: parentbased_traceidratio + 0.05..0.2
   # (or tail sampling in an OpenTelemetry Collector to "keep all errors").
   sampler: parentbased_traceidratio

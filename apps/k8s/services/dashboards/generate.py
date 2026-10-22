@@ -608,7 +608,7 @@ POD_LINK = [{"title": "Show this pod's lines in the explorer",
              "url": SELF + "&${search:queryparam}&var-filters=kubernetes.pod_name%7C%3D%7C${__value.raw}"}]
 SERVICE_DASH = [{"title": "Open Shop — Service dashboard", "url": "/d/shop-service/shop-service?var-service=${__value.raw}&${__url_time_range}"}]
 PIPELINE_LINKS = [{"title": "Open VictoriaLogs - vlagent", "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"},
-                  {"title": "Open VictoriaLogs - cluster", "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"}]
+                  {"title": "Open VictoriaLogs - single-node", "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"}]
 LEVEL_CELL = by_name("Level", [{"id": "custom.width", "value": 70}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                                {"id": "mappings", "value": [{"type": "value", "options": {
                                    lvl: {"color": c, "index": i} for i, (lvl, c) in enumerate(LEVEL_COLORS.items())}}]}])
@@ -793,7 +793,7 @@ SEARCH_VAR = {"name": "search", "label": "Message contains", "type": "textbox", 
               "current": {"text": "", "value": ""}, "description": "Case-insensitive text in the message"}
 # Request picker: the latest lines of the selected levels that carry a trace ID, labelled
 # "<time> · <service> · <message> · <trace id>" and sorted newest first; the regex keeps the trace ID as the value.
-# field_values runs "sort | limit 30" on each vlstorage, so the values limit must cover all nodes' results.
+# The values limit (100) stays above "limit 30": in cluster mode field_values runs the pipes on every storage node.
 REQUEST_PICK = (f'{LOGS_LEVEL} trace_id:* | sort by (_time desc) | limit 30 | format "<_time>" as t '
                 r'| replace ("T", " ") at t | replace_regexp ("\\.[0-9]+Z$", " UTC") at t '
                 '| format "<t> · <service> · <_msg> · <trace_id>" as option')
@@ -1113,7 +1113,7 @@ def lq_var(name, label, field, query, multi, current):
 # Trace picker: the 30 slowest (or failed) requests of the time range, labelled "<ms> ms · HTTP <code> · <id>".
 # Sorted numerically (descending) on the label's first number, so the slowest trace is selected by default; the
 # regex keeps the trace ID as the value. Trace IDs from the table links are accepted as custom values.
-# field_values runs "sort | limit 30" on each vtstorage, so the values limit must cover all nodes' results.
+# The values limit (100) stays above "limit 30": in cluster mode field_values runs the pipes on every storage node.
 TRACE_PICK = (f"{SERVER} (duration:>${{min_duration:raw}} or {IS_5XX}) | stats by (trace_id) max(duration) d, max({CODE}) code "
               '| sort by (d desc) | limit 30 | math round(d/1e6) as ms | format "<ms> ms · HTTP <code> · <trace_id>" as option')
 TRACE_VAR = {"name": "trace_id", "label": "Trace (slowest first)", "type": "query", "datasource": VTL,
@@ -1346,7 +1346,7 @@ for p in (
         "short", min_=0, overrides=[right_axis("C", "bytes")],
         desc="Events waiting to be sent (left) and the collector's memory (right). A full queue drops events."), 12, 6),
 ):
-    p["links"] = [{"title": "Open VictoriaLogs - cluster", "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"}]
+    p["links"] = [{"title": "Open VictoriaLogs - single-node", "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"}]
 
 for p in d.panels:
     if p["type"] in ("timeseries", "status-history") and p["datasource"] is VL:

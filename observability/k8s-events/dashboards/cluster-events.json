@@ -1749,8 +1749,8 @@
       },
       "links": [
         {
-          "title": "Open VictoriaLogs - cluster",
-          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
         }
       ]
     },
@@ -1854,8 +1854,8 @@
       },
       "links": [
         {
-          "title": "Open VictoriaLogs - cluster",
-          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
         }
       ]
     }

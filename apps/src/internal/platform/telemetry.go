@@ -16,7 +16,7 @@ import (
 // InitTracing installs a global TracerProvider exporting spans over OTLP/HTTP to VictoriaTraces.
 //
 // Tuning uses the standard OpenTelemetry environment variables (read by the SDK):
-//   - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT : full URL, e.g. http://vtinsert:10481/insert/opentelemetry/v1/traces
+//   - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT : full URL, e.g. http://vtsingle:10428/insert/opentelemetry/v1/traces
 //   - OTEL_TRACES_SAMPLER / OTEL_TRACES_SAMPLER_ARG : e.g. parentbased_traceidratio + 0.1
 //   - OTEL_RESOURCE_ATTRIBUTES : Kubernetes attributes (namespace, pod, node) from the Downward API
 //   - OTEL_BSP_* : batch size and export interval

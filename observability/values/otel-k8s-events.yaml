@@ -36,7 +36,7 @@ config:
   exporters:
     debug: null
     otlphttp/victorialogs:
-      logs_endpoint: http://vlinsert-vmks.monitoring.svc.cluster.local.:9481/insert/opentelemetry/v1/logs
+      logs_endpoint: http://vlsingle-vmks.monitoring.svc.cluster.local.:9428/insert/opentelemetry/v1/logs
       headers:
         # One log stream per namespace. By default VictoriaLogs uses the resource attributes as the stream,
         # and this receiver puts the object's name, UID and resource version there: a stream per event.

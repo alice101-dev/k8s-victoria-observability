@@ -59,7 +59,7 @@ spec:
             severity: warning
           annotations:
             summary: "The events collector fails to store {{ $value | humanize }} events/s in VictoriaLogs"
-            description: Sends to vlinsert keep failing; events wait in the collector's queue and are dropped when it is full.
+            description: Sends to VLSingle keep failing; events wait in the collector's queue and are dropped when it is full.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubeeventsexportfailing
     - name: kubernetes-events
       type: vlogs

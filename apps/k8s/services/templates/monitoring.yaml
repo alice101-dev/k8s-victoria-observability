@@ -49,7 +49,7 @@ spec:
             summary: Payments declined > 30% over 10 minutes
             description: Likely a payment provider issue — check payment-provider.authorize spans.
     # LOGS-based alerts — LogsQL evaluated by vmalert against VictoriaLogs
-    # (the k8s-stack internal vmauth routes /select/logsql to vlselect).
+    # (the k8s-stack internal vmauth routes /select/logsql to VLSingle).
     - name: shop-logs
       type: vlogs
       interval: 5m

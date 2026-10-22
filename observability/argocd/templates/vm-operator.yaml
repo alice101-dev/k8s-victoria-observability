@@ -1,4 +1,4 @@
-# Wave -2: VictoriaMetrics Operator + CRDs (VMCluster, VLCluster, VLAgent, VTCluster, VMServiceScrape, VMRule, ...).
+# Wave -2: VictoriaMetrics Operator + CRDs (VMSingle, VLSingle, VLAgent, VTSingle, VMServiceScrape, VMRule, ...).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

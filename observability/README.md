@@ -17,9 +17,9 @@ observability/
 ├── values/                     # Helm values, referenced through Argo CD multi-source ($values)
 │   ├── external-secrets.yaml
 │   ├── vm-operator.yaml
-│   ├── vm-k8s-stack.yaml       # main configuration: VMCluster / VLCluster / VTCluster / Grafana
+│   ├── vm-k8s-stack.yaml       # main configuration: VMSingle / VLSingle / VTSingle / Grafana
 │   ├── mcp-{victoriametrics,victorialogs,victoriatraces,victoriatraces-logsql,grafana}.yaml   # MCP servers
-│   └── otel-k8s-events.yaml    # events collector: k8s_events receiver → vlinsert (OTLP), one stream per namespace
+│   └── otel-k8s-events.yaml    # events collector: k8s_events receiver → VLSingle (OTLP), one stream per namespace
 ├── k8s-events/                 # Kustomize: "Cluster — Events" dashboard, event and node alerts, collector scrape
 └── manifests/                  # Kustomize: Grafana admin password generator + ExternalSecret
     └── mcp-grafana/            # Grafana service account token + caller token (ExternalSecrets), VMPodScrape
@@ -30,7 +30,7 @@ observability/
 | Layer | Tool | Reason |
 |---|---|---|
 | Operator + CRDs | `victoria-metrics-operator` chart, separate Application | Controlled CRD upgrades and removal order, as recommended by the k8s-stack docs |
-| Data components (VMCluster, VLCluster, VLAgent, VTCluster, VMAgent, VMAlert, VMAlertmanager) | Operator CRs rendered by `victoria-metrics-k8s-stack` | Ordered storage rollouts, PDBs, config reloads, service discovery via VMServiceScrape/VMPodScrape, VMRule |
+| Data components (VMSingle, VLSingle, VLAgent, VTSingle, VMAgent, VMAlert, VMAlertmanager) | Operator CRs rendered by `victoria-metrics-k8s-stack` | Storage rollouts, config reloads, service discovery via VMServiceScrape/VMPodScrape, VMRule |
 | Grafana, kube-state-metrics, node-exporter, dashboards, rules | k8s-stack subcharts and sync-job | Single source of versions; official dashboards and alerting rules |
 
 The operator CRDs let application teams ship their own scrape configs, alerts and dashboards next to
@@ -40,63 +40,81 @@ their workloads (see `apps/k8s/data/monitoring.yaml` and `apps/k8s/services/temp
 
 | Signal | Components | Replicas | Storage | Retention |
 |---|---|---|---|---|
-| Metrics | VMCluster (vminsert / vmselect / vmstorage) behind a vmauth load balancer (`requestsLoadBalancer`) | 2 / 2 / 2 (+2 vmauth) | 2 × 10Gi pd-balanced | 14d |
-| Scraping | VMAgent StatefulSet, deduplicated at 30s on vmselect/vmstorage | 2 | 2 × 10Gi persistent queue (8GiB cap) | until delivered |
+| Metrics | VMSingle | 1 | 30Gi pd-balanced | 30d |
+| Scraping | VMAgent StatefulSet, deduplicated at 30s on VMSingle | 2 | 2 × 10Gi persistent queue (8GiB cap) | until delivered |
 | Alerting | VMAlert → VMAlertmanager (gossip cluster); alert state persisted to VictoriaMetrics | 2 / 2 | 2 × 10Gi (silences, notification log) | – |
-| Logs | VLCluster (vlinsert / vlselect / vlstorage) + VLAgent DaemonSet | 2 / 2 / 2 | 2 × 10Gi | 7d, capped at 8GiB per node |
-| Traces | VTCluster (vtinsert / vtselect / vtstorage) | 2 / 2 / 2 | 2 × 10Gi | 7d, capped at 8GiB per node |
+| Logs | VLSingle + VLAgent DaemonSet | 1 (+1 agent per node) | 20Gi pd-balanced | 90d, oldest days dropped beyond 16GiB |
+| Traces | VTSingle | 1 | 20Gi pd-balanced | 30d, oldest days dropped beyond 16GiB |
 | UI | Grafana 13 | 1 | 10Gi for runtime state (dashboards and datasources provisioned from Git) | – |
 
-Metrics, logs and traces are sharded across storage nodes without application-level replication;
-durability comes from GCE persistent disks, which the VictoriaMetrics cluster docs describe as the most
-cost-efficient option (`replicationFactor: N` also requires at least `2N-1` vmstorage nodes). When a
-storage node restarts or its Spot VM is preempted, ingestion is rerouted to the remaining nodes and
-queries return partial results until it is back. Scale out by increasing the storage `replicaCount`.
+Each signal runs as one single-node process: simpler than a cluster (no insert/select/storage tiers, load
+balancers or PDBs) and far below its limits here. The case studies in the VictoriaMetrics docs run single-node
+with 100k+ active series and tens of thousands of samples per second; VictoriaLogs compresses logs ~10-50x, so
+2 TB of raw logs a month stays within one node. Move to cluster mode only when one node runs out of CPU, memory
+or disk throughput.
+
+Trade-off: no high availability for queries and ingestion. When a storage pod restarts or its Spot VM is
+preempted (about 2 minutes), dashboards and alert evaluation pause. Nothing is lost on the collection side:
+both vmagents keep samples in their persistent queues and vlagent buffers on its node; the OpenTelemetry SDKs
+retry spans and drop them only once their queue is full. Durability comes from GCE persistent disks.
+
+**Disk sizing.** The disks start small and grow online (raise `storage` in `values/vm-k8s-stack.yaml`; the
+standard-rwo StorageClass allows volume expansion):
+
+- VictoriaMetrics deletes data per monthly partition, so the disk holds up to retention + 1 month: about 2
+  months of data for the 30-day retention. Today ~4.5k samples/s (137k active series every 30s) ≈ 7-10GB a
+  month. The `DiskRunsOutOfSpaceIn3Days` alert (vmhealth rules) warns early; `storage.minFreeDiskSpaceBytes`
+  stops ingestion before the disk is completely full.
+- VictoriaLogs and VictoriaTraces keep per-day partitions, so the disk holds the retention.
+  `retentionMaxDiskSpaceUsageBytes` (16GiB of 20Gi) drops the oldest days first: the effective retention is
+  shorter than 90 or 30 days while the disk is too small. Raise both numbers together.
 
 VMAgent runs in `statefulMode`, so its remote-write persistent queue lives on a PVC instead of an
-emptyDir. If vminsert is unreachable, buffered samples (about 1.5 days at the current ~60KB/s per
+emptyDir. If VMSingle is unreachable, buffered samples (about 1.5 days at the current ~60KB/s per
 replica) survive a pod being rescheduled, for example after a Spot preemption.
 
-VMCluster protections (see the cluster docs, *Resource usage limits* and *Cardinality limiter*):
+VMSingle protections (see the docs, *Resource usage limits* and *Cardinality limiter*):
 
 | Setting | Value | Purpose |
 |---|---|---|
-| `search.maxConcurrentRequests` / `search.maxMemoryPerQuery` (vmselect) | 8 / 96MB | A single wide query (dashboards, AI assistants via MCP) cannot OOM vmselect |
-| `storage.maxHourlySeries` / `storage.maxDailySeries` (vmstorage) | 500k / 1.5M | Cardinality explosions are dropped and logged instead of exhausting memory |
-| `storage.minFreeDiskSpaceBytes` (vmstorage) | 2GB | Keep ≥20% free disk; read-only mode before the disk fills up |
-| `dedup.minScrapeInterval` (vmselect + vmstorage) | 30s | Deduplicate the two HA vmagent replicas |
-| Slow query log (vmselect default) | >5s | Slow queries land in VictoriaLogs |
+| `search.maxConcurrentRequests` / `search.maxMemoryPerQuery` | 8 / 128MB | A single wide query (dashboards, AI assistants via MCP) cannot OOM VMSingle |
+| `storage.maxHourlySeries` / `storage.maxDailySeries` | 500k / 1.5M | Cardinality explosions are dropped and logged instead of exhausting memory |
+| `storage.minFreeDiskSpaceBytes` | 2GB | Read-only mode before the disk fills up completely |
+| `dedup.minScrapeInterval` | 30s | Deduplicate the two HA vmagent replicas |
+| Slow query log (default) | >5s | Slow queries land in VictoriaLogs |
 
 ## Data flow
 
 ```text
-Pod stdout (JSON) ──► VLAgent (DaemonSet) ──► vlinsert ──► vlstorage ◄── vlselect ◄── Grafana (VictoriaLogs plugin)
-App /metrics ◄── VMAgent ×2 (VMServiceScrape/VMPodScrape) ──► vminsert ──► vmstorage ◄── vmselect ◄── Grafana
-App OTLP/HTTP ──► vtinsert ──► vtstorage ◄── vtselect /select/jaeger ◄── Grafana (Jaeger datasource)
-VMRule ──► VMAlert ×2 ──(metrics: vmselect, logs: vlselect via internal vmauth)──► Alertmanager ×2
+Pod stdout (JSON) ──► VLAgent (DaemonSet) ──► VLSingle ◄── Grafana (VictoriaLogs plugin)
+App /metrics ◄── VMAgent ×2 (VMServiceScrape/VMPodScrape) ──► VMSingle ◄── Grafana
+App OTLP/HTTP ──► VTSingle ◄── Grafana (Jaeger datasource on /select/jaeger, VictoriaLogs plugin for LogsQL on spans)
+VMRule ──► VMAlert ×2 ──(metrics: VMSingle, logs: VLSingle via internal vmauth)──► Alertmanager ×2
 ```
 
 Endpoints (namespace `monitoring`):
 
 | Purpose | URL |
 |---|---|
-| OTLP traces | `http://vtinsert-vmks.monitoring.svc:10481/insert/opentelemetry/v1/traces` |
-| Remote write | `http://vminsert-vmks.monitoring.svc:8480/insert/0/prometheus/api/v1/write` |
-| PromQL / MetricsQL | `http://vmselect-vmks.monitoring.svc:8481/select/0/prometheus` |
-| LogsQL | `http://vlselect-vmks.monitoring.svc:9471/select/logsql/query` |
-| Jaeger API | `http://vtselect-vmks.monitoring.svc:10471/select/jaeger` |
+| OTLP traces | `http://vtsingle-vmks.monitoring.svc:10428/insert/opentelemetry/v1/traces` |
+| OTLP logs | `http://vlsingle-vmks.monitoring.svc:9428/insert/opentelemetry/v1/logs` |
+| Remote write | `http://vmsingle-vmks.monitoring.svc:8428/api/v1/write` |
+| PromQL / MetricsQL | `http://vmsingle-vmks.monitoring.svc:8428/prometheus` |
+| LogsQL | `http://vlsingle-vmks.monitoring.svc:9428/select/logsql/query` |
+| LogsQL on spans | `http://vtsingle-vmks.monitoring.svc:10428/select/logsql/query` |
+| Jaeger API | `http://vtsingle-vmks.monitoring.svc:10428/select/jaeger` |
 
 ## Grafana
 
 - Datasources: **VictoriaMetrics** (default, Prometheus type), **VictoriaMetrics (DS)**
   (`victoriametrics-metrics-datasource` 0.26.1), **VictoriaLogs** (`victoriametrics-logs-datasource`
   0.33.1), **VictoriaTraces** (built-in Jaeger: trace search, trace view, service map), **VictoriaTraces
-  (LogsQL)** (the VictoriaLogs plugin on vtselect: VictoriaTraces stores spans like VictoriaLogs stores logs,
+  (LogsQL)** (the VictoriaLogs plugin on VTSingle: VictoriaTraces stores spans like VictoriaLogs stores logs,
   so LogsQL aggregates them, e.g. p95 and failures per endpoint, operation, SQL statement or attribute),
   **Alertmanager**.
 - Correlation: `trace_id` in logs links to traces; spans link to logs (`trace_id:="<id>"`) and to the
   RED metrics of their service.
-- Dashboards: VictoriaMetrics/Logs/Traces cluster, vmagent, vmalert, operator, Kubernetes views,
+- Dashboards: VictoriaMetrics/Logs/Traces single-node, vmagent, vmalert, operator, Kubernetes views,
   node-exporter and Redis (the CloudNativePG dashboard is vendored with fixes in `apps/k8s/data/dashboards`),
   plus **Cluster — Events** (generated with the Shop dashboards, shipped by `k8s-events`). Grafana has two folders:
   **Shop** (application and data tier) and **Platform** (everything else); the Windows, AIX, macOS and
@@ -118,10 +136,10 @@ order-service rise in the last 10 minutes? check its error logs and slowest trac
 
 | Service (`monitoring`) | Backend | Main tools |
 |---|---|---|
-| `vm-mcp` ([mcp-victoriametrics](https://github.com/VictoriaMetrics/mcp-victoriametrics)) | vmselect | `query`, `query_range`, `metrics`, `labels`, `series`, `rules`, `alerts`, `tsdb_status`, `explain_query` |
-| `vl-mcp` ([mcp-victorialogs](https://github.com/VictoriaMetrics/mcp-victorialogs)) | vlselect | `query` (LogsQL), `hits`, `stats_query_range`, `facets`, `field_values`, `streams` |
-| `vt-mcp` ([mcp-victoriatraces](https://github.com/VictoriaMetrics-Community/mcp-victoriatraces)) | vtselect | `services`, `traces`, `trace`, `dependencies` |
-| `vt-logsql-mcp` ([mcp-victorialogs](https://github.com/VictoriaMetrics/mcp-victorialogs) on vtselect) | vtselect (LogsQL) | `stats_query`, `stats_query_range`, `query`, `field_names`, `field_values` over spans: latency, failures and time share per service, endpoint, operation or attribute |
+| `vm-mcp` ([mcp-victoriametrics](https://github.com/VictoriaMetrics/mcp-victoriametrics)) | VMSingle | `query`, `query_range`, `metrics`, `labels`, `series`, `rules`, `alerts`, `tsdb_status`, `explain_query` |
+| `vl-mcp` ([mcp-victorialogs](https://github.com/VictoriaMetrics/mcp-victorialogs)) | VLSingle | `query` (LogsQL), `hits`, `stats_query_range`, `facets`, `field_values`, `streams` |
+| `vt-mcp` ([mcp-victoriatraces](https://github.com/VictoriaMetrics-Community/mcp-victoriatraces)) | VTSingle | `services`, `traces`, `trace`, `dependencies` |
+| `vt-logsql-mcp` ([mcp-victorialogs](https://github.com/VictoriaMetrics/mcp-victorialogs) on VTSingle) | VTSingle (LogsQL) | `stats_query`, `stats_query_range`, `query`, `field_names`, `field_values` over spans: latency, failures and time share per service, endpoint, operation or attribute |
 | `grafana-mcp` ([mcp-grafana](https://github.com/grafana/mcp-grafana)) | Grafana API | `search_dashboards`, `get_dashboard_summary`, `run_panel_query`, `list_datasources`, `query_prometheus` (VictoriaMetrics), `query_loki_logs` / `query_loki_stats` (VictoriaLogs, LogsQL), `alerting_rules_read`, `generate_deeplink` |
 
 The Victoria servers query the databases directly and embed their product documentation

@@ -1,5 +1,5 @@
 # =============================================================================
-# victoria-metrics-operator — chart vm/victoria-metrics-operator 0.68.1 (operator v0.75.0)
+# victoria-metrics-operator — chart vm/victoria-metrics-operator 0.68.1, operator image v0.75.1
 # Installed SEPARATELY from k8s-stack (docs recommendation): CRDs and operator have their own
 # lifecycle, upgrade/removal order is controlled, and the stack can be removed without the operator.
 # =============================================================================
@@ -10,6 +10,12 @@ fullnameOverride: vm-operator
 crds:
   enabled: true
   plain: false
+
+# Latest operator patch release (bug fixes for VMSingle, VLSingle, VTSingle and vmauth); the newest chart still
+# ships v0.75.0 and its CRDs. v0.75.1 needs newer CRDs only for its new features (VTAgent in vmauth targetRef, the
+# `M` unit in retentionPeriod), which this repository does not use. Drop the override with the next chart.
+image:
+  tag: v0.75.1
 
 replicaCount: 1
 

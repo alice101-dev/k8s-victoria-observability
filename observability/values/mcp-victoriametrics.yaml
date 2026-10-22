@@ -1,6 +1,6 @@
 # =============================================================================
 # victoria-metrics-mcp — chart vm/victoria-metrics-mcp 0.4.0
-# Read-only MCP server for VMCluster: query/query_range, metrics, labels, series, rules, alerts,
+# Read-only MCP server for VMSingle: query/query_range, metrics, labels, series, rules, alerts,
 # tsdb_status (cardinality), explain_query + VictoriaMetrics docs search.
 # =============================================================================
 fullnameOverride: vm-mcp
@@ -10,9 +10,8 @@ image:
   tag: v1.20.2
 
 vm:
-  type: cluster
-  # vmselect root URL (the MCP server appends /select/<tenant>/prometheus itself).
-  entrypoint: http://vmselect-vmks.monitoring.svc:8481
+  type: single
+  entrypoint: http://vmsingle-vmks.monitoring.svc:8428
 
 mcp:
   # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via

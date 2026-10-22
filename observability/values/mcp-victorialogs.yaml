@@ -1,6 +1,6 @@
 # =============================================================================
 # victoria-logs-mcp — chart vm/victoria-logs-mcp 0.2.0
-# Read-only MCP server for VLCluster: query (LogsQL), hits, stats_query(_range), facets,
+# Read-only MCP server for VLSingle: query (LogsQL), hits, stats_query(_range), facets,
 # field/stream names & values + VictoriaLogs docs search.
 # =============================================================================
 fullnameOverride: vl-mcp
@@ -9,7 +9,7 @@ image:
   tag: v1.9.0
 
 vl:
-  entrypoint: http://vlselect-vmks.monitoring.svc:9471
+  entrypoint: http://vlsingle-vmks.monitoring.svc:9428
 
 mcp:
   # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via

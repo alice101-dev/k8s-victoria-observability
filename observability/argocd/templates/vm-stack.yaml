@@ -1,4 +1,4 @@
-# Wave 0: observability stack — VMCluster, VLCluster + VLAgent, VTCluster, vmagent, vmalert,
+# Wave 0: observability stack — VMSingle, VLSingle + VLAgent, VTSingle, vmagent, vmalert,
 # alertmanager, Grafana, kube-state-metrics, node-exporter, dashboards & rules.
 # Application name = Helm release name ("vm-stack"); deliberately NO helm.releaseName so the
 # chart's VMServiceScrape selectors still match (see argocdReleaseOverride in the chart docs).

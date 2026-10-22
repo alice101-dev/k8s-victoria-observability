@@ -1,6 +1,6 @@
 # =============================================================================
 # victoria-traces-mcp — chart vm/victoria-traces-mcp 0.2.0 (server from VictoriaMetrics-Community)
-# Read-only MCP server for VTCluster: services, service_names, traces, trace (by ID),
+# Read-only MCP server for VTSingle: services, service_names, traces, trace (by ID),
 # dependencies (service graph) + VictoriaTraces docs search.
 # =============================================================================
 fullnameOverride: vt-mcp
@@ -9,7 +9,7 @@ image:
   tag: v1.5.0
 
 vt:
-  entrypoint: http://vtselect-vmks.monitoring.svc:10471
+  entrypoint: http://vtsingle-vmks.monitoring.svc:10428
 
 mcp:
   # Streamable HTTP on /mcp (port 8080). No built-in auth → ClusterIP only, reached via

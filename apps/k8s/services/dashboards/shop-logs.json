@@ -1990,8 +1990,8 @@
           "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
         },
         {
-          "title": "Open VictoriaLogs - cluster",
-          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
         }
       ]
     },
@@ -2056,8 +2056,8 @@
           "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
         },
         {
-          "title": "Open VictoriaLogs - cluster",
-          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
         }
       ],
       "interval": "1m"
@@ -2146,8 +2146,8 @@
           "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
         },
         {
-          "title": "Open VictoriaLogs - cluster",
-          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
         }
       ]
     },
@@ -2268,8 +2268,8 @@
           "url": "/d/Y5Z9GzMGz/victorialogs-vlagent?${__url_time_range}"
         },
         {
-          "title": "Open VictoriaLogs - cluster",
-          "url": "/d/XqCOFEX4z/victorialogs-cluster?${__url_time_range}"
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
         }
       ]
     }

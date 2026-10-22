@@ -52,8 +52,11 @@ flowchart LR
 
 ### Runtime: telemetry pipeline
 
-Metrics, logs and traces each run in cluster mode (insert / select / storage) with two replicas
-per tier.
+Metrics, logs and traces each run as one single-node process (VMSingle, VLSingle, VTSingle) on a
+persistent disk: one component to run per signal, and far more headroom than this workload needs (single-node
+VictoriaMetrics serves 100k+ active series and tens of thousands of samples/s; VictoriaLogs compresses logs
+~10-50x, so even 2 TB of raw logs a month fits one node). Collection stays highly available: two vmagents with
+persistent queues and a vlagent per node buffer while a storage pod restarts.
 
 ```mermaid
 flowchart LR
@@ -64,16 +67,16 @@ flowchart LR
     svcs --> data[("PostgreSQL 18 · Redis 8")]
   end
 
-  subgraph metrics["Metrics · VMCluster behind vmauth"]
-    vmagent["VMAgent ×2<br/>persistent queue"] --> vminsert["vminsert"] --> vmstorage[("vmstorage")] --> vmselect["vmselect<br/>MetricsQL"]
+  subgraph metrics["Metrics · 30d"]
+    vmagent["VMAgent ×2<br/>persistent queue"] --> vmsingle[("VMSingle<br/>MetricsQL")]
   end
 
-  subgraph logs["Logs · VLCluster"]
-    vlagent["VLAgent<br/>DaemonSet"] --> vlinsert["vlinsert"] --> vlstorage[("vlstorage")] --> vlselect["vlselect<br/>LogsQL"]
+  subgraph logs["Logs · 90d"]
+    vlagent["VLAgent<br/>DaemonSet"] --> vlsingle[("VLSingle<br/>LogsQL")]
   end
 
-  subgraph traces["Traces · VTCluster"]
-    vtinsert["vtinsert"] --> vtstorage[("vtstorage")] --> vtselect["vtselect<br/>Jaeger API"]
+  subgraph traces["Traces · 30d"]
+    vtsingle[("VTSingle<br/>Jaeger API · LogsQL")]
   end
 
   subgraph use["Consumers"]
@@ -84,11 +87,11 @@ flowchart LR
 
   shop -. "scrape /metrics" .-> vmagent
   shop -. "stdout JSON" .-> vlagent
-  shop -. "OTLP/HTTP" .-> vtinsert
+  shop -. "OTLP/HTTP" .-> vtsingle
 
-  vmselect --> vmalert & grafana & mcp
-  vlselect --> vmalert & grafana & mcp
-  vtselect --> grafana & mcp
+  vmsingle --> vmalert & grafana & mcp
+  vlsingle --> vmalert & grafana & mcp
+  vtsingle --> grafana & mcp
   grafana --> mcp
 
   grafana -- "port-forward" --> eng(["Engineer"])
@@ -97,10 +100,10 @@ flowchart LR
 
 | Signal | Collection | Storage | Query | Retention |
 |---|---|---|---|---|
-| Metrics | VMAgent scrapes every target declared with VMServiceScrape / VMPodScrape and remote-writes through vmauth | VMCluster | MetricsQL (PromQL-compatible) | 14d |
-| Logs | VLAgent tails container stdout on every node and parses JSON fields, including `trace_id` | VLCluster | LogsQL | 7d, 8GiB per node |
-| Traces | OpenTelemetry SDK sends spans over OTLP/HTTP straight to vtinsert | VTCluster | Jaeger API | 7d, 8GiB per node |
-| Kubernetes events | An OpenTelemetry Collector (`k8s_events` receiver) watches the API server and sends them to vlinsert | VLCluster | LogsQL | 7d (the API server keeps 1h) |
+| Metrics | VMAgent scrapes every target declared with VMServiceScrape / VMPodScrape and remote-writes to VMSingle | VMSingle, 30Gi | MetricsQL (PromQL-compatible) | 30d |
+| Logs | VLAgent tails container stdout on every node and parses JSON fields, including `trace_id` | VLSingle, 20Gi | LogsQL | 90d (oldest days dropped beyond 16GiB until the disk grows) |
+| Traces | OpenTelemetry SDK sends spans over OTLP/HTTP straight to VTSingle | VTSingle, 20Gi | Jaeger API, LogsQL | 30d (same 16GiB guard) |
+| Kubernetes events | An OpenTelemetry Collector (`k8s_events` receiver) watches the API server and sends them to VLSingle | VLSingle | LogsQL | 90d (the API server keeps 1h) |
 | Alerts | VMAlert evaluates MetricsQL and LogsQL rules; Alertmanager runs as a gossip cluster | – | – | – |
 
 Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached with
@@ -111,10 +114,10 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
 | Area | Choice | Why |
 |---|---|---|
 | Deployment model | `victoria-metrics-k8s-stack` Helm chart rendering **VictoriaMetrics Operator** CRs; operator installed as a separate app | Official production pattern; the operator handles ordered storage rollouts, config reloads and self-service scrape/rule CRDs |
-| Topology | **Cluster mode** for VMCluster, VLCluster and VTCluster (insert/select/storage ×2 on different nodes, PDBs) | Each tier scales out independently; durability comes from GCE persistent disks (no application-level replication); vmauth load-balances vminsert/vmselect |
+| Topology | **Single-node** VMSingle, VLSingle and VTSingle on pd-balanced disks; vmagent ×2, vmalert ×2 and Alertmanager ×2 stay replicated | Simplest to run and enough for TBs a month; durability from GCE persistent disks; collection buffers through a storage restart. Disks start small and grow online |
 | Log collection | VLAgent `k8sCollector` DaemonSet | Native VictoriaLogs agent, automatic JSON parsing, checkpoints |
-| Trace ingestion | OpenTelemetry SDK → `vtinsert` (OTLP/HTTP) | No extra hop; the SDK batches and retries |
-| Kubernetes events | OpenTelemetry Collector (`k8s_events` receiver, one replica) → VictoriaLogs (OTLP) | vlagent reads container logs only; one small pod keeps every event (scheduling, probes, OOM kills, node restarts) for 7 days |
+| Trace ingestion | OpenTelemetry SDK → VTSingle (OTLP/HTTP) | No extra hop; the SDK batches and retries |
+| Kubernetes events | OpenTelemetry Collector (`k8s_events` receiver, one replica) → VictoriaLogs (OTLP) | vlagent reads container logs only; one small pod keeps every event (scheduling, probes, OOM kills, node restarts) for 90 days |
 | Grafana datasources | Prometheus + `victoriametrics-metrics-datasource`, `victoriametrics-logs-datasource`, built-in **Jaeger** for traces | Jaeger API is the documented VictoriaTraces integration |
 | GitOps | Argo CD app-of-apps with sync waves and an Application health check | Operators and CRDs become healthy before the resources that depend on them |
 | Secrets | External Secrets password generator + CloudNativePG-generated credentials | No secret values in Git |
@@ -222,8 +225,9 @@ production practices. To harden it for production:
 
 | Staging default | Production |
 |---|---|
-| Metrics, logs and traces sharded across storage nodes without replication (durability from persistent disks) | Add storage nodes for capacity; `replicationFactor: 2` with at least 3 vmstorage nodes, or `VMDistributed`/`VLDistributed` (independent clusters) for full data HA |
-| All nodes are Spot VMs | Add a small on-demand node pool for stateful workloads (vm/vl/vtstorage, PostgreSQL) |
+| One VMSingle, VLSingle and VTSingle: no query or ingestion HA (a Spot preemption means ~2 minutes without queries and alert evaluation; vmagent and vlagent buffer, spans beyond the SDK queue are lost) | Grow the disks first (`storage` and `retentionMaxDiskSpaceUsageBytes`); for HA run two independent copies (`VMDistributed`/`VLDistributed`) or move to cluster mode when one node runs out of CPU or memory |
+| Small disks: VMSingle 30Gi, VLSingle and VTSingle 20Gi (oldest log and trace days dropped beyond 16GiB) | Size for the retention (metrics: retention + 1 month of data, logs and traces: the retention) and expand online |
+| All nodes are Spot VMs | Add a small on-demand node pool for stateful workloads (VMSingle, VLSingle, VTSingle, PostgreSQL) |
 | Zonal cluster | `regional_cluster = true` |
 | 100% trace sampling | Lower `otel.samplerArg` in `apps/k8s/services/values.yaml` (e.g. `0.1`) or add tail sampling with an OpenTelemetry Collector |
 | VictoriaMetrics Operator admission webhook disabled | Install cert-manager and set `admissionWebhooks.certManager.enabled: true` |

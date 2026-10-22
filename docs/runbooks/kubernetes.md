@@ -93,9 +93,9 @@ contains the fix.
 
 ## KubeEventsExportFailing
 
-**Meaning.** For 10 minutes the collector failed to send events to VictoriaLogs (`vlinsert`).
+**Meaning.** For 10 minutes the collector failed to send events to VictoriaLogs (`vlsingle-vmks`).
 
 **Diagnose.** Collector logs (`kubectl -n monitoring logs deploy/k8s-events`), the Event pipeline row (queue
-size), VictoriaLogs health (`vlinsert` and `vlstorage` pods, the VictoriaLogs - cluster dashboard).
+size), VictoriaLogs health (the `vlsingle-vmks` pod, the VictoriaLogs - single-node dashboard).
 
 **Fix.** Fix VictoriaLogs; the collector retries from its in-memory queue and drops events when it is full.
