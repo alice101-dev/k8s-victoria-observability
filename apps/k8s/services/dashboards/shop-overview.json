@@ -112,9 +112,9 @@
         "iconColor": "purple",
         "step": "1m",
         "useValueForTime": false,
-        "expr": "max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) > max_over_time((max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)))[30m:1m] offset 1m)",
+        "expr": "(max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) > max_over_time((max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)))[30m:1m] offset 1m)) * on (node) group_left (label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)",
         "titleFormat": "Node restarted: {{node}}",
-        "textFormat": "Spot preemption, upgrade or repair: its pods were rescheduled"
+        "textFormat": "Pool {{label_cloud_google_com_gke_nodepool}} ({{label_cloud_google_com_gke_provisioning}}): spot preemption, upgrade or repair; its pods were rescheduled"
       },
       {
         "name": "Container restarts",

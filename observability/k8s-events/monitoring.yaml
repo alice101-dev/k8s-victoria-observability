@@ -24,11 +24,11 @@ spec:
         # Boot time per node name; info only: on spot nodes a preemption is expected, and what it breaks
         # (failovers, unschedulable pods) has its own alerts.
         - alert: KubeNodeRestarted
-          expr: 'time() - max by (node) (label_replace(node_boot_time_seconds, "internal_ip", "$1", "instance", "(.+):[0-9]+") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) < 900'
+          expr: '(time() - max by (node) (label_replace(node_boot_time_seconds, "internal_ip", "$1", "instance", "(.+):[0-9]+") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) < 900) * on (node) group_left (label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)'
           labels:
             severity: info
           annotations:
-            summary: "Node {{ $labels.node }} booted {{ $value | humanizeDuration }} ago"
+            summary: "Node {{ $labels.node }} (pool {{ $labels.label_cloud_google_com_gke_nodepool }}, {{ $labels.label_cloud_google_com_gke_provisioning }}) booted {{ $value | humanizeDuration }} ago"
             description: Spot VM preemption, node upgrade or repair, or a new node. Its pods were rescheduled and stateful workloads may have failed over. The Nodes row of the Cluster — Events dashboard shows the node's events.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubenoderestarted
     - name: kubernetes-events-collector

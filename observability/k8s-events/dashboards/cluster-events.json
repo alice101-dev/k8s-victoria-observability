@@ -135,9 +135,9 @@
         "iconColor": "purple",
         "step": "1m",
         "useValueForTime": false,
-        "expr": "max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) > max_over_time((max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)))[30m:1m] offset 1m)",
+        "expr": "(max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) > max_over_time((max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)))[30m:1m] offset 1m)) * on (node) group_left (label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)",
         "titleFormat": "Node restarted: {{node}}",
-        "textFormat": "Spot preemption, upgrade or repair: its pods were rescheduled"
+        "textFormat": "Pool {{label_cloud_google_com_gke_nodepool}} ({{label_cloud_google_com_gke_provisioning}}): spot preemption, upgrade or repair; its pods were rescheduled"
       },
       {
         "name": "Container restarts",
@@ -699,7 +699,7 @@
     {
       "type": "table",
       "title": "Nodes",
-      "description": "When each node last booted. A recent boot on a spot node usually is a preemption: Compute Engine reclaimed the VM, GKE recreated it and its pods were rescheduled.",
+      "description": "Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether that was in the time range. Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its pods were rescheduled. On-demand nodes reboot only for upgrades or repairs.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -717,6 +717,97 @@
           {
             "matcher": {
               "id": "byName",
+              "options": "Node pool"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Provisioning"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "spot": {
+                        "text": "Spot (can be preempted)",
+                        "color": "orange",
+                        "index": 0
+                      },
+                      "preemptible": {
+                        "text": "Preemptible (can be preempted)",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "standard": {
+                        "text": "On-demand",
+                        "color": "green",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Preemptible"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Machine type"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zone"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
               "options": "Booted"
             },
             "properties": [
@@ -727,6 +818,44 @@
               {
                 "id": "custom.width",
                 "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Restarted in range"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Yes",
+                        "color": "orange",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "No",
+                        "color": "text",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
               }
             ]
           },
@@ -778,8 +907,8 @@
         },
         "sortBy": [
           {
-            "displayName": "Booted",
-            "desc": true
+            "displayName": "Node pool",
+            "desc": false
           }
         ]
       },
@@ -792,12 +921,30 @@
           "id": "organize",
           "options": {
             "excludeByName": {
-              "Time": true
+              "Time": true,
+              "Value #D": true
+            },
+            "indexByName": {
+              "label_cloud_google_com_gke_nodepool": 0,
+              "node": 1,
+              "label_cloud_google_com_gke_provisioning": 2,
+              "label_cloud_google_com_gke_preemptible": 3,
+              "label_node_kubernetes_io_instance_type": 4,
+              "label_topology_kubernetes_io_zone": 5,
+              "Value #A": 6,
+              "Value #B": 7,
+              "Value #C": 8
             },
             "renameByName": {
+              "label_cloud_google_com_gke_nodepool": "Node pool",
               "node": "Node",
+              "label_cloud_google_com_gke_provisioning": "Provisioning",
+              "label_cloud_google_com_gke_preemptible": "Preemptible",
+              "label_node_kubernetes_io_instance_type": "Machine type",
+              "label_topology_kubernetes_io_zone": "Zone",
               "Value #A": "Booted",
-              "Value #B": "Ready"
+              "Value #B": "Restarted in range",
+              "Value #C": "Ready"
             }
           }
         }
@@ -820,9 +967,33 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"})",
+          "expr": "time() - max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) < bool $__range_s",
           "legendFormat": "",
           "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"})",
+          "legendFormat": "",
+          "refId": "C",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning, label_cloud_google_com_gke_preemptible, label_node_kubernetes_io_instance_type, label_topology_kubernetes_io_zone) (kube_node_labels)",
+          "legendFormat": "",
+          "refId": "D",
           "range": false,
           "instant": true,
           "format": "table"
@@ -832,8 +1003,8 @@
       "gridPos": {
         "x": 0,
         "y": 15,
-        "w": 8,
-        "h": 8
+        "w": 24,
+        "h": 7
       },
       "links": [
         {
@@ -844,8 +1015,8 @@
     },
     {
       "type": "timeseries",
-      "title": "Ready nodes",
-      "description": "Ready nodes against all nodes: a dip is a node lost (preemption, upgrade) until it is back.",
+      "title": "Ready nodes by node pool",
+      "description": "Ready nodes against all nodes, per node pool: a dip is a node lost (preemption, upgrade) until it is back; a rise is the autoscaler adding a node.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -885,8 +1056,8 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(kube_node_status_condition{condition=\"Ready\", status=\"true\"})",
-          "legendFormat": "ready",
+          "expr": "sum by (label_cloud_google_com_gke_nodepool) (kube_node_status_condition{condition=\"Ready\", status=\"true\"} * on (node) group_left (label_cloud_google_com_gke_nodepool) max by (node, label_cloud_google_com_gke_nodepool) (kube_node_labels{label_cloud_google_com_gke_nodepool!=\"\"}))",
+          "legendFormat": "{{label_cloud_google_com_gke_nodepool}} ready",
           "refId": "A",
           "range": true,
           "instant": false
@@ -896,8 +1067,8 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "count(kube_node_info)",
-          "legendFormat": "nodes",
+          "expr": "count by (label_cloud_google_com_gke_nodepool) (kube_node_info * on (node) group_left (label_cloud_google_com_gke_nodepool) max by (node, label_cloud_google_com_gke_nodepool) (kube_node_labels{label_cloud_google_com_gke_nodepool!=\"\"}))",
+          "legendFormat": "{{label_cloud_google_com_gke_nodepool}} nodes",
           "refId": "B",
           "range": true,
           "instant": false
@@ -905,9 +1076,9 @@
       ],
       "id": 13,
       "gridPos": {
-        "x": 8,
-        "y": 15,
-        "w": 6,
+        "x": 0,
+        "y": 22,
+        "w": 10,
         "h": 8
       },
       "links": [
@@ -948,9 +1119,9 @@
       ],
       "id": 14,
       "gridPos": {
-        "x": 14,
-        "y": 15,
-        "w": 10,
+        "x": 10,
+        "y": 22,
+        "w": 14,
         "h": 8
       },
       "links": [
@@ -968,7 +1139,7 @@
       "id": 15,
       "gridPos": {
         "x": 0,
-        "y": 23,
+        "y": 30,
         "w": 24,
         "h": 1
       }
@@ -1153,7 +1324,7 @@
       "id": 16,
       "gridPos": {
         "x": 0,
-        "y": 24,
+        "y": 31,
         "w": 24,
         "h": 10
       }
@@ -1264,7 +1435,7 @@
       "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 34,
+        "y": 41,
         "w": 14,
         "h": 8
       }
@@ -1322,7 +1493,7 @@
       "id": 18,
       "gridPos": {
         "x": 14,
-        "y": 34,
+        "y": 41,
         "w": 10,
         "h": 8
       }
@@ -1335,7 +1506,7 @@
       "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 42,
+        "y": 49,
         "w": 24,
         "h": 1
       }
@@ -1372,7 +1543,7 @@
       "id": 20,
       "gridPos": {
         "x": 0,
-        "y": 43,
+        "y": 50,
         "w": 24,
         "h": 14
       }
@@ -1385,7 +1556,7 @@
       "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 57,
+        "y": 64,
         "w": 24,
         "h": 1
       }
@@ -1467,7 +1638,7 @@
       "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 58,
+        "y": 65,
         "w": 12,
         "h": 6
       },
@@ -1572,7 +1743,7 @@
       "id": 23,
       "gridPos": {
         "x": 12,
-        "y": 58,
+        "y": 65,
         "w": 12,
         "h": 6
       },

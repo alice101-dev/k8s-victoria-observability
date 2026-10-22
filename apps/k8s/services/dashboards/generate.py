@@ -36,8 +36,12 @@ def restart_annotations(namespace):
         # True only in the first minute a new boot time shows (the node is gone for a few minutes in between).
         {"name": "Node restarts", "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"}, "enable": True,
          "iconColor": "purple", "step": "1m", "useValueForTime": False,
-         "expr": f"{NODE_BOOT} > max_over_time(({NODE_BOOT})[30m:1m] offset 1m)",
-         "titleFormat": "Node restarted: {{node}}", "textFormat": "Spot preemption, upgrade or repair: its pods were rescheduled"},
+         "expr": f"({NODE_BOOT} > max_over_time(({NODE_BOOT})[30m:1m] offset 1m)) * on (node) group_left "
+                 "(label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, "
+                 "label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)",
+         "titleFormat": "Node restarted: {{node}}",
+         "textFormat": "Pool {{label_cloud_google_com_gke_nodepool}} ({{label_cloud_google_com_gke_provisioning}}): "
+                       "spot preemption, upgrade or repair; its pods were rescheduled"},
         {"name": "Container restarts", "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"}, "enable": True,
          "iconColor": "orange", "step": "1m", "useValueForTime": False,
          "expr": f'(changes(kube_pod_container_status_restarts_total{{{namespace}}}[1m]) > 0) * on (namespace, pod, container) '
@@ -1155,27 +1159,59 @@ d.add(status_history("Warning events per namespace",
                      thresholds(("green", None), ("orange", 1), ("red", 20))), 12, 8)
 
 d.row("Nodes — restarts and spot preemptions")
+POOL = "label_cloud_google_com_gke_nodepool"
+PROVISIONING = "label_cloud_google_com_gke_provisioning"
+NODE_LABELS = (f"max by (node, {POOL}, {PROVISIONING}, label_cloud_google_com_gke_preemptible, "
+               "label_node_kubernetes_io_instance_type, label_topology_kubernetes_io_zone) (kube_node_labels)")
+BY_POOL = f'* on (node) group_left ({POOL}) max by (node, {POOL}) (kube_node_labels{{{POOL}!=""}})'
 d.add(table("Nodes", [vm(f"{NODE_BOOT} * 1000", ref="A", instant=True, fmt="table"),
-                      vm('max by (node) (kube_node_status_condition{condition="Ready", status="true"})', ref="B",
-                         instant=True, fmt="table")],
+                      vm(f"time() - {NODE_BOOT} < bool $__range_s", ref="B", instant=True, fmt="table"),
+                      vm('max by (node) (kube_node_status_condition{condition="Ready", status="true"})', ref="C",
+                         instant=True, fmt="table"),
+                      vm(NODE_LABELS, ref="D", instant=True, fmt="table")],
             [{"id": "merge", "options": {}},
-             {"id": "organize", "options": {"excludeByName": {"Time": True},
-                                            "renameByName": {"node": "Node", "Value #A": "Booted", "Value #B": "Ready"}}}],
-            overrides=[by_name("Booted", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 130}]),
+             {"id": "organize", "options": {
+                 "excludeByName": {"Time": True, "Value #D": True},
+                 "indexByName": {POOL: 0, "node": 1, PROVISIONING: 2, "label_cloud_google_com_gke_preemptible": 3,
+                                 "label_node_kubernetes_io_instance_type": 4, "label_topology_kubernetes_io_zone": 5,
+                                 "Value #A": 6, "Value #B": 7, "Value #C": 8},
+                 "renameByName": {POOL: "Node pool", "node": "Node", PROVISIONING: "Provisioning",
+                                  "label_cloud_google_com_gke_preemptible": "Preemptible",
+                                  "label_node_kubernetes_io_instance_type": "Machine type",
+                                  "label_topology_kubernetes_io_zone": "Zone", "Value #A": "Booted",
+                                  "Value #B": "Restarted in range", "Value #C": "Ready"}}}],
+            overrides=[by_name("Node pool", [{"id": "custom.width", "value": 170}]),
+                       by_name("Provisioning", [{"id": "custom.width", "value": 190}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+                                                {"id": "mappings", "value": [{"type": "value", "options": {
+                                                    "spot": {"text": "Spot (can be preempted)", "color": "orange", "index": 0},
+                                                    "preemptible": {"text": "Preemptible (can be preempted)", "color": "orange", "index": 1},
+                                                    "standard": {"text": "On-demand", "color": "green", "index": 2}}}]}]),
+                       by_name("Preemptible", [{"id": "custom.width", "value": 100}]),
+                       by_name("Machine type", [{"id": "custom.width", "value": 130}]),
+                       by_name("Zone", [{"id": "custom.width", "value": 150}]),
+                       by_name("Booted", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 130}]),
+                       by_name("Restarted in range", [{"id": "custom.width", "value": 150}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+                                                      {"id": "mappings", "value": [{"type": "value", "options": {
+                                                          "1": {"text": "Yes", "color": "orange", "index": 0},
+                                                          "0": {"text": "No", "color": "text", "index": 1}}}]}]),
                        by_name("Ready", [{"id": "custom.width", "value": 90}, {"id": "custom.cellOptions", "value": {"type": "color-background"}},
                                          {"id": "mappings", "value": [{"type": "value", "options": {
                                              "1": {"text": "Ready", "color": "green", "index": 0},
                                              "0": {"text": "NotReady", "color": "red", "index": 1}}}]}])],
-            desc="When each node last booted. A recent boot on a spot node usually is a preemption: Compute Engine "
-                 "reclaimed the VM, GKE recreated it and its pods were rescheduled.",
-            sort=[{"displayName": "Booted", "desc": True}]), 8, 8)
-d.add(ts("Ready nodes", [vm('sum(kube_node_status_condition{condition="Ready", status="true"})', "ready"),
-                         vm("count(kube_node_info)", "nodes", "B")],
-         "short", decimals=0, min_=0, legend_calcs=("min",),
-         desc="Ready nodes against all nodes: a dip is a node lost (preemption, upgrade) until it is back."), 6, 8)
+            desc="Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether "
+                 "that was in the time range. Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: "
+                 "a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its "
+                 "pods were rescheduled. On-demand nodes reboot only for upgrades or repairs.",
+            sort=[{"displayName": "Node pool", "desc": False}]), 24, 7)
+d.add(ts("Ready nodes by node pool",
+         [vm(f'sum by ({POOL}) (kube_node_status_condition{{condition="Ready", status="true"}} {BY_POOL})', f"{{{{{POOL}}}}} ready"),
+          vm(f"count by ({POOL}) (kube_node_info {BY_POOL})", f"{{{{{POOL}}}}} nodes", "B")],
+         "short", decimals=0, min_=0, legend_calcs=("min", "max"),
+         desc="Ready nodes against all nodes, per node pool: a dip is a node lost (preemption, upgrade) until it is back; "
+              "a rise is the autoscaler adding a node."), 10, 8)
 d.add(logs_panel("Node events", f"{EV} k8s.object.kind:=Node {SEARCH} {EVENT_LINE}",
                  "Events on nodes: NodeNotReady, Rebooted, Starting (kubelet), RegisteredNode, OOMKilling and other "
-                 "node-problem-detector findings."), 10, 8)
+                 "node-problem-detector findings."), 14, 8)
 for p in d.panels[-3:]:
     p["links"] = NODE_LINKS
 
