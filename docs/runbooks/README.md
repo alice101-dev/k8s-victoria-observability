@@ -1,0 +1,100 @@
+# Runbooks and investigation guide
+
+Every data-tier alert links to its runbook section through the `runbook_url` annotation:
+
+- [postgres.md](postgres.md): CloudNativePG cluster `shop-db` (availability, replication, locks, disk, backups)
+- [redis.md](redis.md): Redis with Sentinel
+
+This page describes how to investigate in general: where each signal is stored, the field names to query,
+and the order that finds a root cause fastest. It is written for on-call engineers and for AI assistants
+that query the stack through the MCP servers.
+
+## Where the signals are
+
+| Signal | Store | Grafana datasource (uid) | MCP server |
+|---|---|---|---|
+| Metrics, SLO recording rules, alerts | VictoriaMetrics cluster + vmalert | `VictoriaMetrics` | `victoriametrics` (query, query_range, alerts, rules) |
+| Application and PostgreSQL logs | VictoriaLogs cluster | `VictoriaLogs` | `victorialogs` (query, stats_query, field_names) |
+| Traces | VictoriaTraces (Jaeger API) | `VictoriaTraces` | `victoriatraces` (services, traces, trace) |
+| Dashboards, annotations | Grafana | – | `grafana` (search_dashboards, get_dashboard_summary) |
+
+Dashboards (Grafana folder **Shop**): `shop-slo` (SLO Overview), `shop-service` (one service end to end),
+`shop-logs`, `shop-overview`, and `cloudnative-pg-shop` (CloudNativePG, one row per concern: Queries and
+errors, Locks and blocking, Top statements and table health, Database efficiency, Replication, Backups).
+All of them mark rollouts and firing critical alerts as annotations.
+
+## Investigation order
+
+1. **Impact.** Which user journey or service burns its error budget? `slo:sli_error:ratio_rate5m` by
+   `job, slo, kind` or the SLO Overview dashboard. A journey (`kind="journey"`: `checkout`, `browse`) is what
+   users feel; a service SLI tells where it comes from.
+2. **A failing request.** Search traces of that service with an error or a long duration and follow the spans
+   down. Database spans (otelpgx) carry `db.query.text`, `db.operation.name`, the error and the duration;
+   checkout spans carry `order.product_id` and `order.user_id`.
+3. **The logs of that request.** App logs carry `trace_id`, so `trace_id:<id>` returns every service's lines
+   for one request, with the error text in `err`.
+4. **The database side, at the same time.** PostgreSQL logs (errors with SQLSTATE, lock waits naming the
+   blocking pid, slow statements) and the CloudNativePG dashboard rows. Live sessions and locks through psql
+   ([postgres.md](postgres.md#live-diagnosis)).
+5. **Changes.** Rollout and restart annotations, Argo CD sync history, `kubectl get events`.
+
+## Field reference
+
+**Application logs** (Go `slog` JSON), stream `{kubernetes.pod_namespace="shop"}`:
+`service`, `level` (`INFO`, `WARN`, `ERROR`), `_msg`, `err`, `trace_id`, `span_id`, plus request fields such
+as `product_id`, `user_id`, `step`.
+
+**PostgreSQL logs** (CloudNativePG JSON), stream
+`{kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"}`, cluster filter
+`"kubernetes.pod_labels.cnpg.io/cluster":in(shop-db)`, instance `kubernetes.pod_name`:
+`record.error_severity` (`LOG`, `ERROR`, `FATAL`, `PANIC`), `record.sql_state_code`, `record.message`,
+`record.detail`, `record.query`, `record.query_id`, `record.process_id`, `record.user_name`,
+`record.application_name` (the service name for application sessions), `record.database_name`.
+
+**Backup sidecar logs**: `{kubernetes.pod_namespace="shop", kubernetes.container_name="plugin-barman-cloud"}`.
+
+**Metrics**:
+
+| Prefix | Source | Useful labels |
+|---|---|---|
+| `slo:*` | SLO recording rules | `job`, `slo` (`availability`, `latency`), `kind` (`service`, `journey`) |
+| `http_server_*`, `http_client_*` | services | `job` (service), `route`, `code`, `peer` |
+| `cnpg_*` | CloudNativePG exporter, every instance | `pod`, `datname`, `usename`, `application_name`, `state` |
+| `cnpg_pg_stat_statements_top_*` | custom query, primary only | `queryid`, `query` (normalized text) |
+| `cnpg_pg_stat_user_tables_*` | custom query, primary only | `datname`, `relname` |
+| `barman_cloud_cloudnative_pg_io_*` | Barman Cloud plugin | `pod` |
+| `redis_*` | redis_exporter | `pod`, `role` |
+
+## Recipes
+
+```text
+# LogsQL: errors of one request across services
+{kubernetes.pod_namespace="shop"} trace_id:<trace id>
+
+# LogsQL: PostgreSQL errors by SQLSTATE in the last hour
+_time:1h {kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"}
+  record.error_severity:in(ERROR, FATAL, PANIC) | stats by (record.sql_state_code, record.message) count() n
+
+# LogsQL: lock waits with the pids holding the lock
+_time:1h {kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"} record.message:"still waiting for"
+  | fields _time, record.application_name, record.message, record.detail, record.query
+
+# LogsQL: everything one PostgreSQL backend logged (e.g. the blocker pid from a lock wait)
+_time:1h {kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"} record.process_id:<pid>
+
+# MetricsQL: sessions per service and state on the primary
+sum by (application_name, state) (cnpg_backends_total{namespace="shop"} * on (pod) group_left
+  (cnpg_pg_replication_in_recovery{namespace="shop"} == 0))
+```
+
+## Pitfalls
+
+- LogsQL word filters match whole words: `"lock"` does not match `ShareLock`. Use a phrase
+  (`"still waiting for"`), a prefix (`lock*`) or a regexp (`~"(?i)lock"`).
+- The CloudNativePG exporter refreshes its query results every 20s (`metricsQueriesTTL`) and is scraped every
+  30s. A lock wait of a few seconds rarely shows in the metrics; the PostgreSQL logs record every wait longer
+  than 1s (`log_lock_waits`).
+- `cnpg_*` series exist for every instance. The primary is the pod with `cnpg_pg_replication_in_recovery == 0`.
+- `57014 canceling statement due to user request` is not a server timeout: the client cancelled the query,
+  usually because the application's own timeout expired. The trace shows which call gave up.
+- Timestamps in Grafana, the MCP servers and the logs are UTC unless an offset is given.

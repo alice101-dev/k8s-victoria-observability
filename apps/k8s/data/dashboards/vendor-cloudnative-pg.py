@@ -12,7 +12,8 @@ variable expects that label to hold the CloudNativePG cluster name (set by the C
 - The Backups row is rebuilt (backup_panels): backup age and last attempt, recovery window, data at
   risk (RPO), WAL archiving throughput and backlog, and the Barman Cloud sidecar events from VictoriaLogs.
 - New rows after "Operational Stats": "Queries and errors" (slow statements and errors by SQLSTATE from the
-  PostgreSQL logs in VictoriaLogs) and "Database efficiency" (cache hit, rollback, temp files, conflicts).
+  PostgreSQL logs in VictoriaLogs), "Locks and blocking" (lock waits with their blockers, lock timeouts,
+  deadlocks) and "Database efficiency" (cache hit, rollback, temp files, conflicts).
 - "Top statements and table health" row from the custom exporter queries in postgres-monitoring.yaml
   (pg_stat_statements top 10, pg_stat_user_tables).
 - Replication row: bytes behind the primary per standby and WAL retained by replication slots.
@@ -179,8 +180,10 @@ def log_panels(y):
                [{"expr": f"{errors} | stats by (record.error_severity, record.sql_state_code) count() errors",
                  "queryType": "statsRange", "editorMode": "code",
                  "legendFormat": "{{record.error_severity}} {{record.sql_state_code}}"}],
-               "short", 0, y + 8, "ERROR/FATAL/PANIC log lines. Common SQLSTATEs: 57P03 server starting up (restarts), "
-               "40P01 deadlock, 23505 unique violation, 53300 too many connections, 57014 statement timeout.",
+               "short", 0, y + 8, "ERROR/FATAL/PANIC log lines. Common SQLSTATEs: 55P03 lock_timeout (lock contention, "
+               "see Locks and blocking), 57014 statement cancelled (statement_timeout, or \"due to user request\": the "
+               "client gave up, e.g. an application timeout), 25P03 idle-in-transaction timeout, 40P01 deadlock, "
+               "23505 unique violation, 53300 too many connections, 57P03 server starting up (restarts).",
                bars=True, stack=True, ds=LOGS),
         {"id": 9103, "type": "logs", "title": "Latest errors", "datasource": LOGS,
          "description": "The newest ERROR/FATAL/PANIC lines; expand one for the SQLSTATE, user, database and query.",
@@ -190,6 +193,63 @@ def log_panels(y):
          "targets": [{"datasource": LOGS, "refId": "A", "queryType": "instant", "editorMode": "code", "maxLines": 100,
                       "expr": f'{errors} | format "<record.error_severity> <record.sql_state_code> [<kubernetes.pod_name>]: '
                               f'<record.message>" as _msg | copy record.error_severity as level'}]},
+    ]
+
+
+def lock_panels(y):
+    """Who waits for whom, from the PostgreSQL logs: log_lock_waits logs every wait longer than
+    deadlock_timeout (1s) with the waiting statement and the pids holding the lock."""
+    waits = f'{PG_LOGS} record.message:"still waiting for"'
+    events = (f'{PG_LOGS} (record.message:~"^process [0-9]+ (still waiting for|acquired) " '
+              'or record.sql_state_code:in(55P03, 40P01, 25P03))')
+    count = lambda flt, legend: {"expr": f"{flt} | stats count() events", "legendFormat": legend,
+                                 "queryType": "statsRange", "editorMode": "code"}
+    by_wait = (f'{waits} | extract "still waiting for <lock_mode> on <lock_object> " from record.message '
+               '| extract "holding the lock: <blockers>. Wait" from record.detail '
+               '| stats by (record.application_name, record.query, lock_mode, lock_object, blockers) count() waits '
+               '| sort by (waits desc) | limit 20')
+    return [
+        series(9141, "Lock events",
+               [count(waits, "waits over 1s"), count(f"{PG_LOGS} record.sql_state_code:55P03", "lock timeouts (55P03)"),
+                count(f"{PG_LOGS} record.sql_state_code:40P01", "deadlocks (40P01)"),
+                count(f"{PG_LOGS} record.sql_state_code:25P03", "idle-in-transaction timeouts (25P03)")],
+               "short", 0, y, "Lock waits longer than deadlock_timeout (1s), statements cancelled by lock_timeout, "
+               "deadlocks and sessions terminated by idle_in_transaction_session_timeout. Application sessions use "
+               "lock_timeout 2s, so contention on a hot row shows as lock timeouts and checkout errors.",
+               bars=True, stack=True, ds=LOGS),
+        {"id": 9143, "type": "logs", "title": "Latest lock events", "datasource": LOGS,
+         "description": "Newest waits (with the pids holding the lock), acquisitions after a wait, lock timeouts, "
+                        "deadlocks and idle-in-transaction terminations. Search a blocker's other log lines with "
+                        "record.process_id:<pid> in Explore.",
+         "gridPos": {"h": 8, "w": 12, "x": 12, "y": y},
+         "options": {"showTime": True, "wrapLogMessage": True, "enableLogDetails": True, "sortOrder": "Descending",
+                     "dedupStrategy": "none"},
+         "targets": [{"datasource": LOGS, "refId": "A", "queryType": "instant", "editorMode": "code", "maxLines": 100,
+                      "expr": f'{events} | format "<record.error_severity> <record.sql_state_code> [<kubernetes.pod_name>] '
+                              f'<record.application_name> pid <record.process_id>: <record.message>. <record.detail> '
+                              f'| <record.query>" as _msg | copy record.error_severity as level'}]},
+        {"id": 9142, "type": "table", "title": "Lock waits by statement and blocker",
+         "description": "Waits over 1s in the selected range, grouped by the waiting application and statement, the "
+                        "lock mode, what it waits on (a row's transaction, a relation, an advisory lock) and the pids "
+                        "holding the lock. The blocker's user and application are in its own log lines "
+                        "(record.process_id:<pid>).",
+         "datasource": LOGS, "gridPos": {"h": 8, "w": 24, "x": 0, "y": y + 8},
+         "fieldConfig": {"defaults": {"custom": {"cellOptions": {"type": "auto"}, "inspect": True}},
+                         "overrides": [unit("Waits", "short", 0, 70), unit("Lock", "string", width=150),
+                                       unit("On", "string", width=110), unit("Blocker pids", "string", width=110),
+                                       unit("Application", "string", width=140)]},
+         "options": {"showHeader": True, "cellHeight": "sm", "sortBy": [{"displayName": "Waits", "desc": True}]},
+         "transformations": [
+             {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
+             {"id": "merge", "options": {}},
+             {"id": "organize", "options": {
+                 "excludeByName": {"Time": True},
+                 "indexByName": {"record.application_name": 0, "record.query": 1, "lock_mode": 2, "lock_object": 3,
+                                 "blockers": 4, "waits": 5},
+                 "renameByName": {"record.application_name": "Application", "record.query": "Waiting statement",
+                                  "lock_mode": "Lock", "lock_object": "On", "blockers": "Blocker pids",
+                                  "waits": "Waits"}}}],
+         "targets": [{"datasource": LOGS, "refId": "A", "queryType": "stats", "editorMode": "code", "expr": by_wait}]},
     ]
 
 
@@ -397,6 +457,7 @@ for row in dash["panels"]:
 
 insert_collapsed_rows(dash, "Storage & I/O", [
     (9100, "Queries and errors (PostgreSQL logs)", log_panels),
+    (9140, "Locks and blocking", lock_panels),
     (9130, "Top statements and table health", statement_panels),
     (9110, "Database efficiency", efficiency_panels),
 ])

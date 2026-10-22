@@ -133,8 +133,13 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
   - Every Shop dashboard marks rollouts and firing critical Shop alerts on its graphs.
   - *Logs:* log volume, top messages and top pods, filterable by service, level and any field.
   - *Microservices Overview:* RED for all services side by side, plus business metrics.
+  - *CloudNativePG:* PostgreSQL health, replication, WAL and backups, plus slow statements and errors by
+    SQLSTATE from the PostgreSQL logs, lock waits with the sessions holding the locks, top statements and
+    table health.
 - **Alerting:** SLO burn-rate alerts (multi-window, multi-burn-rate), a payment decline rule and
-  **log-based** rules (LogsQL), all evaluated by vmalert.
+  **log-based** rules (LogsQL), all evaluated by vmalert. Data-tier alerts link to their runbook
+  ([docs/runbooks](docs/runbooks/README.md)), which also describes how to investigate across metrics, logs and
+  traces.
 
 ## Getting started
 

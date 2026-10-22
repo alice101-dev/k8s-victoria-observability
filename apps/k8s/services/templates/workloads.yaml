@@ -112,6 +112,14 @@ spec:
                 secretKeyRef:
                   name: {{ $.Values.postgres.secretName }}
                   key: {{ $.Values.postgres.uriKey }}
+            - name: PGAPPNAME
+              value: {{ $name }}
+            {{- $options := list }}
+            {{- range $k, $v := $.Values.postgres.sessionSettings }}
+            {{- $options = append $options (printf "-c %s=%v" $k $v) }}
+            {{- end }}
+            - name: PGOPTIONS
+              value: {{ join " " $options | quote }}
             {{- end }}
             {{- if $svc.redis }}
             - name: REDIS_SENTINEL_ADDRS

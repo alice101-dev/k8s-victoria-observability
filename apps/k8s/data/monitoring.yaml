@@ -53,6 +53,7 @@ spec:
           annotations:
             summary: Shop Redis unreachable from exporter
             description: redis_exporter in {{ $labels.pod }} reported redis_up=0 for 2 minutes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisdown
         - alert: RedisNoSingleMaster
           expr: count(redis_instance_info{namespace="shop", role="master"}) != 1 or absent(redis_instance_info{namespace="shop", role="master"})
           for: 1m
@@ -61,6 +62,7 @@ spec:
           annotations:
             summary: Redis does not have exactly one master
             description: No master means writes fail, two masters mean split brain. Check Sentinel with "sentinel masters" on port 26379.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnosinglemaster
         - alert: RedisReplicasMissing
           expr: max(redis_connected_slaves{namespace="shop"}) < 2
           for: 5m
@@ -69,6 +71,7 @@ spec:
           annotations:
             summary: Redis master has {{ $value }} of 2 replicas connected
             description: Fewer replicas means a failover may lose recent writes or have no candidate at all.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisreplicasmissing
         - alert: RedisMemoryNearLimit
           expr: redis_memory_used_bytes{namespace="shop"} / redis_memory_max_bytes{namespace="shop"} > 0.9 and redis_memory_max_bytes{namespace="shop"} > 0
           for: 10m
@@ -77,6 +80,7 @@ spec:
           annotations:
             summary: Redis memory > 90% of maxmemory
             description: Keys with TTL are being evicted; consider raising maxmemory/limit.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redismemorynearlimit
         - alert: PostgresDown
           expr: cnpg_collector_up{namespace="shop"} == 0
           for: 2m
@@ -85,6 +89,7 @@ spec:
           annotations:
             summary: PostgreSQL {{ $labels.pod }} down
             description: CloudNativePG exporter reported the instance not queryable for 2 minutes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresdown
         - alert: PostgresStandbyMissing
           expr: max(cnpg_pg_replication_streaming_replicas{namespace="shop"}) < 1
           for: 5m
@@ -93,6 +98,7 @@ spec:
           annotations:
             summary: PostgreSQL primary has no streaming standby
             description: Automatic failover is not possible and commits are no longer synchronous (dataDurability preferred).
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresstandbymissing
         - alert: PostgresReplicationLagHigh
           expr: max by (pod) (cnpg_pg_replication_lag{namespace="shop"}) > 30
           for: 5m
@@ -101,6 +107,7 @@ spec:
           annotations:
             summary: PostgreSQL standby {{ $labels.pod }} is {{ $value }}s behind the primary
             description: A failover now would lose the unreplicated transactions; check the standby's disk and network.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresreplicationlaghigh
         - alert: PostgresTooManyConnections
           expr: sum by (pod) (cnpg_backends_total{namespace="shop"}) / on (pod) max by (pod) (cnpg_pg_settings_setting{namespace="shop", name="max_connections"}) > 0.8
           for: 5m
@@ -109,6 +116,7 @@ spec:
           annotations:
             summary: PostgreSQL connections > 80% of max_connections
             description: Check service pool size (DB_MAX_CONNS) or add PgBouncer (CNPG Pooler).
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgrestoomanyconnections
         # Thresholds follow the CloudNativePG recommended alerts.
         - alert: PostgresDiskSpaceLow
           expr: max by (persistentvolumeclaim) (1 - kubelet_volume_stats_available_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"} / kubelet_volume_stats_capacity_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"}) > 0.8
@@ -118,6 +126,7 @@ spec:
           annotations:
             summary: PostgreSQL volume {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full
             description: PostgreSQL stops accepting writes when the disk is full. Grow spec.storage.size (the operator resizes the PVCs) or clean up data.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresdiskspacelow
         - alert: PostgresDiskSpaceCritical
           expr: max by (persistentvolumeclaim) (1 - kubelet_volume_stats_available_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"} / kubelet_volume_stats_capacity_bytes{namespace="shop", persistentvolumeclaim=~"shop-db-[0-9]+(-wal)?"}) > 0.9
           for: 5m
@@ -126,6 +135,7 @@ spec:
           annotations:
             summary: PostgreSQL volume {{ $labels.persistentvolumeclaim }} is {{ $value | humanizePercentage }} full
             description: Writes will fail soon. Grow spec.storage.size now.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresdiskspacecritical
         - alert: PostgresXidAgeHigh
           expr: max by (datname) (cnpg_pg_database_xid_age{namespace="shop"}) > 300000000
           for: 15m
@@ -134,14 +144,36 @@ spec:
           annotations:
             summary: The oldest unfrozen transaction ID in {{ $labels.datname }} is {{ $value }} transactions old
             description: Autovacuum is not keeping up; at ~2 billion PostgreSQL stops writes to prevent transaction ID wraparound. Check long transactions and autovacuum.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresxidagehigh
         - alert: PostgresLongRunningTransaction
           expr: max by (pod) (cnpg_backends_max_tx_duration_seconds{namespace="shop"}) > 300
-          for: 5m
+          for: 1m
           labels:
             severity: warning
           annotations:
             summary: A transaction on {{ $labels.pod }} has been open for {{ $value | humanizeDuration }}
             description: Long transactions hold locks and block vacuum (table bloat, XID age). Find it with pg_stat_activity and fix or terminate it.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgreslongrunningtransaction
+        # PostgreSQL ends such sessions after idle_in_transaction_session_timeout (5min, 30s for the services).
+        - alert: PostgresIdleInTransaction
+          expr: max by (pod, usename, application_name) (cnpg_backends_max_tx_duration_seconds{namespace="shop", state=~"idle in transaction.*"}) > 60
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: A session of {{ $labels.usename }} {{ $labels.application_name }} on {{ $labels.pod }} is idle in a transaction open for {{ $value | humanizeDuration }}
+            description: It holds its locks and blocks vacuum until it commits or PostgreSQL ends it after 5 minutes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresidleintransaction
+        # Application statements give up after lock_timeout (2s), so waits that last are usually DDL or manual sessions.
+        - alert: PostgresSessionsBlocked
+          expr: max by (pod) (cnpg_backends_waiting_total{namespace="shop"}) > 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} session(s) on {{ $labels.pod }} have been waiting on locks for 2 minutes"
+            description: Find the blocker (pid, user, application) in the "Locks and blocking" row of the CloudNativePG dashboard or with pg_blocking_pids(), and end its transaction.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgressessionsblocked
         # archive_timeout forces a WAL switch every 5 minutes, so even an idle primary archives regularly.
         - alert: PostgresWalArchivingStalled
           expr: max((1 - cnpg_pg_replication_in_recovery{namespace="shop"}) * on (pod) cnpg_pg_stat_archiver_seconds_since_last_archival{namespace="shop"}) > 900
@@ -151,6 +183,7 @@ spec:
           annotations:
             summary: No WAL has been archived to the backup store for {{ $value | humanizeDuration }}
             description: Point-in-time recovery is not possible past the last archived WAL, and pg_wal grows until the disk is full. Check the plugin-barman-cloud sidecar logs, the bucket and its IAM.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgreswalarchivingstalled
         # Failures right after a restart are retried and recover; only sustained failures matter.
         - alert: PostgresWalArchivingFailing
           expr: increase(cnpg_pg_stat_archiver_failed_count{namespace="shop"}[10m]) > 0
@@ -160,6 +193,7 @@ spec:
           annotations:
             summary: WAL archiving on {{ $labels.pod }} keeps failing and retrying
             description: Archiving still progresses between failures (otherwise PostgresWalArchivingStalled fires). Check the plugin-barman-cloud sidecar logs.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgreswalarchivingfailing
         # Backup metrics come from the Barman Cloud plugin (barman_cloud_*) or the in-core exporter.
         - alert: PostgresBackupTooOld
           expr: time() - max({__name__=~"barman_cloud_cloudnative_pg_io_last_available_backup_timestamp|cnpg_collector_last_available_backup_timestamp", namespace="shop"}) > 26 * 3600
@@ -169,6 +203,7 @@ spec:
           annotations:
             summary: The last successful PostgreSQL base backup is {{ $value | humanizeDuration }} old
             description: The daily ScheduledBackup shop-db-daily did not complete. Check "kubectl -n shop get backups" and the plugin-barman-cloud sidecar logs.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresbackuptooold
         - alert: PostgresBackupFailed
           expr: max({__name__=~"barman_cloud_cloudnative_pg_io_last_failed_backup_timestamp|cnpg_collector_last_failed_backup_timestamp", namespace="shop"}) > max({__name__=~"barman_cloud_cloudnative_pg_io_last_available_backup_timestamp|cnpg_collector_last_available_backup_timestamp", namespace="shop"})
           for: 15m
@@ -177,3 +212,26 @@ spec:
           annotations:
             summary: The most recent PostgreSQL backup attempt failed
             description: A backup failed after the last successful one. Check "kubectl -n shop get backups" for the error.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresbackupfailed
+    # LogsQL rules on the PostgreSQL logs, evaluated by vmalert against VictoriaLogs over each interval.
+    - name: shop-data-logs
+      type: vlogs
+      interval: 5m
+      rules:
+        # log_lock_waits logs each wait longer than deadlock_timeout (1s); 55P03 is a lock_timeout cancel.
+        - alert: PostgresLockContention
+          expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"} (record.message:"still waiting for" or record.sql_state_code:55P03) | copy kubernetes.pod_name as pod | stats by (pod) count() as lock_events | filter lock_events:>=5'
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }}: {{ $value }} lock waits over 1s or lock timeouts in 5 minutes"
+            description: Requests wait for rows or tables another transaction holds. The "Locks and blocking" row of the CloudNativePG dashboard shows the waiting statements and the pids holding the locks.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgreslockcontention
+        - alert: PostgresDeadlocks
+          expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"} record.sql_state_code:40P01 | copy kubernetes.pod_name as pod | stats by (pod) count() as deadlocks | filter deadlocks:>0'
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.pod }}: {{ $value }} deadlock(s) in 5 minutes"
+            description: PostgreSQL cancelled a transaction to break a deadlock; the log line's detail lists both statements.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/postgres.md#postgresdeadlocks

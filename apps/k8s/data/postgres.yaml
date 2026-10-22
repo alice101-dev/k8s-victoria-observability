@@ -49,7 +49,12 @@ spec:
       random_page_cost: "1.1"
       # Slow queries (>250ms) are logged → searchable in VictoriaLogs.
       log_min_duration_statement: 250ms
+      # Waits longer than deadlock_timeout (1s) are logged with the pids holding the lock.
       log_lock_waits: "on"
+      # Safety net for every session (manual psql, jobs): a transaction left open holds its locks and
+      # blocks vacuum. Application sessions get tighter limits (postgres.sessionSettings in the
+      # shop-services values).
+      idle_in_transaction_session_timeout: 5min
       log_checkpoints: "on"
       # The operator adds shared_preload_libraries & CREATE EXTENSION pg_stat_statements automatically.
       pg_stat_statements.max: "1000"
@@ -78,6 +83,9 @@ spec:
   # Extra exporter metrics: top statements (pg_stat_statements) and table health (postgres-monitoring.yaml).
   # The operator always puts its default queries first; listing them keeps Argo CD free of drift.
   monitoring:
+    # The exporter caches query results for this long (default 30s). With the default and a 30s scrape
+    # interval (two vmagent replicas), every other sample is a cached copy: 60s effective resolution.
+    metricsQueriesTTL: 20s
     customQueriesConfigMap:
       - name: cnpg-default-monitoring
         key: queries

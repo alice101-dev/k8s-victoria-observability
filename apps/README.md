@@ -67,6 +67,11 @@ k8s/
 - Redis runs 3 pods (one per node), each with redis + Sentinel. Sentinel promotes a replica about 5s
   after the master is lost, and services discover the master through `redis-sentinel:26379`
   (go-redis `FailoverClient`). A master that is shut down hands over to a replica first (preStop).
+- Application sessions run with `lock_timeout` 2s, `statement_timeout` 5s and
+  `idle_in_transaction_session_timeout` 30s, and with `application_name` set to the service name
+  (`postgres.sessionSettings`, sent as `PGOPTIONS`/`PGAPPNAME`). A request stuck behind a lock fails fast with
+  SQLSTATE 55P03 instead of holding a connection, and every session, metric and log line names its service.
+  Other sessions are ended after 5 minutes idle in a transaction.
 - Trace sampling is 100% (`otel.samplerArg: "1.0"`); lower it in `k8s/services/values.yaml` for production.
 - Secrets are not stored in Git: `shop-db-app` is created by CloudNativePG and `redis-auth` by an
   External Secrets password generator (`refreshPolicy: CreatedOnce`).
@@ -100,8 +105,10 @@ Alerts shipped with the application (VMRule):
 - Data tier: `RedisDown`, `RedisNoSingleMaster`, `RedisReplicasMissing`, `RedisMemoryNearLimit`,
   `PostgresDown`, `PostgresStandbyMissing`, `PostgresReplicationLagHigh`, `PostgresTooManyConnections`,
   `PostgresDiskSpaceLow`/`Critical`, `PostgresXidAgeHigh`, `PostgresLongRunningTransaction`,
-  `PostgresWalArchivingStalled`, `PostgresWalArchivingFailing`, `PostgresBackupTooOld`,
-  `PostgresBackupFailed`.
+  `PostgresIdleInTransaction`, `PostgresSessionsBlocked`, `PostgresWalArchivingStalled`,
+  `PostgresWalArchivingFailing`, `PostgresBackupTooOld`, `PostgresBackupFailed`, and from the PostgreSQL
+  logs (LogsQL) `PostgresLockContention` and `PostgresDeadlocks`. Each links to its section in
+  [docs/runbooks](../docs/runbooks/README.md) (`runbook_url`).
 
 ## Restore drill
 

@@ -5826,7 +5826,7 @@
           "id": 9102,
           "type": "timeseries",
           "title": "Errors by severity and SQLSTATE",
-          "description": "ERROR/FATAL/PANIC log lines. Common SQLSTATEs: 57P03 server starting up (restarts), 40P01 deadlock, 23505 unique violation, 53300 too many connections, 57014 statement timeout.",
+          "description": "ERROR/FATAL/PANIC log lines. Common SQLSTATEs: 55P03 lock_timeout (lock contention, see Locks and blocking), 57014 statement cancelled (statement_timeout, or \"due to user request\": the client gave up, e.g. an application timeout), 25P03 idle-in-transaction timeout, 40P01 deadlock, 23505 unique violation, 53300 too many connections, 57P03 server starting up (restarts).",
           "datasource": {
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
@@ -5917,6 +5917,316 @@
       ]
     },
     {
+      "id": 9140,
+      "type": "row",
+      "title": "Locks and blocking",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "panels": [
+        {
+          "id": 9141,
+          "type": "timeseries",
+          "title": "Lock events",
+          "description": "Lock waits longer than deadlock_timeout (1s), statements cancelled by lock_timeout, deadlocks and sessions terminated by idle_in_transaction_session_timeout. Application sessions use lock_timeout 2s, so contention on a hot row shows as lock timeouts and checkout errors.",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "bars",
+                "fillOpacity": 60,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.message:\"still waiting for\" | stats count() events",
+              "legendFormat": "waits over 1s",
+              "queryType": "statsRange",
+              "editorMode": "code",
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "A"
+            },
+            {
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.sql_state_code:55P03 | stats count() events",
+              "legendFormat": "lock timeouts (55P03)",
+              "queryType": "statsRange",
+              "editorMode": "code",
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "B"
+            },
+            {
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.sql_state_code:40P01 | stats count() events",
+              "legendFormat": "deadlocks (40P01)",
+              "queryType": "statsRange",
+              "editorMode": "code",
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "C"
+            },
+            {
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.sql_state_code:25P03 | stats count() events",
+              "legendFormat": "idle-in-transaction timeouts (25P03)",
+              "queryType": "statsRange",
+              "editorMode": "code",
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "D"
+            }
+          ]
+        },
+        {
+          "id": 9143,
+          "type": "logs",
+          "title": "Latest lock events",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "description": "Newest waits (with the pids holding the lock), acquisitions after a wait, lock timeouts, deadlocks and idle-in-transaction terminations. Search a blocker's other log lines with record.process_id:<pid> in Explore.",
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 53
+          },
+          "options": {
+            "showTime": true,
+            "wrapLogMessage": true,
+            "enableLogDetails": true,
+            "sortOrder": "Descending",
+            "dedupStrategy": "none"
+          },
+          "targets": [
+            {
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "A",
+              "queryType": "instant",
+              "editorMode": "code",
+              "maxLines": 100,
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) (record.message:~\"^process [0-9]+ (still waiting for|acquired) \" or record.sql_state_code:in(55P03, 40P01, 25P03)) | format \"<record.error_severity> <record.sql_state_code> [<kubernetes.pod_name>] <record.application_name> pid <record.process_id>: <record.message>. <record.detail> | <record.query>\" as _msg | copy record.error_severity as level"
+            }
+          ]
+        },
+        {
+          "id": 9142,
+          "type": "table",
+          "title": "Lock waits by statement and blocker",
+          "description": "Waits over 1s in the selected range, grouped by the waiting application and statement, the lock mode, what it waits on (a row's transaction, a relation, an advisory lock) and the pids holding the lock. The blocker's user and application are in its own log lines (record.process_id:<pid>).",
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 61
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Waits"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Lock"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 150
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "On"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Blocker pids"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Application"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 140
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "sortBy": [
+              {
+                "displayName": "Waits",
+                "desc": true
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "labelsToFields",
+              "options": {
+                "mode": "columns",
+                "valueLabel": "__name__"
+              }
+            },
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "record.application_name": 0,
+                  "record.query": 1,
+                  "lock_mode": 2,
+                  "lock_object": 3,
+                  "blockers": 4,
+                  "waits": 5
+                },
+                "renameByName": {
+                  "record.application_name": "Application",
+                  "record.query": "Waiting statement",
+                  "lock_mode": "Lock",
+                  "lock_object": "On",
+                  "blockers": "Blocker pids",
+                  "waits": "Waits"
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "datasource": {
+                "type": "victoriametrics-logs-datasource",
+                "uid": "VictoriaLogs"
+              },
+              "refId": "A",
+              "queryType": "stats",
+              "editorMode": "code",
+              "expr": "{kubernetes.pod_namespace=\"$namespace\", kubernetes.container_name=\"postgres\"} \"kubernetes.pod_labels.cnpg.io/cluster\":in($cluster) record.message:\"still waiting for\" | extract \"still waiting for <lock_mode> on <lock_object> \" from record.message | extract \"holding the lock: <blockers>. Wait\" from record.detail | stats by (record.application_name, record.query, lock_mode, lock_object, blockers) count() waits | sort by (waits desc) | limit 20"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": 9130,
       "type": "row",
       "title": "Top statements and table health",
@@ -5925,7 +6235,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 53
       },
       "panels": [
         {
@@ -5941,7 +6251,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 53
+            "y": 54
           },
           "fieldConfig": {
             "defaults": {
@@ -6233,7 +6543,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 62
+            "y": 63
           },
           "fieldConfig": {
             "defaults": {
@@ -6288,7 +6598,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 62
+            "y": 63
           },
           "fieldConfig": {
             "defaults": {
@@ -6343,7 +6653,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 70
+            "y": 71
           },
           "fieldConfig": {
             "defaults": {
@@ -6676,7 +6986,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 78
+            "y": 79
           },
           "fieldConfig": {
             "defaults": {
@@ -6731,7 +7041,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 78
+            "y": 79
           },
           "fieldConfig": {
             "defaults": {
@@ -6794,7 +7104,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 54
       },
       "panels": [
         {
@@ -6810,7 +7120,7 @@
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 54
+            "y": 55
           },
           "fieldConfig": {
             "defaults": {
@@ -6877,7 +7187,7 @@
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 54
+            "y": 55
           },
           "fieldConfig": {
             "defaults": {
@@ -6944,7 +7254,7 @@
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 54
+            "y": 55
           },
           "fieldConfig": {
             "defaults": {
@@ -7007,7 +7317,7 @@
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 54
+            "y": 55
           },
           "fieldConfig": {
             "defaults": {
@@ -7070,7 +7380,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -7141,7 +7451,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -7204,7 +7514,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 55
       },
       "id": 35,
       "panels": [
@@ -7246,7 +7556,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 55
+            "y": 56
           },
           "id": 424,
           "options": {
@@ -7337,7 +7647,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 56
           },
           "id": 426,
           "options": {
@@ -7426,7 +7736,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 63
+            "y": 64
           },
           "id": 564,
           "options": {
@@ -7528,7 +7838,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 70
+            "y": 71
           },
           "id": 44,
           "options": {
@@ -7680,7 +7990,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 70
+            "y": 71
           },
           "id": 46,
           "options": {
@@ -7787,7 +8097,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 78
+            "y": 79
           },
           "id": 22,
           "options": {
@@ -7885,7 +8195,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 78
+            "y": 79
           },
           "id": 2,
           "options": {
@@ -7938,7 +8248,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 56
       },
       "id": 37,
       "panels": [
@@ -8005,7 +8315,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 56
+            "y": 57
           },
           "id": 6,
           "options": {
@@ -8111,7 +8421,7 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 56
+            "y": 57
           },
           "id": 52,
           "options": {
@@ -8219,7 +8529,7 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 56
+            "y": 57
           },
           "id": 53,
           "options": {
@@ -8313,7 +8623,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 64
+            "y": 65
           },
           "id": 725,
           "options": {
@@ -8366,7 +8676,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 57
       },
       "id": 18,
       "panels": [
@@ -8438,7 +8748,7 @@
             "h": 8,
             "w": 6,
             "x": 0,
-            "y": 62
+            "y": 63
           },
           "id": 16,
           "options": {
@@ -8534,7 +8844,7 @@
             "h": 8,
             "w": 6,
             "x": 6,
-            "y": 62
+            "y": 63
           },
           "id": 14,
           "options": {
@@ -8631,7 +8941,7 @@
             "h": 8,
             "w": 6,
             "x": 12,
-            "y": 62
+            "y": 63
           },
           "id": 59,
           "options": {
@@ -8729,7 +9039,7 @@
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 62
+            "y": 63
           },
           "id": 20,
           "options": {
@@ -8775,7 +9085,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 70
+            "y": 71
           },
           "fieldConfig": {
             "defaults": {
@@ -8860,7 +9170,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 70
+            "y": 71
           },
           "fieldConfig": {
             "defaults": {
@@ -8923,7 +9233,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 58
       },
       "id": 231,
       "panels": [
@@ -8961,7 +9271,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 58
+            "y": 59
           },
           "heatmap": {},
           "hideZeroBuckets": false,
@@ -9102,7 +9412,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 58
+            "y": 59
           },
           "id": 235,
           "options": {
@@ -9154,7 +9464,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 59
       },
       "id": 239,
       "panels": [
@@ -9171,7 +9481,7 @@
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 59
+            "y": 60
           },
           "fieldConfig": {
             "defaults": {
@@ -9250,7 +9560,7 @@
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 59
+            "y": 60
           },
           "fieldConfig": {
             "defaults": {
@@ -9327,7 +9637,7 @@
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 59
+            "y": 60
           },
           "fieldConfig": {
             "defaults": {
@@ -9386,7 +9696,7 @@
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 59
+            "y": 60
           },
           "fieldConfig": {
             "defaults": {
@@ -9453,7 +9763,7 @@
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 59
+            "y": 60
           },
           "fieldConfig": {
             "defaults": {
@@ -9520,7 +9830,7 @@
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 59
+            "y": 60
           },
           "fieldConfig": {
             "defaults": {
@@ -9583,7 +9893,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 63
+            "y": 64
           },
           "fieldConfig": {
             "defaults": {
@@ -9654,7 +9964,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 63
+            "y": 64
           },
           "fieldConfig": {
             "defaults": {
@@ -9725,7 +10035,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 71
+            "y": 72
           },
           "fieldConfig": {
             "defaults": {
@@ -9821,7 +10131,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 71
+            "y": 72
           },
           "fieldConfig": {
             "defaults": {
@@ -9903,7 +10213,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 79
+            "y": 80
           },
           "options": {
             "showTime": true,
@@ -9947,7 +10257,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 60
       },
       "id": 293,
       "panels": [
@@ -10016,7 +10326,7 @@
             "h": 6,
             "w": 5,
             "x": 0,
-            "y": 60
+            "y": 61
           },
           "id": 295,
           "options": {
@@ -10130,7 +10440,7 @@
             "h": 6,
             "w": 5,
             "x": 5,
-            "y": 60
+            "y": 61
           },
           "id": 296,
           "options": {
@@ -10197,7 +10507,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 61
       },
       "id": 794,
       "panels": [
@@ -10267,7 +10577,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 84
+            "y": 85
           },
           "id": 792,
           "options": {
@@ -10355,7 +10665,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 61
+        "y": 62
       },
       "id": 696,
       "panels": [
@@ -10411,7 +10721,7 @@
             "h": 2,
             "w": 4,
             "x": 0,
-            "y": 67
+            "y": 68
           },
           "id": 697,
           "options": {
@@ -10512,7 +10822,7 @@
             "h": 2,
             "w": 4,
             "x": 4,
-            "y": 67
+            "y": 68
           },
           "id": 702,
           "options": {
@@ -10613,7 +10923,7 @@
             "h": 2,
             "w": 4,
             "x": 8,
-            "y": 67
+            "y": 68
           },
           "id": 698,
           "options": {
@@ -10714,7 +11024,7 @@
             "h": 2,
             "w": 4,
             "x": 12,
-            "y": 67
+            "y": 68
           },
           "id": 704,
           "options": {
@@ -10815,7 +11125,7 @@
             "h": 2,
             "w": 4,
             "x": 16,
-            "y": 67
+            "y": 68
           },
           "id": 703,
           "options": {
@@ -10937,7 +11247,7 @@
             "h": 8,
             "w": 4,
             "x": 0,
-            "y": 69
+            "y": 70
           },
           "id": 746,
           "options": {
@@ -11066,7 +11376,7 @@
             "h": 8,
             "w": 4,
             "x": 4,
-            "y": 69
+            "y": 70
           },
           "id": 767,
           "options": {
@@ -11194,7 +11504,7 @@
             "h": 8,
             "w": 4,
             "x": 8,
-            "y": 69
+            "y": 70
           },
           "id": 768,
           "options": {
@@ -11322,7 +11632,7 @@
             "h": 8,
             "w": 4,
             "x": 12,
-            "y": 69
+            "y": 70
           },
           "id": 790,
           "options": {
@@ -11452,7 +11762,7 @@
             "h": 8,
             "w": 4,
             "x": 16,
-            "y": 69
+            "y": 70
           },
           "id": 769,
           "options": {

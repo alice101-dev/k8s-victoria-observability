@@ -68,6 +68,15 @@ postgres:
   # Secret created by CloudNativePG for Cluster "shop-db".
   secretName: shop-db-app
   uriKey: uri
+  # Server-side limits for every application session, sent at connect time (PGOPTIONS, read by pgx
+  # like libpq). A statement stuck behind a lock fails after lock_timeout with SQLSTATE 55P03 instead of
+  # piling up connections; the services also set application_name (PGAPPNAME) to their own name, so
+  # pg_stat_activity, the exporter metrics and the PostgreSQL logs show which service a session is.
+  # Migrations run under the same limits: a migration that needs more must SET its own.
+  sessionSettings:
+    lock_timeout: 2s
+    statement_timeout: 5s
+    idle_in_transaction_session_timeout: 30s
 redis:
   # Sentinel endpoints and master name (apps/k8s/data/redis.yaml); clients follow failovers.
   sentinelAddrs: redis-sentinel:26379
