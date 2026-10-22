@@ -11,7 +11,7 @@ metadata:
 data:
   queries.yaml: |
     # Most expensive statements by total execution time (cluster-wide view, application roles only:
-    # superuser statements such as the exporter's own queries are left out).
+    # superusers and the operator's own roles, e.g. cnpg_metrics_exporter, are left out).
     pg_stat_statements_top:
       primary: true
       query: |
@@ -28,7 +28,7 @@ data:
         FROM pg_stat_statements s
         JOIN pg_database d ON d.oid = s.dbid
         JOIN pg_roles r ON r.oid = s.userid
-        WHERE s.toplevel AND NOT r.rolsuper
+        WHERE s.toplevel AND NOT r.rolsuper AND r.rolname NOT LIKE 'cnpg\_%'
         ORDER BY s.total_exec_time DESC
         LIMIT 10
       metrics:

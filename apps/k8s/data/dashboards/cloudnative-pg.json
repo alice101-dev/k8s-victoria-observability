@@ -5917,6 +5917,874 @@
       ]
     },
     {
+      "id": 9130,
+      "type": "row",
+      "title": "Top statements and table health",
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 52
+      },
+      "panels": [
+        {
+          "id": 9131,
+          "type": "table",
+          "title": "Top statements (pg_stat_statements)",
+          "description": "The 10 statements with the most total execution time (application roles), measured over the selected range. Temp written > 0 means the statement spilled to disk: it needs more work_mem or an index.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 9,
+            "w": 24,
+            "x": 0,
+            "y": 53
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Time"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 3
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Calls"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Mean"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 4
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Rows"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 80
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Cache hit"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percentunit"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Temp written"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "datname"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 70
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "queryid"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "string"
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 160
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "sortBy": [
+              {
+                "displayName": "Time",
+                "desc": true
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "datname": 0,
+                  "queryid": 1,
+                  "query": 2,
+                  "Value #A": 3,
+                  "Value #B": 4,
+                  "Value #C": 5,
+                  "Value #D": 6,
+                  "Value #E": 7,
+                  "Value #F": 8
+                },
+                "renameByName": {
+                  "Value #A": "Time",
+                  "Value #B": "Calls",
+                  "Value #C": "Mean",
+                  "Value #D": "Rows",
+                  "Value #E": "Cache hit",
+                  "Value #F": "Temp written"
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "expr": "sum by (datname, queryid, query) (increase(cnpg_pg_stat_statements_top_total_exec_seconds{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "B",
+              "expr": "sum by (datname, queryid, query) (increase(cnpg_pg_stat_statements_top_calls{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "C",
+              "expr": "sum by (datname, queryid, query) (increase(cnpg_pg_stat_statements_top_total_exec_seconds{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]) / increase(cnpg_pg_stat_statements_top_calls{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "D",
+              "expr": "sum by (datname, queryid, query) (increase(cnpg_pg_stat_statements_top_rows{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "E",
+              "expr": "sum by (datname, queryid, query) (increase(cnpg_pg_stat_statements_top_shared_blks_hit{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]) / (increase(cnpg_pg_stat_statements_top_shared_blks_hit{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]) + increase(cnpg_pg_stat_statements_top_shared_blks_read{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range])))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "F",
+              "expr": "sum by (datname, queryid, query) (increase(cnpg_pg_stat_statements_top_temp_blks_written{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]) * 8192)",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 9132,
+          "type": "timeseries",
+          "title": "Execution time per statement",
+          "description": "Database time spent per second on each top statement; the stacked total is the load the application puts on PostgreSQL.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 62
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "s",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "normal"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (query) (rate(cnpg_pg_stat_statements_top_total_exec_seconds{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval]))",
+              "legendFormat": "{{query}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            }
+          ]
+        },
+        {
+          "id": 9133,
+          "type": "timeseries",
+          "title": "Calls per second per statement",
+          "description": "Execution rate of each top statement.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 62
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (query) (rate(cnpg_pg_stat_statements_top_calls{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval]))",
+              "legendFormat": "{{query}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            }
+          ]
+        },
+        {
+          "id": 9134,
+          "type": "table",
+          "title": "Table health (pg_stat_user_tables)",
+          "description": "Dead % above 10-20% means autovacuum is behind (bloat, slower scans). Autovacuum waits for at least 50 dead rows (autovacuum_vacuum_threshold), so a high % on a table with few rows is normal. Many sequential scans on a large table usually mean a missing index; on tiny tables they are normal.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 24,
+            "x": 0,
+            "y": 70
+          },
+          "fieldConfig": {
+            "defaults": {
+              "custom": {
+                "cellOptions": {
+                  "type": "auto"
+                },
+                "inspect": true
+              }
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Dead %"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "percentunit"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 1
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  },
+                  {
+                    "id": "custom.cellOptions",
+                    "value": {
+                      "type": "color-text"
+                    }
+                  },
+                  {
+                    "id": "thresholds",
+                    "value": {
+                      "mode": "absolute",
+                      "steps": [
+                        {
+                          "color": "green",
+                          "value": null
+                        },
+                        {
+                          "color": "orange",
+                          "value": 0.1
+                        },
+                        {
+                          "color": "red",
+                          "value": 0.2
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Last vacuum"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "s"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 110
+                  },
+                  {
+                    "id": "mappings",
+                    "value": [
+                      {
+                        "type": "range",
+                        "options": {
+                          "from": 1000000000.0,
+                          "to": null,
+                          "result": {
+                            "text": "never"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Size"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "bytes"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Live rows"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Dead rows"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Seq scans"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byName",
+                  "options": "Index scans"
+                },
+                "properties": [
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "decimals",
+                    "value": 0
+                  },
+                  {
+                    "id": "custom.width",
+                    "value": 90
+                  }
+                ]
+              }
+            ]
+          },
+          "options": {
+            "showHeader": true,
+            "cellHeight": "sm",
+            "sortBy": [
+              {
+                "displayName": "Size",
+                "desc": true
+              }
+            ]
+          },
+          "transformations": [
+            {
+              "id": "merge",
+              "options": {}
+            },
+            {
+              "id": "organize",
+              "options": {
+                "excludeByName": {
+                  "Time": true
+                },
+                "indexByName": {
+                  "datname": 0,
+                  "schemaname": 1,
+                  "relname": 2,
+                  "Value #A": 3,
+                  "Value #B": 4,
+                  "Value #C": 5,
+                  "Value #D": 6,
+                  "Value #E": 7,
+                  "Value #F": 8,
+                  "Value #G": 9
+                },
+                "renameByName": {
+                  "Value #A": "Live rows",
+                  "Value #B": "Dead rows",
+                  "Value #C": "Dead %",
+                  "Value #D": "Seq scans",
+                  "Value #E": "Index scans",
+                  "Value #F": "Last vacuum",
+                  "Value #G": "Size"
+                }
+              }
+            }
+          ],
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "expr": "sum by (datname, schemaname, relname) (cnpg_pg_stat_user_tables_n_live_tup{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "B",
+              "expr": "sum by (datname, schemaname, relname) (cnpg_pg_stat_user_tables_n_dead_tup{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "C",
+              "expr": "sum by (datname, schemaname, relname) (cnpg_pg_stat_user_tables_n_dead_tup{namespace=~\"$namespace\", pod=~\"$instances\"} / (cnpg_pg_stat_user_tables_n_live_tup{namespace=~\"$namespace\", pod=~\"$instances\"} + cnpg_pg_stat_user_tables_n_dead_tup{namespace=~\"$namespace\", pod=~\"$instances\"}))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "D",
+              "expr": "sum by (datname, schemaname, relname) (increase(cnpg_pg_stat_user_tables_seq_scan{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "E",
+              "expr": "sum by (datname, schemaname, relname) (increase(cnpg_pg_stat_user_tables_idx_scan{namespace=~\"$namespace\", pod=~\"$instances\"}[$__range]))",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "F",
+              "expr": "sum by (datname, schemaname, relname) (time() - cnpg_pg_stat_user_tables_last_vacuum_time{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "G",
+              "expr": "sum by (datname, schemaname, relname) (cnpg_pg_stat_user_tables_total_bytes{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "instant": true,
+              "range": false,
+              "format": "table"
+            }
+          ]
+        },
+        {
+          "id": 9135,
+          "type": "timeseries",
+          "title": "Dead rows by table",
+          "description": "Drops when autovacuum runs; a steady climb means vacuum cannot keep up (long transactions, autovacuum settings).",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 78
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "short",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "max by (relname) (cnpg_pg_stat_user_tables_n_dead_tup{namespace=~\"$namespace\", pod=~\"$instances\"})",
+              "legendFormat": "{{relname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            }
+          ]
+        },
+        {
+          "id": 9136,
+          "type": "timeseries",
+          "title": "Sequential and index scans per second",
+          "description": "How each table is read.",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 78
+          },
+          "fieldConfig": {
+            "defaults": {
+              "unit": "ops",
+              "custom": {
+                "drawStyle": "line",
+                "fillOpacity": 10,
+                "lineWidth": 1,
+                "showPoints": "never",
+                "spanNulls": true,
+                "stacking": {
+                  "mode": "none"
+                }
+              }
+            },
+            "overrides": []
+          },
+          "options": {
+            "legend": {
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "multi",
+              "sort": "desc"
+            }
+          },
+          "targets": [
+            {
+              "expr": "sum by (relname) (rate(cnpg_pg_stat_user_tables_seq_scan{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval]))",
+              "legendFormat": "seq {{relname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "A",
+              "range": true
+            },
+            {
+              "expr": "sum by (relname) (rate(cnpg_pg_stat_user_tables_idx_scan{namespace=~\"$namespace\", pod=~\"$instances\"}[$__rate_interval]))",
+              "legendFormat": "index {{relname}}",
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_PROMETHEUS}"
+              },
+              "refId": "B",
+              "range": true
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": 9110,
       "type": "row",
       "title": "Database efficiency",
@@ -5925,7 +6793,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 52
+        "y": 53
       },
       "panels": [
         {
@@ -5941,7 +6809,7 @@
             "h": 4,
             "w": 6,
             "x": 0,
-            "y": 53
+            "y": 54
           },
           "fieldConfig": {
             "defaults": {
@@ -6008,7 +6876,7 @@
             "h": 4,
             "w": 6,
             "x": 6,
-            "y": 53
+            "y": 54
           },
           "fieldConfig": {
             "defaults": {
@@ -6075,7 +6943,7 @@
             "h": 4,
             "w": 6,
             "x": 12,
-            "y": 53
+            "y": 54
           },
           "fieldConfig": {
             "defaults": {
@@ -6138,7 +7006,7 @@
             "h": 4,
             "w": 6,
             "x": 18,
-            "y": 53
+            "y": 54
           },
           "fieldConfig": {
             "defaults": {
@@ -6201,7 +7069,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 57
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -6272,7 +7140,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 57
+            "y": 58
           },
           "fieldConfig": {
             "defaults": {
@@ -6335,7 +7203,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 53
+        "y": 54
       },
       "id": 35,
       "panels": [
@@ -6377,7 +7245,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 54
+            "y": 55
           },
           "id": 424,
           "options": {
@@ -6468,7 +7336,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 54
+            "y": 55
           },
           "id": 426,
           "options": {
@@ -6557,7 +7425,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 62
+            "y": 63
           },
           "id": 564,
           "options": {
@@ -6659,7 +7527,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 70
           },
           "id": 44,
           "options": {
@@ -6811,7 +7679,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 70
           },
           "id": 46,
           "options": {
@@ -6918,7 +7786,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 77
+            "y": 78
           },
           "id": 22,
           "options": {
@@ -7016,7 +7884,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 77
+            "y": 78
           },
           "id": 2,
           "options": {
@@ -7069,7 +7937,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 54
+        "y": 55
       },
       "id": 37,
       "panels": [
@@ -7136,7 +8004,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 55
+            "y": 56
           },
           "id": 6,
           "options": {
@@ -7242,7 +8110,7 @@
             "h": 8,
             "w": 8,
             "x": 8,
-            "y": 55
+            "y": 56
           },
           "id": 52,
           "options": {
@@ -7350,7 +8218,7 @@
             "h": 8,
             "w": 8,
             "x": 16,
-            "y": 55
+            "y": 56
           },
           "id": 53,
           "options": {
@@ -7444,7 +8312,7 @@
             "h": 8,
             "w": 8,
             "x": 0,
-            "y": 63
+            "y": 64
           },
           "id": 725,
           "options": {
@@ -7497,7 +8365,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 55
+        "y": 56
       },
       "id": 18,
       "panels": [
@@ -7569,7 +8437,7 @@
             "h": 8,
             "w": 6,
             "x": 0,
-            "y": 61
+            "y": 62
           },
           "id": 16,
           "options": {
@@ -7665,7 +8533,7 @@
             "h": 8,
             "w": 6,
             "x": 6,
-            "y": 61
+            "y": 62
           },
           "id": 14,
           "options": {
@@ -7762,7 +8630,7 @@
             "h": 8,
             "w": 6,
             "x": 12,
-            "y": 61
+            "y": 62
           },
           "id": 59,
           "options": {
@@ -7860,7 +8728,7 @@
             "h": 8,
             "w": 6,
             "x": 18,
-            "y": 61
+            "y": 62
           },
           "id": 20,
           "options": {
@@ -7906,7 +8774,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 70
           },
           "fieldConfig": {
             "defaults": {
@@ -7991,7 +8859,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 70
           },
           "fieldConfig": {
             "defaults": {
@@ -8054,7 +8922,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 56
+        "y": 57
       },
       "id": 231,
       "panels": [
@@ -8092,7 +8960,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 57
+            "y": 58
           },
           "heatmap": {},
           "hideZeroBuckets": false,
@@ -8233,7 +9101,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 57
+            "y": 58
           },
           "id": 235,
           "options": {
@@ -8285,7 +9153,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 57
+        "y": 58
       },
       "id": 239,
       "panels": [
@@ -8302,7 +9170,7 @@
             "h": 4,
             "w": 4,
             "x": 0,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -8381,7 +9249,7 @@
             "h": 4,
             "w": 4,
             "x": 4,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -8458,7 +9326,7 @@
             "h": 4,
             "w": 4,
             "x": 8,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -8517,7 +9385,7 @@
             "h": 4,
             "w": 4,
             "x": 12,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -8584,7 +9452,7 @@
             "h": 4,
             "w": 4,
             "x": 16,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -8651,7 +9519,7 @@
             "h": 4,
             "w": 4,
             "x": 20,
-            "y": 58
+            "y": 59
           },
           "fieldConfig": {
             "defaults": {
@@ -8714,7 +9582,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 62
+            "y": 63
           },
           "fieldConfig": {
             "defaults": {
@@ -8785,7 +9653,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 62
+            "y": 63
           },
           "fieldConfig": {
             "defaults": {
@@ -8856,7 +9724,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 70
+            "y": 71
           },
           "fieldConfig": {
             "defaults": {
@@ -8952,7 +9820,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 70
+            "y": 71
           },
           "fieldConfig": {
             "defaults": {
@@ -9034,7 +9902,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 78
+            "y": 79
           },
           "options": {
             "showTime": true,
@@ -9078,7 +9946,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 58
+        "y": 59
       },
       "id": 293,
       "panels": [
@@ -9147,7 +10015,7 @@
             "h": 6,
             "w": 5,
             "x": 0,
-            "y": 59
+            "y": 60
           },
           "id": 295,
           "options": {
@@ -9261,7 +10129,7 @@
             "h": 6,
             "w": 5,
             "x": 5,
-            "y": 59
+            "y": 60
           },
           "id": 296,
           "options": {
@@ -9328,7 +10196,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 60
       },
       "id": 794,
       "panels": [
@@ -9398,7 +10266,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 83
+            "y": 84
           },
           "id": 792,
           "options": {
@@ -9486,7 +10354,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 60
+        "y": 61
       },
       "id": 696,
       "panels": [
@@ -9542,7 +10410,7 @@
             "h": 2,
             "w": 4,
             "x": 0,
-            "y": 66
+            "y": 67
           },
           "id": 697,
           "options": {
@@ -9643,7 +10511,7 @@
             "h": 2,
             "w": 4,
             "x": 4,
-            "y": 66
+            "y": 67
           },
           "id": 702,
           "options": {
@@ -9744,7 +10612,7 @@
             "h": 2,
             "w": 4,
             "x": 8,
-            "y": 66
+            "y": 67
           },
           "id": 698,
           "options": {
@@ -9845,7 +10713,7 @@
             "h": 2,
             "w": 4,
             "x": 12,
-            "y": 66
+            "y": 67
           },
           "id": 704,
           "options": {
@@ -9946,7 +10814,7 @@
             "h": 2,
             "w": 4,
             "x": 16,
-            "y": 66
+            "y": 67
           },
           "id": 703,
           "options": {
@@ -10068,7 +10936,7 @@
             "h": 8,
             "w": 4,
             "x": 0,
-            "y": 68
+            "y": 69
           },
           "id": 746,
           "options": {
@@ -10197,7 +11065,7 @@
             "h": 8,
             "w": 4,
             "x": 4,
-            "y": 68
+            "y": 69
           },
           "id": 767,
           "options": {
@@ -10325,7 +11193,7 @@
             "h": 8,
             "w": 4,
             "x": 8,
-            "y": 68
+            "y": 69
           },
           "id": 768,
           "options": {
@@ -10453,7 +11321,7 @@
             "h": 8,
             "w": 4,
             "x": 12,
-            "y": 68
+            "y": 69
           },
           "id": 790,
           "options": {
@@ -10583,7 +11451,7 @@
             "h": 8,
             "w": 4,
             "x": 16,
-            "y": 68
+            "y": 69
           },
           "id": 769,
           "options": {

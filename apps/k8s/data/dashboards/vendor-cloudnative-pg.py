@@ -13,6 +13,8 @@ variable expects that label to hold the CloudNativePG cluster name (set by the C
   risk (RPO), WAL archiving throughput and backlog, and the Barman Cloud sidecar events from VictoriaLogs.
 - New rows after "Operational Stats": "Queries and errors" (slow statements and errors by SQLSTATE from the
   PostgreSQL logs in VictoriaLogs) and "Database efficiency" (cache hit, rollback, temp files, conflicts).
+- "Top statements and table health" row from the custom exporter queries in postgres-monitoring.yaml
+  (pg_stat_statements top 10, pg_stat_user_tables).
 - Replication row: bytes behind the primary per standby and WAL retained by replication slots.
 - Annotations: instance (re)starts, role changes (failover/switchover) and firing critical alerts.
 - Export placeholders (__inputs, ${DS_EXPRESSION}) are resolved for file provisioning.
@@ -223,6 +225,90 @@ def efficiency_panels(y):
     ]
 
 
+def merged_table(pid, title, columns, by, y, h, desc, overrides=(), sort=None):
+    """Instant queries aggregated by the same labels, merged into one row per label set."""
+    targets = [{"datasource": PROM, "refId": chr(65 + i), "expr": f"sum by ({by}) ({expr})", "instant": True,
+                "range": False, "format": "table"} for i, (_, expr) in enumerate(columns)]
+    rename = {f"Value #{chr(65 + i)}": name for i, (name, _) in enumerate(columns)}
+    labels = [label.strip() for label in by.split(",")]
+    index = {**{label: i for i, label in enumerate(labels)}, **{v: len(labels) + i for i, v in enumerate(rename)}}
+    return {"id": pid, "type": "table", "title": title, "description": desc, "datasource": PROM,
+            "gridPos": {"h": h, "w": 24, "x": 0, "y": y},
+            "fieldConfig": {"defaults": {"custom": {"cellOptions": {"type": "auto"}, "inspect": True}},
+                            "overrides": list(overrides)},
+            "options": {"showHeader": True, "cellHeight": "sm", **({"sortBy": [sort]} if sort else {})},
+            "transformations": [{"id": "merge", "options": {}},
+                                {"id": "organize", "options": {"excludeByName": {"Time": True},
+                                                               "indexByName": index, "renameByName": rename}}],
+            "targets": targets}
+
+
+def unit(name, value, decimals=None, width=None, extra=()):
+    props = [{"id": "unit", "value": value}] + ([{"id": "decimals", "value": decimals}] if decimals is not None else [])
+    props += [{"id": "custom.width", "value": width}] if width else []
+    return {"matcher": {"id": "byName", "options": name}, "properties": props + list(extra)}
+
+
+def statement_panels(y):
+    """Which statements consume the database time, and which tables bloat or are scanned sequentially."""
+    stmt = lambda m: f"cnpg_pg_stat_statements_top_{m}{{{SEL}}}"
+    tbl = lambda m: f"cnpg_pg_stat_user_tables_{m}{{{SEL}}}"
+    inc = lambda metric: f"increase({metric}[$__range])"
+    hit, read = inc(stmt("shared_blks_hit")), inc(stmt("shared_blks_read"))
+    never = {"type": "range", "options": {"from": 1e9, "to": None, "result": {"text": "never"}}}
+    return [
+        merged_table(9131, "Top statements (pg_stat_statements)", [
+            ("Time", inc(stmt("total_exec_seconds"))),
+            ("Calls", inc(stmt("calls"))),
+            ("Mean", f"{inc(stmt('total_exec_seconds'))} / {inc(stmt('calls'))}"),
+            ("Rows", inc(stmt("rows"))),
+            ("Cache hit", f"{hit} / ({hit} + {read})"),
+            ("Temp written", f"{inc(stmt('temp_blks_written'))} * 8192"),
+        ], "datname, queryid, query", y, 9,
+            "The 10 statements with the most total execution time (application roles), measured over the selected "
+            "range. Temp written > 0 means the statement spilled to disk: it needs more work_mem or an index.",
+            overrides=[unit("Time", "s", 3, 90), unit("Calls", "short", 0, 80), unit("Mean", "s", 4, 90),
+                       unit("Rows", "short", 0, 80), unit("Cache hit", "percentunit", 1, 90),
+                       unit("Temp written", "bytes", 0, 110), unit("datname", "string", width=70),
+                       unit("queryid", "string", width=160)],
+            sort={"displayName": "Time", "desc": True}),
+        series(9132, "Execution time per statement",
+               [{"expr": f"sum by (query) (rate({stmt('total_exec_seconds')}[$__rate_interval]))", "legendFormat": "{{query}}"}],
+               "s", 0, y + 9, "Database time spent per second on each top statement; the stacked total is the load "
+               "the application puts on PostgreSQL.", stack=True),
+        series(9133, "Calls per second per statement",
+               [{"expr": f"sum by (query) (rate({stmt('calls')}[$__rate_interval]))", "legendFormat": "{{query}}"}],
+               "ops", 12, y + 9, "Execution rate of each top statement."),
+        merged_table(9134, "Table health (pg_stat_user_tables)", [
+            ("Live rows", tbl("n_live_tup")),
+            ("Dead rows", tbl("n_dead_tup")),
+            ("Dead %", f"{tbl('n_dead_tup')} / ({tbl('n_live_tup')} + {tbl('n_dead_tup')})"),
+            ("Seq scans", inc(tbl("seq_scan"))),
+            ("Index scans", inc(tbl("idx_scan"))),
+            ("Last vacuum", f"time() - {tbl('last_vacuum_time')}"),
+            ("Size", tbl("total_bytes")),
+        ], "datname, schemaname, relname", y + 17, 8,
+            "Dead % above 10-20% means autovacuum is behind (bloat, slower scans). Autovacuum waits for at least "
+            "50 dead rows (autovacuum_vacuum_threshold), so a high % on a table with few rows is normal. Many "
+            "sequential scans on a large table usually mean a missing index; on tiny tables they are normal.",
+            overrides=[unit("Dead %", "percentunit", 1, 90, extra=[
+                           {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+                           {"id": "thresholds", "value": steps(("green", None), ("orange", 0.1), ("red", 0.2))}]),
+                       unit("Last vacuum", "s", 0, 110, extra=[{"id": "mappings", "value": [never]}]),
+                       unit("Size", "bytes", 0, 90), unit("Live rows", "short", 0, 90), unit("Dead rows", "short", 0, 90),
+                       unit("Seq scans", "short", 0, 90), unit("Index scans", "short", 0, 90)],
+            sort={"displayName": "Size", "desc": True}),
+        series(9135, "Dead rows by table",
+               [{"expr": f"max by (relname) ({tbl('n_dead_tup')})", "legendFormat": "{{relname}}"}],
+               "short", 0, y + 25, "Drops when autovacuum runs; a steady climb means vacuum cannot keep up "
+               "(long transactions, autovacuum settings)."),
+        series(9136, "Sequential and index scans per second",
+               [{"expr": f"sum by (relname) (rate({tbl('seq_scan')}[$__rate_interval]))", "legendFormat": "seq {{relname}}"},
+                {"expr": f"sum by (relname) (rate({tbl('idx_scan')}[$__rate_interval]))", "legendFormat": "index {{relname}}"}],
+               "ops", 12, y + 25, "How each table is read."),
+    ]
+
+
 def replication_panels(y):
     """Lag in bytes stays meaningful when traffic is low (time-based lag then reads 0 or jumps)."""
     stages = [{"expr": f"max by (application_name) (cnpg_pg_stat_replication_{s}_diff_bytes{{{SEL}}})",
@@ -311,6 +397,7 @@ for row in dash["panels"]:
 
 insert_collapsed_rows(dash, "Storage & I/O", [
     (9100, "Queries and errors (PostgreSQL logs)", log_panels),
+    (9130, "Top statements and table health", statement_panels),
     (9110, "Database efficiency", efficiency_panels),
 ])
 dash["annotations"]["list"] += ANNOTATIONS
