@@ -21,7 +21,8 @@ that query the stack through the MCP servers.
 | Live sessions, locks, statistics | PostgreSQL (`shop-db`) | – | `postgres` (list_active_queries, list_locks, execute_sql; read-only, `pg_monitor`) |
 
 Dashboards (Grafana folder **Shop**): `shop-slo` (SLO Overview), `shop-service` (one service end to end),
-`shop-logs`, `shop-overview`, and `cloudnative-pg-shop` (CloudNativePG, one row per concern: Queries and
+`shop-logs` (message patterns, what failing lines have in common, one request across services),
+`shop-traces`, `shop-overview`, and `cloudnative-pg-shop` (CloudNativePG, one row per concern: Queries and
 errors, Locks and blocking, Top statements and table health, Database efficiency, Replication, Backups).
 All of them mark rollouts and firing critical alerts as annotations.
 

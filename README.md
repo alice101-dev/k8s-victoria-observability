@@ -132,7 +132,10 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
     database: connection pool, sessions and PostgreSQL errors of that service, saturation, WARN/ERROR logs,
     slowest and failed traces).
   - Every Shop dashboard marks rollouts and firing critical Shop alerts on its graphs.
-  - *Logs:* log volume, top messages and top pods, filterable by service, level and any field.
+  - *Logs:* errors and error ratio per service over time, message patterns with their cause, what the
+    failing lines have in common (field facets: product, user, pod, node, version), lines by pod and
+    version, every line of one request across services, a message search, lines outside the JSON logger
+    and the health of the log pipeline (last line per service, dropped lines, collector backlog).
   - *Traces:* distributed tracing analytics computed from the spans (LogsQL on VictoriaTraces): every
     endpoint's latency and failures, where the time goes inside one endpoint's requests (each downstream
     call, SQL statement and Redis command with its share), failures by message, hot spots by product, user,
