@@ -62,3 +62,12 @@ coverage.*
 .vscode/*
 *.swp
 *~
+
+# -----------------------------
+# CI output (ci/render_manifests.py default directory)
+# -----------------------------
+/rendered/
+
+# Python bytecode (dashboard generator, CI scripts)
+__pycache__/
+*.pyc

@@ -1,0 +1,81 @@
+# Runs on every push to main and every pull request:
+# - Dashboards: the committed JSON is exactly what the generators produce, and every dashboard is valid
+#   (datasources, variables, links, panel ids).
+# - Argo CD applications: every Application of the two app-of-apps charts renders the way Argo CD renders it
+#   (same Helm and Kustomize versions) and the result validates against the Kubernetes and CRD schemas.
+# Actions are pinned to commit SHAs; downloaded tools are checked against their published checksums.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  HELM_VERSION: v4.2.1 # bundled with Argo CD v3.5.5 (hack/tool-versions.sh)
+  KUSTOMIZE_VERSION: v5.8.1 # bundled with Argo CD v3.5.5
+  KUBECONFORM_VERSION: v0.8.0
+
+jobs:
+  dashboards:
+    name: Dashboards
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Committed dashboards match their generators
+        run: |
+          python3 apps/k8s/services/dashboards/generate.py
+          python3 apps/k8s/data/dashboards/vendor-cloudnative-pg.py
+          if [ -n "$(git status --porcelain -- '*.json')" ]; then
+            git status --short -- '*.json'
+            git diff --stat -- '*.json'
+            echo "::error::Dashboard JSON differs from its generator. Edit the generator (apps/k8s/services/dashboards/generator/ or vendor-cloudnative-pg.py), run it and commit the JSON it writes."
+            exit 1
+          fi
+      - name: Dashboards are valid
+        run: python3 ci/validate_dashboards.py
+
+  manifests:
+    name: Argo CD applications
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: ${{ env.HELM_VERSION }}
+      - name: Install Kustomize and kubeconform
+        run: |
+          bin="$HOME/.local/bin" && mkdir -p "$bin" && cd "$RUNNER_TEMP"
+          kz="https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2F${KUSTOMIZE_VERSION}"
+          curl -fsSLO "$kz/kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o kustomize.sha256 "$kz/checksums.txt"
+          grep " kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz\$" kustomize.sha256 | sha256sum -c -
+          tar -xzf "kustomize_${KUSTOMIZE_VERSION}_linux_amd64.tar.gz" -C "$bin" kustomize
+          kc="https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}"
+          curl -fsSLO "$kc/kubeconform-linux-amd64.tar.gz"
+          curl -fsSL -o kubeconform.sha256 "$kc/CHECKSUMS"
+          grep " kubeconform-linux-amd64.tar.gz\$" kubeconform.sha256 | sha256sum -c -
+          tar -xzf kubeconform-linux-amd64.tar.gz -C "$bin" kubeconform
+          echo "$bin" >> "$GITHUB_PATH"
+      - name: Install Python dependencies
+        run: pip install -r ci/requirements.txt
+      - name: Tool versions
+        run: helm version --short && kustomize version && kubeconform -v
+      - name: Render and validate every Argo CD Application
+        run: python3 ci/render_manifests.py "$RUNNER_TEMP/rendered"
