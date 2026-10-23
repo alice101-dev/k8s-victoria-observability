@@ -102,7 +102,11 @@ d.add({"type": "bargauge", "title": "Ready pods per service", "datasource": VM,
       8, 6)
 # The SLO spending its budget fastest right now, named: is something burning, and where. The 30-day budgets
 # move slowly and are in the tables below.
-p = d.add(stat("Burning fastest now", f"topk(1, slo:sli_error:ratio_rate1h {BURN})", "x",
+# Below 0.1x no SLO is singled out (all near 0, topk would name an arbitrary one); the value stays the highest.
+BURN_1H = f"slo:sli_error:ratio_rate1h {BURN}"
+p = d.add(stat("Burning fastest now",
+               f"topk(1, {BURN_1H} > 0.1) or label_replace(label_replace(max({BURN_1H}), "
+               f'"job", "every SLO", "", ""), "slo", "below 0.1x", "", "")', "x",
                thresholds(("green", None), ("orange", 1), ("red", 14.4)), decimals=2,
                desc="The journey or service SLO with the highest burn rate over the last hour. Below 1 its budget "
                     "lasts longer than 30 days; above 1 it is spent faster than planned; at 14.4 (2% of the 30-day "

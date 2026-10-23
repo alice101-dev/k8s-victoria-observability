@@ -910,7 +910,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "topk(1, slo:sli_error:ratio_rate1h / on (job, slo, kind) (1 - slo:objective:ratio))",
+          "expr": "topk(1, slo:sli_error:ratio_rate1h / on (job, slo, kind) (1 - slo:objective:ratio) > 0.1) or label_replace(label_replace(max(slo:sli_error:ratio_rate1h / on (job, slo, kind) (1 - slo:objective:ratio)), \"job\", \"every SLO\", \"\", \"\"), \"slo\", \"below 0.1x\", \"\", \"\")",
           "legendFormat": "{{job}} · {{slo}}",
           "refId": "A",
           "range": false,
