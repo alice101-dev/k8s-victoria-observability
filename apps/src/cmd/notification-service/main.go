@@ -74,6 +74,7 @@ func run(ctx context.Context, app *platform.App) error {
 	// Separate, uninstrumented client for the blocking XREADGROUP loop, so polling
 	// does not flood VictoriaTraces with useless root spans.
 	consumer := redis.NewClient(rdb.Options())
+	platform.RegisterRedisPool("stream-consumer", consumer)
 	app.OnShutdown(func(context.Context) error { return consumer.Close() })
 	go h.deliverLoop(ctx, consumer)
 
