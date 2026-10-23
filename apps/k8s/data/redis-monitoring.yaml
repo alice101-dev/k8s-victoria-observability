@@ -1,0 +1,238 @@
+# Redis with Sentinel: scrape configs and alerts. Runbook: docs/runbooks/redis.md; dashboard "Shop — Redis".
+#
+# Each Redis pod runs two redis_exporters: Redis itself (port metrics, job redis-node) and the pod's Sentinel
+# (port sentinel-metrics, relabelled job redis-sentinel so Sentinel's own redis_up / redis_instance_info never
+# mix with the data nodes'). Every rule selects its job explicitly.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: node
+  endpoints:
+    - port: metrics
+    - port: sentinel-metrics
+      relabelConfigs:
+        - targetLabel: job
+          replacement: redis-sentinel
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: shop-redis
+spec:
+  groups:
+    - name: redis
+      rules:
+        - alert: RedisDown
+          expr: redis_up{job="redis-node"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis on {{ $labels.pod }} is unreachable"
+            description: redis_exporter in {{ $labels.pod }} cannot reach Redis for 2 minutes. If it is the master, Sentinel should fail over within seconds (RedisFailover).
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisdown
+        - alert: RedisNoSingleMaster
+          expr: count(redis_instance_info{job="redis-node", role="master"}) != 1 or absent(redis_instance_info{job="redis-node", role="master"})
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: Redis does not have exactly one master
+            description: No master means every write fails (cache fills, payment idempotency, notification queue); two masters mean split brain and lost writes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnosinglemaster
+        - alert: RedisReplicasMissing
+          expr: max(redis_connected_slaves{job="redis-node"}) < 2
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The Redis master has {{ $value }} of 2 replicas connected"
+            description: With fewer replicas a failover has fewer candidates and may lose the writes not yet replicated.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisreplicasmissing
+        - alert: RedisReplicationBroken
+          expr: max by (pod, master_host) (redis_master_link_up{job="redis-node"}) == 0
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Replica {{ $labels.pod }} has lost its link to the master"
+            description: The replica serves stale data and is no longer a safe failover candidate. Usually it is resyncing after a restart (master_sync_in_progress) or cannot reach {{ $labels.master_host }}.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisreplicationbroken
+        # Seconds since the replica's last acknowledgement (normally 0-1).
+        - alert: RedisReplicaLagging
+          expr: max by (slave_ip) (redis_connected_slave_lag_seconds{job="redis-node"}) > 10
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Replica {{ $labels.slave_ip }} is {{ $value }}s behind the master"
+            description: A failover now would lose the writes of the last seconds. Check the replica's CPU, its node and the network.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisreplicalagging
+        - alert: RedisMemoryNearLimit
+          expr: redis_memory_used_bytes{job="redis-node"} / redis_memory_max_bytes{job="redis-node"} > 0.9 and redis_memory_max_bytes{job="redis-node"} > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis on {{ $labels.pod }} uses {{ $value | humanizePercentage }} of maxmemory"
+            description: At maxmemory Redis evicts keys with a TTL (volatile-lru) and then rejects writes with OOM.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redismemorynearlimit
+        # volatile-lru evicts any key with a TTL: product and user cache entries, but also payment idempotency keys,
+        # whose loss lets a retried payment be charged twice.
+        - alert: RedisEvictingKeys
+          expr: sum by (pod) (rate(redis_evicted_keys_total{job="redis-node"}[5m])) > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis on {{ $labels.pod }} evicts {{ $value | humanize }} keys/s"
+            description: Memory is at maxmemory. Cache hit ratio drops and payment idempotency keys can be evicted before their hour is over.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisevictingkeys
+        # Nothing evictable is left (the notification stream has no TTL): writes fail.
+        - alert: RedisOutOfMemoryErrors
+          expr: sum by (pod) (increase(redis_errors_total{job="redis-node", err="OOM"}[5m])) > 0
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis on {{ $labels.pod }} rejected {{ $value | humanize }} writes with OOM in 5 minutes"
+            description: Writes fail (notification queue, payment idempotency, cache). Free memory or raise maxmemory and the container limit.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisoutofmemoryerrors
+        # maxmemory (96mb) is below the limit (128Mi), but replication buffers, client buffers and the AOF rewrite
+        # fork (copy-on-write) come on top: the kernel OOM-kills the container, not Redis.
+        - alert: RedisContainerMemoryNearLimit
+          expr: max by (pod) (container_memory_working_set_bytes{job="kubelet", metrics_path="/metrics/cadvisor", namespace="shop", container="redis"}) / max by (pod) (kube_pod_container_resource_limits{namespace="shop", container="redis", resource="memory"}) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The redis container of {{ $labels.pod }} uses {{ $value | humanizePercentage }} of its memory limit"
+            description: An OOM kill restarts Redis; a master then fails over and a replica needs a full resync.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#rediscontainermemorynearlimit
+        - alert: RedisRejectedConnections
+          expr: sum by (pod) (increase(redis_rejected_connections_total{job="redis-node"}[5m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis on {{ $labels.pod }} rejected {{ $value | humanize }} connections (maxclients)"
+            description: Clients cannot connect. Usually a connection leak or pools larger than maxclients allows.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisrejectedconnections
+        # With appendonly yes, a failed AOF write makes Redis refuse writes until it succeeds again.
+        - alert: RedisPersistenceFailing
+          expr: max by (pod) ((redis_aof_last_write_status{job="redis-node"} == 0) or (redis_aof_last_bgrewrite_status{job="redis-node"} == 0))
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis on {{ $labels.pod }} cannot write its append-only file"
+            description: Disk full or failing; Redis rejects writes while the AOF write fails, and a restart would lose data.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redispersistencefailing
+        # The stream is replicated, so every pod reports the same group state.
+        - alert: RedisNotificationBacklog
+          expr: max(redis_stream_group_lag{job="redis-node", stream="notifications"}) > 100
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} notifications wait in the stream for the notifier group"
+            description: notification-service does not read the stream fast enough (or not at all). Notifications are delayed; past MAXLEN 10000 the oldest are trimmed unread.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnotificationbacklog
+        # Delivered but never acknowledged: the consumer died while delivering. The service does not reclaim them
+        # (no XAUTOCLAIM), so they stay pending forever.
+        - alert: RedisNotificationsStuckPending
+          expr: max(redis_stream_group_messages_pending{job="redis-node", stream="notifications"}) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value }} notifications were delivered to a consumer and never acknowledged"
+            description: A notification-service pod stopped while delivering them; nothing redelivers them. Claim them for a live consumer (XAUTOCLAIM) or acknowledge them.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnotificationsstuckpending
+        # Client side (the services' go-redis pools, goredis_pool_*).
+        - alert: RedisClientPoolTimeouts
+          expr: sum by (job, client) (increase(goredis_pool_timeouts_total{namespace="shop"}[5m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.job }}: {{ $value | humanize }} Redis commands failed waiting for a pooled connection"
+            description: Every connection of the {{ $labels.client }} pool was busy for the whole pool timeout. Slow Redis, a failover in progress, or REDIS_POOL_SIZE too small for the load.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisclientpooltimeouts
+    # Sentinel's view, from its own exporter (job redis-sentinel).
+    - name: redis-sentinel
+      rules:
+        # SENTINEL CKQUORUM on every sentinel: none can authorise a failover (or none reports at all).
+        - alert: RedisSentinelQuorumLost
+          expr: absent(redis_sentinel_master_ckquorum_status{job="redis-sentinel"} == 1)
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: Redis Sentinel cannot reach a quorum to fail over
+            description: Fewer than 2 of 3 sentinels can agree. If the master fails now, no replica is promoted and every write fails until a human intervenes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentinelquorumlost
+        - alert: RedisSentinelsDegraded
+          expr: min(redis_sentinel_master_ok_sentinels{job="redis-sentinel"}) < 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "A sentinel sees only {{ $value }} of 3 sentinels healthy"
+            description: The quorum (2) still holds, but one more lost sentinel (node preemption) blocks every failover.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentinelsdegraded
+        # Sentinels mark the master down after 5s and fail over within seconds; still not ok after a minute means
+        # the failover is not happening. At least 2 sentinels (the quorum) must agree, so one isolated sentinel
+        # does not fire it.
+        - alert: RedisSentinelMasterDown
+          expr: count by (master_address) (redis_sentinel_master_status{job="redis-sentinel", master_status!="ok"}) >= 2
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Sentinel sees the Redis master {{ $labels.master_address }} as down and no failover replaced it"
+            description: Writes fail. Check RedisFailoverAborted and the sentinel logs for why no replica was promoted.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentinelmasterdown
+        - alert: RedisSentinelsDisagree
+          expr: count(count by (master_address) (redis_sentinel_master_status{job="redis-sentinel"})) > 1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Redis sentinels follow {{ $value }} different masters"
+            description: Clients asking different sentinels write to different nodes (split brain); the writes on the losing side are lost when it rejoins.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentinelsdisagree
+    # Sentinel events from its logs (VictoriaLogs), evaluated every minute over the last minute.
+    - name: redis-sentinel-events
+      type: vlogs
+      interval: 1m
+      rules:
+        # Every sentinel logs the switch; grouped by old and new master it is one alert per failover.
+        - alert: RedisFailover
+          expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="sentinel"} "+switch-master" | extract "+switch-master <_> <old> <_> <new> " from _msg | stats by (old, new) count() as sentinels | filter sentinels:>0'
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis failover: the master moved from {{ $labels.old }} to {{ $labels.new }}"
+            description: Writes failed for a few seconds while the clients followed the new master (READONLY and connection errors in the services). Planned during Redis rollouts (preStop), unplanned after a crash, OOM kill or node preemption.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisfailover
+        - alert: RedisFailoverAborted
+          expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="sentinel"} "-failover-abort" | extract "-failover-abort-<reason> " from _msg | stats by (reason) count() as aborts | filter aborts:>0'
+          labels:
+            severity: critical
+          annotations:
+            summary: "A Redis failover was aborted: {{ $labels.reason }}"
+            description: Sentinel could not promote a replica (no good replica, not elected, timeout). The old master may still be down.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisfailoveraborted
+        # TILT: the sentinel's clock jumped or the process stalled (CPU starvation); for 30s it acts as a pure
+        # observer and authorises no failover.
+        - alert: RedisSentinelTilt
+          expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="sentinel"} "+tilt" | copy kubernetes.pod_name as pod | stats by (pod) count() as tilts | filter tilts:>0'
+          labels:
+            severity: warning
+          annotations:
+            summary: "Sentinel on {{ $labels.pod }} entered TILT mode"
+            description: For at least 30s this sentinel authorises no failover. Repeated TILT points at CPU starvation or a paused node.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentineltilt

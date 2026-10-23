@@ -1,16 +1,5 @@
-# Data tier scraping + basic alerts. vmagent uses selectAllByDefault → objects in any namespace
-# are discovered automatically; vmalert loads this VMRule automatically too.
-apiVersion: operator.victoriametrics.com/v1beta1
-kind: VMServiceScrape
-metadata:
-  name: redis
-spec:
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: redis
-  endpoints:
-    - port: metrics
----
+# PostgreSQL scraping and alerts (Redis: redis-monitoring.yaml). vmagent uses selectAllByDefault → objects in any
+# namespace are discovered automatically; vmalert loads this VMRule automatically too.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMPodScrape
 metadata:
@@ -45,42 +34,6 @@ spec:
   groups:
     - name: shop-data
       rules:
-        - alert: RedisDown
-          expr: redis_up{namespace="shop"} == 0
-          for: 2m
-          labels:
-            severity: critical
-          annotations:
-            summary: Shop Redis unreachable from exporter
-            description: redis_exporter in {{ $labels.pod }} reported redis_up=0 for 2 minutes.
-            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisdown
-        - alert: RedisNoSingleMaster
-          expr: count(redis_instance_info{namespace="shop", role="master"}) != 1 or absent(redis_instance_info{namespace="shop", role="master"})
-          for: 1m
-          labels:
-            severity: critical
-          annotations:
-            summary: Redis does not have exactly one master
-            description: No master means writes fail, two masters mean split brain. Check Sentinel with "sentinel masters" on port 26379.
-            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnosinglemaster
-        - alert: RedisReplicasMissing
-          expr: max(redis_connected_slaves{namespace="shop"}) < 2
-          for: 5m
-          labels:
-            severity: warning
-          annotations:
-            summary: Redis master has {{ $value }} of 2 replicas connected
-            description: Fewer replicas means a failover may lose recent writes or have no candidate at all.
-            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisreplicasmissing
-        - alert: RedisMemoryNearLimit
-          expr: redis_memory_used_bytes{namespace="shop"} / redis_memory_max_bytes{namespace="shop"} > 0.9 and redis_memory_max_bytes{namespace="shop"} > 0
-          for: 10m
-          labels:
-            severity: warning
-          annotations:
-            summary: Redis memory > 90% of maxmemory
-            description: Keys with TTL are being evicted; consider raising maxmemory/limit.
-            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redismemorynearlimit
         - alert: PostgresDown
           expr: cnpg_collector_up{namespace="shop"} == 0
           for: 2m

@@ -3,7 +3,8 @@
 Every data-tier and platform alert links to its runbook section through the `runbook_url` annotation:
 
 - [postgres.md](postgres.md): CloudNativePG cluster `shop-db` (availability, replication, locks, disk, backups)
-- [redis.md](redis.md): Redis with Sentinel
+- [redis.md](redis.md): Redis with Sentinel (failovers, quorum, replication, memory and evictions, notification
+  stream, client pools)
 - [kubernetes.md](kubernetes.md): Kubernetes events, node restarts (spot preemptions), scheduling, OOM kills
 - [platform.md](platform.md): Argo CD (sync failures, drift, health, Git), External Secrets (sync, stores),
   cert-manager (certificate readiness, renewal and expiry, issuers)
@@ -28,7 +29,8 @@ that query the stack through the MCP servers.
 
 Dashboards (Grafana folder **Shop**): `shop-slo` (SLO Overview), `shop-service` (one service end to end),
 `shop-logs` (message patterns, what failing lines have in common, one request across services),
-`shop-traces`, `shop-overview`, and `cloudnative-pg-shop` (CloudNativePG, one row per concern: Queries and
+`shop-traces`, `shop-overview`, `shop-redis` (Redis and Sentinel: master and failover readiness, failovers,
+replication, memory, client latency and pools, the notification stream), and `cloudnative-pg-shop` (CloudNativePG, one row per concern: Queries and
 errors, Locks and blocking, Top statements and table health, Database efficiency, Replication, Backups).
 All of them mark rollouts, firing critical alerts, node restarts and container restarts as annotations.
 `cluster-events` (folder **Platform**) shows the Kubernetes events of every namespace;
@@ -82,7 +84,9 @@ as `product_id`, `user_id`, `step`.
 | `cnpg_pg_stat_user_tables_*` | custom query, primary only | `datname`, `relname` |
 | `cnpg_pg_blocking_*` | custom query, primary only: sessions holding a lock others wait for | `pid`, `usename`, `application_name`, `state`, `query_id` |
 | `barman_cloud_cloudnative_pg_io_*` | Barman Cloud plugin | `pod` |
-| `redis_*` | redis_exporter | `pod`, `role` |
+| `redis_*{job="redis-node"}` | redis_exporter on each Redis | `pod`, `role` (`redis_instance_info`), `cmd`, `err`, `stream`, `group`, `consumer` |
+| `redis_sentinel_*{job="redis-sentinel"}` | redis_exporter on each Sentinel | `pod` (the sentinel), `master_address`, `master_status` |
+| `goredis_pool_*` | services' Redis connection pools | `job` (service), `client` (`default`, `stream-consumer`) |
 
 ## Recipes
 

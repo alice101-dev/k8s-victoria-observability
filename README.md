@@ -147,6 +147,10 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
     call, SQL statement and Redis command with its share), failures by message, hot spots by product, user,
     pod, node or version, the service map, and the slowest or failed requests opening their trace.
   - *Microservices Overview:* RED for all services side by side, plus business metrics.
+  - *Redis:* Redis with Sentinel: who is master and whether a failover could happen right now (quorum,
+    healthy sentinels, replicas in sync), the failover timeline from the Sentinel logs, replication, memory
+    against maxmemory and the container limit, evictions, server and client latency per command, the
+    services' connection pools, the notification stream and its consumers, persistence, and the logs.
   - *CloudNativePG:* PostgreSQL health, replication, WAL and backups, plus slow statements and errors by
     SQLSTATE from the PostgreSQL logs, lock waits with the sessions holding the locks, top statements and
     table health.
@@ -164,7 +168,8 @@ Nothing is exposed publicly: Grafana, Argo CD and the MCP servers are reached wi
   dashboard.
 - **Alerting:** SLO burn-rate alerts (multi-window, multi-burn-rate), a payment decline rule,
   **log-based** rules (LogsQL, including Kubernetes events: unschedulable pods, OOM kills, failing image
-  pulls) and platform rules (Argo CD sync failures, drift and unhealthy applications, ExternalSecrets that stop
+  pulls), Redis and Sentinel rules (failovers, lost quorum, TILT, replication, evictions, OOM, stuck
+  notifications, client pool timeouts) and platform rules (Argo CD sync failures, drift and unhealthy applications, ExternalSecrets that stop
   syncing, certificate renewals and expiry) and pipeline rules (log or span ingestion stopped, retention cut by
   the disk limit), all evaluated by vmalert. Data-tier, Kubernetes and platform alerts
   link to their runbook

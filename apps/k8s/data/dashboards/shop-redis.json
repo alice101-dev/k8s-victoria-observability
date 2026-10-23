@@ -1,0 +1,3618 @@
+{
+  "uid": "shop-redis",
+  "title": "Shop — Redis",
+  "description": "Redis with Sentinel: master and failover readiness, failovers, replication, memory and evictions, server and client latency, connection pools, the notification stream, persistence and the Sentinel logs.",
+  "tags": [
+    "shop",
+    "redis"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Shop dashboards",
+      "type": "dashboards",
+      "tags": [
+        "shop"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "Explore traces",
+      "type": "link",
+      "url": "/explore?left={\"datasource\":\"VictoriaTraces\"}",
+      "targetBlank": true
+    },
+    {
+      "title": "Explore logs",
+      "type": "link",
+      "url": "/explore?left={\"datasource\":\"VictoriaLogs\"}",
+      "targetBlank": true
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "name": "Redis master changes",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "yellow",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}) unless max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"} offset 1m)",
+        "titleFormat": "Redis master: {{pod}}",
+        "textFormat": "Failover (planned during Redis rollouts)"
+      },
+      {
+        "name": "Rollouts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "blue",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "changes(max by (deployment) (kube_deployment_metadata_generation{namespace=\"shop\"})[1m]) > 0 or changes(max by (statefulset) (kube_statefulset_metadata_generation{namespace=\"shop\"})[1m]) > 0",
+        "titleFormat": "Rollout {{deployment}}{{statefulset}}",
+        "textFormat": "Spec changed (image, env or resources)"
+      },
+      {
+        "name": "Critical alerts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "red",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "max by (alertname, job, deployment, slo) (ALERTS{alertname=~\"Shop.*\", alertstate=\"firing\", severity=\"critical\"})",
+        "titleFormat": "{{alertname}}",
+        "textFormat": "{{job}}{{deployment}} {{slo}}"
+      },
+      {
+        "name": "Node restarts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "purple",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "(max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) > max_over_time((max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)))[30m:1m] offset 1m)) * on (node) group_left (label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)",
+        "titleFormat": "Node restarted: {{node}}",
+        "textFormat": "Pool {{label_cloud_google_com_gke_nodepool}} ({{label_cloud_google_com_gke_provisioning}}): spot preemption, upgrade or repair; its pods were rescheduled"
+      },
+      {
+        "name": "Container restarts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "(changes(kube_pod_container_status_restarts_total{namespace=\"shop\"}[1m]) > 0) * on (namespace, pod, container) group_left (reason) max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{namespace=\"shop\"})",
+        "titleFormat": "Restart {{pod}}: {{reason}}",
+        "textFormat": "Container {{container}} (OOMKilled: memory limit reached)"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Overview — is Redis healthy, and could it fail over right now?",
+      "collapsed": false,
+      "panels": [],
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Master",
+      "description": "The pod that takes the writes now. Clients find it through Sentinel (service redis-sentinel).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No master"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "name"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"})",
+          "legendFormat": "{{pod}}",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Failover possible",
+      "description": "SENTINEL CKQUORUM: enough sentinels (2 of 3) agree to promote a replica if the master fails. No means the next master failure is an outage.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "No sentinel data",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Yes",
+                  "index": 0
+                },
+                "0": {
+                  "text": "No quorum",
+                  "index": 1
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(redis_sentinel_master_ckquorum_status{job=\"redis-sentinel\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Healthy sentinels",
+      "description": "Sentinels the least informed sentinel sees as healthy (of 3). Quorum is 2: at 2 one more lost node blocks failovers.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2
+              },
+              {
+                "color": "green",
+                "value": 3
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "min(redis_sentinel_master_ok_sentinels{job=\"redis-sentinel\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Replicas in sync",
+      "description": "Replicas with a live replication link to the master (of 2): the failover candidates.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count(redis_master_link_up{job=\"redis-node\"} == 1) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Failovers",
+      "description": "Completed failovers in the time range (logged by the sentinel that led them). Each one fails writes for a few seconds; annotations mark when.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"sentinel\"} \"+failover-end\" | stats count() failovers",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Sentinel TILT events",
+      "description": "Times a sentinel entered TILT (clock jump or stalled process, usually CPU starvation): for 30s it authorises no failover.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"sentinel\"} \"+tilt\" | stats count() tilts",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Commands / s",
+      "description": "Commands processed by all nodes (replication traffic included).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(redis_commands_processed_total{job=\"redis-node\"}[5m]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 8,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Cache hit ratio",
+      "description": "Key lookups that found the key, over the time range (user and product cache reads, idempotency checks).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.5
+              },
+              {
+                "color": "green",
+                "value": 0.8
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(redis_keyspace_hits_total{job=\"redis-node\"}[$__range])) / (sum(rate(redis_keyspace_hits_total{job=\"redis-node\"}[$__range])) + sum(rate(redis_keyspace_misses_total{job=\"redis-node\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "x": 4,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Memory of maxmemory",
+      "description": "The master's dataset against maxmemory (96mb). At 100% keys with a TTL are evicted, then writes fail with OOM.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max((redis_memory_used_bytes{job=\"redis-node\"} / redis_memory_max_bytes{job=\"redis-node\"}) * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "x": 8,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Evicted keys",
+      "description": "Keys removed for memory in the time range: cache entries and payment idempotency keys.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(round(increase(redis_evicted_keys_total{job=\"redis-node\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Client p99 latency",
+      "description": "99th percentile of every Redis call as the services measure it (spans): network, pool wait and Redis together.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ns",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 20000000.0
+              },
+              {
+                "color": "red",
+                "value": 100000000.0
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=shop \"span_attr:db.system\":=redis | stats quantile(0.99, duration) p99",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "x": 16,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Notification backlog",
+      "description": "Notifications in the stream not yet read by the notifier group.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 100
+              },
+              {
+                "color": "red",
+                "value": 1000
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(redis_stream_group_lag{job=\"redis-node\", stream=\"notifications\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "x": 20,
+        "y": 5,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "row",
+      "title": "Topology and failover",
+      "collapsed": false,
+      "panels": [],
+      "id": 14,
+      "gridPos": {
+        "x": 0,
+        "y": 9,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Nodes",
+      "description": "Every Redis pod: its node, role, replication link and how many bytes it is behind the master, clients, memory, fragmentation (RSS / used: above 1.5 wastes RAM once the dataset is large; below ~100 MB the allocator's fixed overhead makes it high and meaningless), uptime, and what the sentinel in the same pod believes: which master it follows, whether that master is ok, how many sentinels it sees healthy, TILT. All sentinels must follow the same master (RedisSentinelsDisagree).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pod"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Role"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "master": {
+                        "text": "Master",
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "slave": {
+                        "text": "Replica",
+                        "color": "green",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Master link"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Up",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "Down",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Master link"
+            },
+            "properties": [
+              {
+                "id": "noValue",
+                "value": "–"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Behind master"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 120
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 100000.0
+                    },
+                    {
+                      "color": "red",
+                      "value": 10000000.0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Clients"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Memory"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Fragmentation"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 2
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Up for"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dtdurations"
+              },
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Its sentinel follows"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Sentinel sees master"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "ok",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "down",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Healthy sentinels seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "TILT"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "no",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "1": {
+                        "text": "TILT",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Pod",
+            "desc": false
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value #A": true,
+              "Value #B": true
+            },
+            "indexByName": {
+              "pod": 0,
+              "node": 1,
+              "role": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "Value #E": 5,
+              "Value #F": 6,
+              "Value #G": 7,
+              "Value #H": 8,
+              "follows": 9,
+              "Value #I": 10,
+              "Value #J": 11,
+              "Value #K": 12
+            },
+            "renameByName": {
+              "pod": "Pod",
+              "node": "Node",
+              "role": "Role",
+              "Value #C": "Master link",
+              "Value #D": "Behind master",
+              "Value #E": "Clients",
+              "Value #F": "Memory",
+              "Value #G": "Fragmentation",
+              "Value #H": "Up for",
+              "follows": "Its sentinel follows",
+              "Value #I": "Sentinel sees master",
+              "Value #J": "Healthy sentinels seen",
+              "Value #K": "TILT"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod, role) (redis_instance_info{job=\"redis-node\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod, node) (kube_pod_info{namespace=\"shop\", pod=~\"redis-node-[0-9]+\"})",
+          "legendFormat": "",
+          "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_master_link_up{job=\"redis-node\"})",
+          "legendFormat": "",
+          "refId": "C",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "clamp_min(scalar(max(redis_master_repl_offset{job=\"redis-node\"} * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))) - max by (pod) (redis_master_repl_offset{job=\"redis-node\"}), 0)",
+          "legendFormat": "",
+          "refId": "D",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_connected_clients{job=\"redis-node\"})",
+          "legendFormat": "",
+          "refId": "E",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_memory_used_bytes{job=\"redis-node\"})",
+          "legendFormat": "",
+          "refId": "F",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_mem_fragmentation_ratio{job=\"redis-node\"})",
+          "legendFormat": "",
+          "refId": "G",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_uptime_in_seconds{job=\"redis-node\"})",
+          "legendFormat": "",
+          "refId": "H",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod, follows) (label_replace(redis_sentinel_master_status{job=\"redis-sentinel\"}, \"follows\", \"$1\", \"master_address\", \"([^.:]+).*\"))",
+          "legendFormat": "",
+          "refId": "I",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_sentinel_master_ok_sentinels{job=\"redis-sentinel\"})",
+          "legendFormat": "",
+          "refId": "J",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_sentinel_tilt{job=\"redis-sentinel\"})",
+          "legendFormat": "",
+          "refId": "K",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 15,
+      "gridPos": {
+        "x": 0,
+        "y": 10,
+        "w": 24,
+        "h": 6
+      }
+    },
+    {
+      "type": "status-history",
+      "title": "Role over time",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "maxDataPoints": 60,
+      "description": "Which pod was master when: a change of colour between pods is a failover.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "2": {
+                  "text": "Master",
+                  "color": "blue",
+                  "index": 0
+                },
+                "1": {
+                  "text": "Replica",
+                  "color": "green",
+                  "index": 1
+                },
+                "0": {
+                  "text": "Down",
+                  "color": "red",
+                  "index": 2
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "rowHeight": 0.85,
+        "colWidth": 0.95,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}) * 2 or max by (pod) (redis_instance_info{job=\"redis-node\", role=\"slave\"}) or max by (pod) (redis_up{job=\"redis-node\"}) * 0",
+          "legendFormat": "{{pod}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 10,
+        "h": 8
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Sentinel events",
+      "description": "What the sentinels decided: +sdown (one sentinel lost contact for 5s), +odown (the quorum agrees the master is down), +try-failover / +elected-leader / +selected-slave / +promoted-slave, +switch-master (clients now go to the new master), +tilt, -failover-abort-* (no replica could be promoted).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"sentinel\"} _msg:~\"[+-](switch-master|sdown|odown|try-failover|elected-leader|failover-[a-z-]+|selected-slave|promoted-slave|slave-reconf-[a-z-]+|tilt|reboot|convert-to-slave|fix-slave-config)\" | extract \"# <event>\" from _msg | format \"<kubernetes.pod_name>: <event>\" as _msg",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "x": 10,
+        "y": 16,
+        "w": 14,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Replication",
+      "collapsed": false,
+      "panels": [],
+      "id": 18,
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Bytes behind the master",
+      "description": "Replication offset of each replica against the master's: what a failover to that pod would lose. Normally a few bytes (scrapes of the pods are a few seconds apart).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "clamp_min(scalar(max(redis_master_repl_offset{job=\"redis-node\"} * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))) - max by (pod) (redis_master_repl_offset{job=\"redis-node\"}), 0)",
+          "legendFormat": "{{pod}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 19,
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Replica acknowledgement lag",
+      "description": "Seconds since each replica last acknowledged the stream from the master (RedisReplicaLagging above 10s).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (slave_ip) (label_replace(redis_connected_slave_lag_seconds{job=\"redis-node\"}, \"slave_ip\", \"$1\", \"slave_ip\", \"([^.]+).*\"))",
+          "legendFormat": "{{slave_ip}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "x": 8,
+        "y": 25,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Resyncs",
+      "description": "Replicas reconnecting: partial (from the backlog) is cheap; full copies the whole dataset (after a restart, a failover, or a backlog too small for the outage).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "full"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "partial denied"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(round(increase(redis_replica_resyncs_full{job=\"redis-node\"}[$__interval])))",
+          "legendFormat": "full",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(round(increase(redis_replica_partial_resync_accepted{job=\"redis-node\"}[$__interval])))",
+          "legendFormat": "partial",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(round(increase(redis_replica_partial_resync_denied{job=\"redis-node\"}[$__interval])))",
+          "legendFormat": "partial denied",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "interval": "5m",
+      "id": 21,
+      "gridPos": {
+        "x": 16,
+        "y": 25,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Memory and keys",
+      "collapsed": false,
+      "panels": [],
+      "id": 22,
+      "gridPos": {
+        "x": 0,
+        "y": 32,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory",
+      "description": "Redis' own memory per pod against maxmemory (evictions start there) and the container's working set against its limit (the kernel OOM-kills there): replication and client buffers and the AOF rewrite fork sit between the two.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "maxmemory"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "container limit"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_memory_used_bytes{job=\"redis-node\"})",
+          "legendFormat": "{{pod}} dataset",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (container_memory_working_set_bytes{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", namespace=\"shop\", container=\"redis\"})",
+          "legendFormat": "{{pod}} container",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(redis_memory_max_bytes{job=\"redis-node\"})",
+          "legendFormat": "maxmemory",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(kube_pod_container_resource_limits{namespace=\"shop\", container=\"redis\", resource=\"memory\"})",
+          "legendFormat": "container limit",
+          "refId": "D",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 23,
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Evicted and expired keys",
+      "description": "Keys per second removed for memory (evicted: should be 0) and at the end of their TTL (expired: normal cache turnover).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* evicted"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (pod) (rate(redis_evicted_keys_total{job=\"redis-node\"}[$__rate_interval]))",
+          "legendFormat": "{{pod}} evicted",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(redis_expired_keys_total{job=\"redis-node\"}[$__rate_interval]))",
+          "legendFormat": "expired (TTL)",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 24,
+      "gridPos": {
+        "x": 12,
+        "y": 33,
+        "w": 6,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Keys",
+      "description": "Keys on the master; only those with a TTL can be evicted (volatile-lru). The notification stream has none.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max((sum by (pod) (redis_db_keys{job=\"redis-node\"})) * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "keys",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max((sum by (pod) (redis_db_keys_expiring{job=\"redis-node\"})) * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "with a TTL (evictable)",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 25,
+      "gridPos": {
+        "x": 18,
+        "y": 33,
+        "w": 6,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Commands and latency — the server side",
+      "collapsed": false,
+      "panels": [],
+      "id": 26,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Commands by command",
+      "description": "Top commands per second on all nodes (replicas run the replicated writes).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "topk(8, sum by (cmd) (rate(redis_commands_total{job=\"redis-node\"}[$__rate_interval])))",
+          "legendFormat": "{{cmd}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 27,
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Server latency p99 by command",
+      "description": "Time Redis spends executing each command (LATENCY HISTOGRAM, since start). Compare with the client latency below: the difference is network and pool waiting.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "µs",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (cmd) (redis_latency_percentiles_usec{job=\"redis-node\", quantile=\"99\"}) and on (cmd) topk(8, sum by (cmd) (rate(redis_commands_total{job=\"redis-node\"}[$__rate_interval])))",
+          "legendFormat": "{{cmd}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 28,
+      "gridPos": {
+        "x": 8,
+        "y": 42,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Errors and rejections",
+      "description": "Error replies by type: OOM (memory full), READONLY (write on a replica, during a failover), LOADING (replica loading its data), NOAUTH (client before AUTH), BUSYGROUP (the stream group exists, harmless at service start).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (err) (rate(redis_errors_total{job=\"redis-node\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{err}} replies",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(redis_rejected_connections_total{job=\"redis-node\"}[$__rate_interval])) > 0",
+          "legendFormat": "rejected connections",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (cmd) (rate(redis_commands_rejected_calls_total{job=\"redis-node\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{cmd}} rejected",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 29,
+      "gridPos": {
+        "x": 16,
+        "y": 42,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Connections",
+      "description": "Client connections per pod (the services' pools, sentinels, replicas, the exporter); blocked: clients waiting in XREADGROUP BLOCK.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_connected_clients{job=\"redis-node\"})",
+          "legendFormat": "{{pod}} clients",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_blocked_clients{job=\"redis-node\"}) > 0",
+          "legendFormat": "{{pod}} blocked",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 30,
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 12,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Slow log",
+      "description": "Commands slower than slowlog-log-slower-than (10ms): entries kept (left) and the duration of the last one (right). redis-cli SLOWLOG GET shows them.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_slowlog_length{job=\"redis-node\"})",
+          "legendFormat": "{{pod}} entries",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_last_slow_execution_duration_seconds{job=\"redis-node\"})",
+          "legendFormat": "{{pod}} last slow command",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 31,
+      "gridPos": {
+        "x": 12,
+        "y": 49,
+        "w": 12,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Clients — what the services see",
+      "collapsed": false,
+      "panels": [],
+      "id": 32,
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Client latency p99 by service and command",
+      "description": "99th percentile of the Redis calls as each service sees them (redisotel spans): includes network and waiting for a pooled connection.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ns",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=shop \"span_attr:db.system\":=redis | copy \"resource_attr:service.name\" as service | stats by (service, name) quantile(0.99, duration) p99",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{service}} {{name}}"
+        }
+      ],
+      "id": 33,
+      "gridPos": {
+        "x": 0,
+        "y": 57,
+        "w": 12,
+        "h": 8
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "timeseries",
+      "title": "Client calls and errors",
+      "description": "Redis calls per interval by service (left) and the failed ones (right): connection errors and READONLY during a failover, timeouts.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=shop \"span_attr:db.system\":=redis | copy \"resource_attr:service.name\" as service | stats by (service) count() calls",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{service}} calls"
+        },
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=shop \"span_attr:db.system\":=redis status_code:=2 | copy \"resource_attr:service.name\" as service | stats by (service) count() errors",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "B",
+          "legendFormat": "{{service}} errors"
+        }
+      ],
+      "id": 34,
+      "gridPos": {
+        "x": 12,
+        "y": 57,
+        "w": 12,
+        "h": 8
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "timeseries",
+      "title": "Connection pools: in use against the pool size",
+      "description": "Connections each service's go-redis pool has busy, against REDIS_POOL_SIZE. The stream consumer keeps one in XREADGROUP BLOCK.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pool size"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job, client) (goredis_pool_connections{namespace=\"shop\"} - goredis_pool_idle_connections{namespace=\"shop\"})",
+          "legendFormat": "{{job}} {{client}} in use",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(goredis_pool_max_connections{namespace=\"shop\"})",
+          "legendFormat": "pool size",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 35,
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pool waits and timeouts",
+      "description": "Commands per second that waited for a free connection, failed waiting (RedisClientPoolTimeouts), and broken connections thrown away (expected right after a failover).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* timeouts"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job) (rate(goredis_pool_waits_total{namespace=\"shop\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{job}} waits",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job) (rate(goredis_pool_timeouts_total{namespace=\"shop\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{job}} timeouts",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (job) (rate(goredis_pool_stale_connections_total{namespace=\"shop\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{job}} stale closed",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 36,
+      "gridPos": {
+        "x": 8,
+        "y": 65,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "table",
+      "title": "Slowest Redis calls",
+      "description": "The 20 slowest Redis calls in the time range; open the trace to see what waited.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Took"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Command"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open this trace",
+                    "url": "/d/shop-traces/shop-traces?var-trace_id=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Took",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "took": 0,
+              "service": 1,
+              "name": 2,
+              "statement": 3,
+              "trace_id": 4
+            },
+            "renameByName": {
+              "took": "Took",
+              "service": "Service",
+              "name": "Command",
+              "statement": "Statement",
+              "trace_id": "Trace"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=shop \"span_attr:db.system\":=redis | copy \"resource_attr:service.name\" as service | copy \"span_attr:db.statement\" as statement | stats by (trace_id, service, name, statement) max(duration) took | sort by (took desc) | limit 20",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 37,
+      "gridPos": {
+        "x": 16,
+        "y": 65,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Notification stream",
+      "collapsed": false,
+      "panels": [],
+      "id": 38,
+      "gridPos": {
+        "x": 0,
+        "y": 72,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Stream and the notifier group",
+      "description": "The notifications stream (MAXLEN ~10000, so the length stays near 10000): entries the group has not read yet, entries delivered but never acknowledged (a consumer died mid-delivery; nothing reclaims them), and the enqueue rate (right).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "D"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "read, not acknowledged"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max((redis_stream_length{job=\"redis-node\", stream=\"notifications\"}) * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "length",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max((redis_stream_group_lag{job=\"redis-node\", stream=\"notifications\"}) * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "not yet read (lag)",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max((redis_stream_group_messages_pending{job=\"redis-node\", stream=\"notifications\"}) * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "read, not acknowledged",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(redis_stream_entries_added_total{job=\"redis-node\", stream=\"notifications\"}[$__rate_interval]) * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "added / s",
+          "refId": "D",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 39,
+      "gridPos": {
+        "x": 0,
+        "y": 73,
+        "w": 12,
+        "h": 7
+      }
+    },
+    {
+      "type": "table",
+      "title": "Consumers",
+      "description": "Consumers of the notifier group. A live pod polls every 5s (idle < 5s); a long idle consumer is a pod that is gone (rescheduled), and its pending entries are never delivered. Remove it with XGROUP DELCONSUMER once it has none.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Idle"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 60
+                    },
+                    {
+                      "color": "red",
+                      "value": 600
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Pending"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Idle",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "consumer": 0,
+              "Value #A": 1,
+              "Value #B": 2
+            },
+            "renameByName": {
+              "consumer": "Consumer (notification-service pod)",
+              "Value #A": "Idle",
+              "Value #B": "Pending"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (consumer) (redis_stream_group_consumer_idle_seconds{job=\"redis-node\", stream=\"notifications\"} * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (consumer) (redis_stream_group_consumer_messages_pending{job=\"redis-node\", stream=\"notifications\"} * on (pod) group_left () max by (pod) (redis_instance_info{job=\"redis-node\", role=\"master\"}))",
+          "legendFormat": "",
+          "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 40,
+      "gridPos": {
+        "x": 12,
+        "y": 73,
+        "w": 12,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Persistence",
+      "collapsed": false,
+      "panels": [],
+      "id": 41,
+      "gridPos": {
+        "x": 0,
+        "y": 80,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Append-only file",
+      "description": "AOF size per pod (appendfsync everysec); a rewrite compacts it in a forked child (memory copy-on-write: RedisContainerMemoryNearLimit).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_aof_current_size_bytes{job=\"redis-node\"})",
+          "legendFormat": "{{pod}} size",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod) (redis_aof_rewrite_in_progress{job=\"redis-node\"}) > 0",
+          "legendFormat": "{{pod}} rewriting",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 42,
+      "gridPos": {
+        "x": 0,
+        "y": 81,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "AOF health",
+      "description": "1 = the last AOF write and rewrite succeeded. A failed write makes Redis refuse writes (RedisPersistenceFailing). Delayed fsyncs: the disk is slower than the write rate.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "min by (pod) (redis_aof_last_write_status{job=\"redis-node\"})",
+          "legendFormat": "{{pod}} last write ok",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "min by (pod) (redis_aof_last_bgrewrite_status{job=\"redis-node\"})",
+          "legendFormat": "{{pod}} last rewrite ok",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (pod) (rate(redis_aof_delayed_fsync{job=\"redis-node\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{pod}} delayed fsyncs / s",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 43,
+      "gridPos": {
+        "x": 8,
+        "y": 81,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Data volumes",
+      "description": "Used share of each pod's data volume (AOF and its rewrites).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (persistentvolumeclaim) (1 - kubelet_volume_stats_available_bytes{namespace=\"shop\", persistentvolumeclaim=~\"data-redis-node-[0-9]+\"} / kubelet_volume_stats_capacity_bytes{namespace=\"shop\", persistentvolumeclaim=~\"data-redis-node-[0-9]+\"})",
+          "legendFormat": "{{persistentvolumeclaim}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 44,
+      "gridPos": {
+        "x": 16,
+        "y": 81,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Logs",
+      "collapsed": false,
+      "panels": [],
+      "id": 45,
+      "gridPos": {
+        "x": 0,
+        "y": 88,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Redis and Sentinel logs",
+      "description": "Warnings (#) and notices of Redis and Sentinel, routine replication and AOF lines left out.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=~\"redis|sentinel\"} _msg:~\" [#!*] \" -_msg:~\"Background AOF|AOF rewrite|Accepted|Synchronization with replica|Streamed RDB|MASTER <-> REPLICA sync|Diskless\" | format \"<kubernetes.pod_name>/<kubernetes.container_name>: <_msg>\" as _msg",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 46,
+      "gridPos": {
+        "x": 0,
+        "y": 89,
+        "w": 12,
+        "h": 10
+      }
+    },
+    {
+      "type": "logs",
+      "title": "go-redis client messages in the services",
+      "description": "What the clients logged: Sentinel discovering a new master, pool timeouts, READONLY writes during a failover. go-redis logs through its own logger, so these lines have no service or level field.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{kubernetes.pod_namespace=\"shop\", kubernetes.container_name=\"app\"} _msg:~\"(?i)^redis: |sentinel: |READONLY|connection pool timeout|MASTERDOWN\" | format \"<kubernetes.pod_name>: <_msg>\" as _msg",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 47,
+      "gridPos": {
+        "x": 12,
+        "y": 89,
+        "w": 12,
+        "h": 10
+      }
+    }
+  ]
+}

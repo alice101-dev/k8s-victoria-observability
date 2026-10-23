@@ -1,4 +1,5 @@
-# Redis 8 with Sentinel: 3 pods, each running redis + sentinel + redis_exporter.
+# Redis 8 with Sentinel: 3 pods, each running redis + sentinel + two redis_exporters (Redis on 9121, Sentinel's
+# own view of the master, replicas and other sentinels on 9355).
 # 1 master + 2 replicas; 3 sentinels (quorum 2) promote a replica when the master is down for 5s.
 # Clients ask Sentinel for the master (service redis-sentinel) and follow failovers (go-redis FailoverClient).
 # Used for: read-through cache (user/product), payment idempotency keys, notification Redis Stream.
@@ -122,6 +123,9 @@ spec:
     - name: metrics
       port: 9121
       targetPort: metrics
+    - name: sentinel-metrics
+      port: 9355
+      targetPort: sentinel-metrics
 ---
 # Entry point for clients: any Sentinel returns the current master.
 apiVersion: v1
@@ -331,6 +335,32 @@ spec:
           ports:
             - name: metrics
               containerPort: 9121
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+        # Sentinel's view (redis_sentinel_*): which master it follows and its state, how many replicas and other
+        # sentinels it sees as healthy, whether the quorum can authorise a failover, TILT mode. Scraped as job
+        # redis-sentinel (apps/k8s/data/monitoring.yaml).
+        - name: sentinel-exporter
+          image: oliver006/redis_exporter:v1.93.0
+          env:
+            - name: REDIS_ADDR
+              value: redis://localhost:26379
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+            - name: REDIS_EXPORTER_WEB_LISTEN_ADDRESS
+              value: ":9355"
+          ports:
+            - name: sentinel-metrics
+              containerPort: 9355
           resources:
             requests: { cpu: 10m, memory: 16Mi }
             limits: { memory: 64Mi }
