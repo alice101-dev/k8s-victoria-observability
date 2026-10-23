@@ -12,6 +12,10 @@ traffic-generator ──► api-gateway ──► /api/orders ──► order-se
                          └──► /api/products/* ──► product-service
 ```
 
+`traffic-generator` is k6 with fixed arrival rates (`trafficGenerator.rate` in `k8s/services/values.yaml`):
+50 requests/s at api-gateway, 5 checkouts, 25 product reads and 20 user reads per second. User and product ids
+include unknown ones on purpose, so 4xx answers, failed checkouts and their traces are always present.
+
 | Service | Data | What it demonstrates |
 |---|---|---|
 | `api-gateway` | – | Root span, reverse proxy, upstream errors (502) |

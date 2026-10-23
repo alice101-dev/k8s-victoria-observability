@@ -84,16 +84,19 @@ redis:
   secretName: redis-auth
   passwordKey: password
 
-# Simple traffic generator (curl loop) so metrics/logs/traces always have data.
-# Set enabled=false (or replicas=0) when not needed.
+# Traffic generator (k6, fixed arrival rate) so metrics/logs/traces always have data. Requests per second at
+# api-gateway, browse-heavy like a real shop: 50/s in total. Every checkout also calls user, product, payment
+# and notification (≈25 spans), a read ≈5. Set enabled=false when not needed.
 trafficGenerator:
   enabled: true
-  image: curlimages/curl:8.16.0
-  # Pause between iterations (seconds). Each iteration = 1 checkout + 2 reads.
-  sleepSeconds: 1
+  image: grafana/k6:2.3.0
+  rate:
+    checkout: 5    # POST /api/orders
+    products: 25   # GET /api/products/{id}
+    users: 20      # GET /api/users/{id}
   resources:
-    requests: { cpu: 5m, memory: 16Mi }
-    limits: { memory: 32Mi }
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { memory: 256Mi }
 
 # Alerts (VMRule) & Grafana dashboards (ConfigMap, loaded by the Grafana sidecar).
 alerts:

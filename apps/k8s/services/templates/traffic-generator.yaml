@@ -1,7 +1,55 @@
+{{- define "shop.trafficScript" -}}
+import http from 'k6/http';
+
+const GW = 'http://api-gateway:8080';
+const rand = (n) => Math.floor(Math.random() * n) + 1;
+const scenario = (exec, rate) => ({
+  executor: 'constant-arrival-rate', exec, rate, timeUnit: '1s', duration: '87600h',
+  preAllocatedVUs: Math.max(5, rate), maxVUs: Math.max(20, rate * 4),
+});
+
+export const options = {
+  scenarios: {
+    checkout: scenario('checkout', Number(__ENV.CHECKOUT_RATE || 5)),
+    products: scenario('products', Number(__ENV.PRODUCTS_RATE || 25)),
+    users: scenario('users', Number(__ENV.USERS_RATE || 20)),
+  },
+  // Failures are part of the traffic (unknown users and products, declined payments).
+  discardResponseBodies: true,
+  noConnectionReuse: false,
+};
+
+export function checkout() {
+  http.post(`${GW}/api/orders`,
+    JSON.stringify({ user_id: rand(60), product_id: rand(22), quantity: rand(3) }),
+    { headers: { 'Content-Type': 'application/json' }, timeout: '10s', tags: { name: 'checkout' } });
+}
+
+export function products() {
+  http.get(`${GW}/api/products/${rand(22)}`, { timeout: '5s', tags: { name: 'product' } });
+}
+
+export function users() {
+  http.get(`${GW}/api/users/${rand(60)}`, { timeout: '5s', tags: { name: 'user' } });
+}
+{{- end }}
 {{- if .Values.trafficGenerator.enabled }}
-# Traffic generator: each iteration = 1 checkout (POST /api/orders) + 2 reads.
+{{- $tg := .Values.trafficGenerator }}
+# Traffic generator: k6 with constant-arrival-rate scenarios, so the request rate stays fixed whatever the latency
+# (a sequential loop slows down with the services). Rates per second from values (trafficGenerator.rate).
 # user_id 1..60 (only 50 seeded) & product_id 1..22 (20 seeded) → some requests fail on purpose
-# (422) so error dashboards/alerts/traces have data.
+# (404/422) so error dashboards/alerts/traces have data.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traffic-generator
+  labels:
+    app.kubernetes.io/name: traffic-generator
+    app.kubernetes.io/part-of: shop
+data:
+  traffic.js: |
+    {{- include "shop.trafficScript" . | nindent 4 }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,35 +69,44 @@ spec:
       labels:
         app.kubernetes.io/name: traffic-generator
         app.kubernetes.io/part-of: shop
+      annotations:
+        checksum/script: {{ include "shop.trafficScript" . | sha256sum | trunc 16 }}
     spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
-        runAsUser: 100
+        runAsUser: 12345
         seccompProfile:
           type: RuntimeDefault
       containers:
-        - name: curl
-          image: {{ .Values.trafficGenerator.image }}
-          command: ["/bin/sh", "-c"]
-          args:
-            - |
-              GW=http://api-gateway:8080
-              while true; do
-                uid=$(( RANDOM % 60 + 1 )); pid=$(( RANDOM % 22 + 1 )); qty=$(( RANDOM % 3 + 1 ))
-                code=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -X POST "$GW/api/orders" \
-                  -H 'Content-Type: application/json' \
-                  -d "{\"user_id\":$uid,\"product_id\":$pid,\"quantity\":$qty}")
-                curl -s -o /dev/null -m 5 "$GW/api/products/$pid"
-                curl -s -o /dev/null -m 5 "$GW/api/users/$uid"
-                echo "checkout user=$uid product=$pid qty=$qty status=$code"
-                sleep {{ .Values.trafficGenerator.sleepSeconds }}
-              done
+        - name: k6
+          image: {{ $tg.image }}
+          # --no-usage-report: no anonymous usage statistics sent to Grafana; --quiet: no progress bar in the logs.
+          args: ["run", "--quiet", "--no-usage-report", "--no-summary", "/scripts/traffic.js"]
+          env:
+            - name: CHECKOUT_RATE
+              value: {{ $tg.rate.checkout | quote }}
+            - name: PRODUCTS_RATE
+              value: {{ $tg.rate.products | quote }}
+            - name: USERS_RATE
+              value: {{ $tg.rate.users | quote }}
           resources:
-            {{- toYaml .Values.trafficGenerator.resources | nindent 12 }}
+            {{- toYaml $tg.resources | nindent 12 }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: ["ALL"]
+          volumeMounts:
+            - name: script
+              mountPath: /scripts
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: script
+          configMap:
+            name: traffic-generator
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
 {{- end }}
