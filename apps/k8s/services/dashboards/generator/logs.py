@@ -1,5 +1,5 @@
 """Shop — Logs: volume and error trends, message patterns, facets, pods and versions, one request, explorer, pipeline."""
-from .common import (ADHOC, APP_LOGS, COUNT, LEVEL_COLORS, LINKS_ON, PCT, RI, SEARCH, SEARCH_VAR, VL, WHEN,
+from .common import (ADHOC, APP_LOGS, COUNT, describe, LEVEL_COLORS, LINKS_ON, PCT, RI, SEARCH, SEARCH_VAR, VL, WHEN,
     by_name, Dash, dashboard, level_colors, logs_panel, logsql_table, right_axis, status_history, thresholds,
     ts, vl, vl_stat, vm)
 
@@ -207,6 +207,9 @@ REQUEST_VAR = {"name": "request", "label": "Request (latest first)", "type": "qu
                "query": {"type": "fieldValue", "field": "option", "query": REQUEST_PICK, "limit": 100, "refId": "request"},
                "definition": "option: latest lines with a trace ID", "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
                "sort": 2, "refresh": 2, "multi": False, "includeAll": False, "allowCustomValue": True, "current": {}}
+describe(d.panels, {
+    "Lines by level": "Log lines of the selected services per interval by level, after the message search.",
+})
 DASHBOARD = dashboard(
     "shop-logs", "Shop — Logs", ["shop", "logs"], d.panels, [LOG_SERVICE, LEVEL, SEARCH_VAR, ADHOC, REQUEST_VAR],
     "Application logs of the shop services from VictoriaLogs: volume and error trends, message patterns, what failing "

@@ -615,7 +615,7 @@
     {
       "type": "timeseries",
       "title": "Lines by level",
-      "description": "",
+      "description": "Log lines of the selected services per interval by level, after the message search.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"

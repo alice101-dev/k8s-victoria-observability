@@ -199,7 +199,8 @@
           "refId": "A",
           "range": true
         }
-      ]
+      ],
+      "description": "Requests per second entering the shop at api-gateway."
     },
     {
       "id": 3,
@@ -262,7 +263,8 @@
           "refId": "A",
           "range": true
         }
-      ]
+      ],
+      "description": "Share of api-gateway requests answered with a 5xx: what users see failing."
     },
     {
       "id": 4,
@@ -325,7 +327,8 @@
           "refId": "A",
           "range": true
         }
-      ]
+      ],
+      "description": "95th percentile response time at api-gateway."
     },
     {
       "id": 5,
@@ -380,7 +383,8 @@
           "refId": "A",
           "range": true
         }
-      ]
+      ],
+      "description": "Checkouts that ended with a confirmed order, per minute (5-minute average)."
     },
     {
       "id": 6,
@@ -399,7 +403,7 @@
       "id": 7,
       "type": "timeseries",
       "title": "Request rate per service",
-      "description": "",
+      "description": "Requests per second each service answers.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -452,7 +456,7 @@
       "id": 8,
       "type": "timeseries",
       "title": "Error rate 5xx per service",
-      "description": "",
+      "description": "Share of each service's requests answered with a 5xx.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -505,7 +509,7 @@
       "id": 9,
       "type": "timeseries",
       "title": "p95 latency per service",
-      "description": "",
+      "description": "95th percentile response time of each service.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -558,7 +562,7 @@
       "id": 10,
       "type": "timeseries",
       "title": "p95 latency per route",
-      "description": "",
+      "description": "95th percentile response time per service and route.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -611,7 +615,7 @@
       "id": 11,
       "type": "timeseries",
       "title": "Status code per service",
-      "description": "",
+      "description": "Responses per second by HTTP status code: 4xx are client errors (unknown user, declined payment), 5xx server errors.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -664,7 +668,7 @@
       "id": 12,
       "type": "timeseries",
       "title": "In-flight requests",
-      "description": "",
+      "description": "Requests being processed right now per service; rises when a service or a dependency slows.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -730,7 +734,7 @@
       "id": 14,
       "type": "timeseries",
       "title": "Calls to other services",
-      "description": "",
+      "description": "HTTP calls each service makes to the others per second, by callee and status code.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -783,7 +787,7 @@
       "id": 15,
       "type": "timeseries",
       "title": "p95 latency to other services",
-      "description": "",
+      "description": "95th percentile duration of calls between services, by caller and callee.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -849,7 +853,7 @@
       "id": 17,
       "type": "timeseries",
       "title": "Checkout results",
-      "description": "",
+      "description": "Checkouts per second by result: confirmed, payment_failed (declined card), invalid_user, invalid_product.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -902,7 +906,7 @@
       "id": 18,
       "type": "timeseries",
       "title": "Payment",
-      "description": "",
+      "description": "Payments per second by result (approved, declined).",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -955,7 +959,7 @@
       "id": 19,
       "type": "timeseries",
       "title": "Stock & notifications",
-      "description": "",
+      "description": "Stock reservations (reserved, released when a checkout fails) and notifications by stage (queued, delivered, reclaimed, dropped), per second.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1114,7 +1118,8 @@
           "maxLines": 200,
           "expr": "{kubernetes.pod_namespace=\"shop\"} level:in(ERROR, WARN)"
         }
-      ]
+      ],
+      "description": "Newest WARN and ERROR lines of all shop services; the trace_id opens the request's trace."
     },
     {
       "id": 23,
@@ -1133,7 +1138,7 @@
       "id": 24,
       "type": "timeseries",
       "title": "CPU per pod",
-      "description": "",
+      "description": "CPU used by every shop pod (all its containers).",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1175,7 +1180,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{namespace=\"shop\", container!=\"\", container!=\"POD\"}[$__rate_interval]))",
+          "expr": "sum by (pod) (rate(container_cpu_usage_seconds_total{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", namespace=\"shop\", container!=\"\", container!=\"POD\"}[$__rate_interval]))",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "range": true
@@ -1186,7 +1191,7 @@
       "id": 25,
       "type": "timeseries",
       "title": "Memory working set per pod",
-      "description": "",
+      "description": "Working set memory of every shop pod (what counts against memory limits).",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1228,7 +1233,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (pod) (container_memory_working_set_bytes{namespace=\"shop\", container!=\"\", container!=\"POD\"})",
+          "expr": "sum by (pod) (container_memory_working_set_bytes{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", namespace=\"shop\", container!=\"\", container!=\"POD\"})",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "range": true

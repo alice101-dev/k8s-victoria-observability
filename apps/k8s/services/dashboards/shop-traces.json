@@ -1256,7 +1256,7 @@
     {
       "type": "timeseries",
       "title": "p95 by endpoint",
-      "description": "",
+      "description": "95th percentile duration of each endpoint's server spans (the request as the service handles it).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -1316,7 +1316,7 @@
     {
       "type": "timeseries",
       "title": "5xx by endpoint",
-      "description": "",
+      "description": "Server spans answered with a 5xx per interval, by endpoint.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -2627,7 +2627,7 @@
     {
       "type": "timeseries",
       "title": "5xx by ${attribute:text}",
-      "description": "",
+      "description": "Requests answered with a 5xx per interval, split by the attribute chosen in the Attribute variable: whether failures concentrate on one product, user, pod or version.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"

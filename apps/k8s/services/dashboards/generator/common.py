@@ -231,6 +231,17 @@ def dashboard(uid, title, tags, panels, variables, desc, time_from="now-3h"):
             "panels": panels}
 
 
+def describe(panels, descriptions):
+    """Set the description (the panel's info tooltip) of panels by title; every title must exist."""
+    found = set()
+    for p in panels:
+        if p.get("title") in descriptions:
+            p["description"] = descriptions[p["title"]]
+            found.add(p["title"])
+    missing = set(descriptions) - found
+    assert not missing, f"no panel titled {sorted(missing)}"
+
+
 def write(name, dash, out):
     with open(os.path.join(out, name), "w") as f:
         json.dump(dash, f, indent=2, ensure_ascii=False)

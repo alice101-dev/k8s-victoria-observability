@@ -1,5 +1,5 @@
 """Shop — Traces: span analytics with LogsQL on VictoriaTraces (datasource "VictoriaTraces (LogsQL)")."""
-from .common import (COUNT, LINKS_ON, PCT, VT, by_name, code_colors, Dash, dashboard, logsql_table, stat,
+from .common import (COUNT, LINKS_ON, PCT, VT, by_name, describe, code_colors, Dash, dashboard, logsql_table, stat,
     thresholds, ts, vl)
 
 FILE = "shop-traces.json"
@@ -322,6 +322,13 @@ ATTRIBUTES = [("product", "span_attr:order.product_id"), ("user", "span_attr:ord
               ("HTTP status", "span_attr:http.response.status_code"), ("pod", "resource_attr:k8s.pod.name"),
               ("node", "resource_attr:k8s.node.name"), ("version", "resource_attr:service.version")]
 DURATIONS = [(t, str(int(ms * 1e6))) for t, ms in (("100ms", 100), ("250ms", 250), ("500ms", 500), ("1s", 1000), ("2s", 2000))]
+describe(d.panels, {
+    "p95 by endpoint": "95th percentile duration of each endpoint's server spans (the request as the service "
+                       "handles it).",
+    "5xx by endpoint": "Server spans answered with a 5xx per interval, by endpoint.",
+    "5xx by ${attribute:text}": "Requests answered with a 5xx per interval, split by the attribute chosen in the "
+                                "Attribute variable: whether failures concentrate on one product, user, pod or version.",
+})
 DASHBOARD = dashboard(
     "shop-traces", "Shop — Traces", ["shop", "traces"], d.panels, [
         lq_var("service", "Service", "resource_attr:service.name", '"resource_attr:service.namespace":=shop', True, None),

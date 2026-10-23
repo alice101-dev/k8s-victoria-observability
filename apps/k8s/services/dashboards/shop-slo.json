@@ -798,6 +798,7 @@
         "type": "prometheus",
         "uid": "VictoriaMetrics"
       },
+      "description": "Share of each service's desired replicas that are available (passing their readiness probe, so they receive traffic). 100%: all replicas serve. Orange: some are restarting, rolling out, rescheduled after a node preemption or crash-looping; the service still answers with less capacity and redundancy. Red 0%: the service is down. Its own SLI then stops moving (no requests reach it), so this panel, Services without ready pods and ShopServiceDown catch it; users see it in the journey SLOs.",
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",

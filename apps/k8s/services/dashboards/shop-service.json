@@ -182,7 +182,7 @@
     {
       "type": "stat",
       "title": "Availability (30d)",
-      "description": "",
+      "description": "Share of this service's requests answered without a 5xx over the 30-day SLO window.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -248,7 +248,7 @@
     {
       "type": "stat",
       "title": "Availability budget left",
-      "description": "",
+      "description": "Error budget of the availability SLO still unspent in the 30-day window: 100% none used, 0% the SLO is met exactly, below 0 it is violated.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -380,7 +380,7 @@
     {
       "type": "stat",
       "title": "Latency budget left",
-      "description": "",
+      "description": "Error budget of the latency SLO (requests slower than the threshold) still unspent in the 30-day window.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -446,7 +446,7 @@
     {
       "type": "stat",
       "title": "Burn rate 1h (worst SLI)",
-      "description": "",
+      "description": "How fast the worst SLI of this service spends its budget over the last hour: 1 spends it in exactly 30 days, 14.4 pages (2% of the budget in one hour).",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -512,7 +512,7 @@
     {
       "type": "stat",
       "title": "Requests / s",
-      "description": "",
+      "description": "Requests this service answers per second (5-minute average).",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -583,7 +583,7 @@
     {
       "type": "timeseries",
       "title": "Requests by route",
-      "description": "",
+      "description": "Requests per second by HTTP method and route pattern.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -741,7 +741,7 @@
     {
       "type": "timeseries",
       "title": "5xx ratio by route",
-      "description": "",
+      "description": "Share of each route's requests answered with a 5xx (server error).",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -813,7 +813,7 @@
     {
       "type": "timeseries",
       "title": "Latency percentiles",
-      "description": "",
+      "description": "Server-side response time of the whole service: median, 95th and 99th percentile.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -891,7 +891,7 @@
     {
       "type": "timeseries",
       "title": "p95 latency by route",
-      "description": "",
+      "description": "95th percentile response time per route: which endpoint is slow.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1158,7 +1158,7 @@
     {
       "type": "timeseries",
       "title": "Outgoing p95 latency by peer",
-      "description": "",
+      "description": "95th percentile duration of this service's HTTP calls to other services, per callee: slowness that comes from a dependency.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1611,7 +1611,7 @@
     {
       "type": "timeseries",
       "title": "CPU per pod",
-      "description": "",
+      "description": "CPU used by the app container of each pod, against its request (dashed). Above the request the pod competes for CPU with its neighbours.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1679,7 +1679,7 @@
     {
       "type": "timeseries",
       "title": "Memory per pod",
-      "description": "",
+      "description": "Working set memory of the app container of each pod, against its limit: at the limit the container is OOM-killed.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1746,7 +1746,7 @@
     {
       "type": "timeseries",
       "title": "In-flight requests and goroutines",
-      "description": "",
+      "description": "Requests being processed right now and Go goroutines per pod: both rise when the service or a dependency slows down.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1885,7 +1885,7 @@
     {
       "type": "timeseries",
       "title": "Log volume by level",
-      "description": "",
+      "description": "Log lines of this service per interval by level (INFO, WARN, ERROR).",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"
@@ -2004,7 +2004,7 @@
     {
       "type": "table",
       "title": "Top WARN and ERROR messages",
-      "description": "",
+      "description": "The 10 most frequent WARN and ERROR messages of this service in the time range.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaLogs"

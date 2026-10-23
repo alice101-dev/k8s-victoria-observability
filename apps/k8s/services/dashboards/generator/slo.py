@@ -87,6 +87,12 @@ d.add(stat("Services without ready pods", f'count(kube_deployment_status_replica
            "short", thresholds(("green", None), ("red", 1)), decimals=0,
            desc="A service with no ready pod is down even though its SLO rows stay quiet. Alert: ShopServiceDown."), 4, 6)
 d.add({"type": "bargauge", "title": "Ready pods per service", "datasource": VM,
+       "description": "Share of each service's desired replicas that are available (passing their readiness probe, "
+                      "so they receive traffic). 100%: all replicas serve. Orange: some are restarting, rolling out, "
+                      "rescheduled after a node preemption or crash-looping; the service still answers with less "
+                      "capacity and redundancy. Red 0%: the service is down. Its own SLI then stops moving (no "
+                      "requests reach it), so this panel, Services without ready pods and ShopServiceDown catch it; "
+                      "users see it in the journey SLOs.",
        "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1,
                                     "thresholds": thresholds(("red", None), ("orange", 0.01), ("green", 1))}, "overrides": []},
        "options": {"orientation": "horizontal", "displayMode": "basic", "showUnfilled": True, "valueMode": "color",

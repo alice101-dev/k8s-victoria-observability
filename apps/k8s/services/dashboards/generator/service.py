@@ -1,5 +1,5 @@
 """Shop — Service: one service end to end (SLO, RED, latency, dependencies, database, saturation, logs, traces)."""
-from .common import (APP_LOGS, BURN, CADVISOR, NS, RI, VL, VM, VT, by_name, code_colors, Dash, dashboard, level_colors,
+from .common import (APP_LOGS, BURN, CADVISOR, NS, RI, VL, VM, VT, by_name, code_colors, Dash, dashboard, describe, level_colors,
     logs_panel, right_axis, stat, table, thresholds, ts, var_service, vl, vm)
 
 FILE = "shop-service.json"
@@ -151,6 +151,30 @@ for p in (
 MIN_DUR = {"name": "min_duration", "label": "Slow trace threshold", "type": "custom",
            "query": "100ms,250ms,500ms,1s,2s", "current": {"selected": True, "text": "250ms", "value": "250ms"},
            "options": [{"selected": v == "250ms", "text": v, "value": v} for v in ("100ms", "250ms", "500ms", "1s", "2s")]}
+describe(d.panels, {
+    "Availability (30d)": "Share of this service's requests answered without a 5xx over the 30-day SLO window.",
+    "Availability budget left": "Error budget of the availability SLO still unspent in the 30-day window: 100% none "
+                                "used, 0% the SLO is met exactly, below 0 it is violated.",
+    "Latency budget left": "Error budget of the latency SLO (requests slower than the threshold) still unspent in "
+                           "the 30-day window.",
+    "Burn rate 1h (worst SLI)": "How fast the worst SLI of this service spends its budget over the last hour: 1 "
+                                "spends it in exactly 30 days, 14.4 pages (2% of the budget in one hour).",
+    "Requests / s": "Requests this service answers per second (5-minute average).",
+    "Requests by route": "Requests per second by HTTP method and route pattern.",
+    "5xx ratio by route": "Share of each route's requests answered with a 5xx (server error).",
+    "Latency percentiles": "Server-side response time of the whole service: median, 95th and 99th percentile.",
+    "p95 latency by route": "95th percentile response time per route: which endpoint is slow.",
+    "Outgoing p95 latency by peer": "95th percentile duration of this service's HTTP calls to other services, per "
+                                    "callee: slowness that comes from a dependency.",
+    "CPU per pod": "CPU used by the app container of each pod, against its request (dashed). Above the request "
+                   "the pod competes for CPU with its neighbours.",
+    "Memory per pod": "Working set memory of the app container of each pod, against its limit: at the limit the "
+                      "container is OOM-killed.",
+    "In-flight requests and goroutines": "Requests being processed right now and Go goroutines per pod: both rise "
+                                         "when the service or a dependency slows down.",
+    "Log volume by level": "Log lines of this service per interval by level (INFO, WARN, ERROR).",
+    "Top WARN and ERROR messages": "The 10 most frequent WARN and ERROR messages of this service in the time range.",
+})
 DASHBOARD = dashboard(
     "shop-service", "Shop — Service", ["shop", "red"], d.panels, [var_service(False), MIN_DUR],
     "One service end to end: SLO, RED, latency distribution, dependencies, database, saturation, logs and traces.", "now-1h")
