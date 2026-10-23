@@ -921,7 +921,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (type) (rate(vm_rows_inserted_total{job=\"vmsingle-vmks\"}[$__rate_interval]))",
+          "expr": "sum by (type) (rate(vm_rows_inserted_total{job=\"vmsingle-vmks\"}[$__rate_interval])) > 0",
           "legendFormat": "{{type}}",
           "refId": "A",
           "range": true,
@@ -2914,7 +2914,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "topk(12, sum by (pod) (container_memory_working_set_bytes{namespace=\"monitoring\", container!=\"\"}) / sum by (pod) (kube_pod_container_resource_limits{namespace=\"monitoring\", resource=\"memory\"}))",
+          "expr": "topk(12, sum by (pod) (container_memory_working_set_bytes{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", namespace=\"monitoring\", container!=\"\"}) / sum by (pod) (kube_pod_container_resource_limits{namespace=\"monitoring\", resource=\"memory\"}))",
           "legendFormat": "{{pod}}",
           "refId": "A",
           "range": false,

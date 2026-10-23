@@ -1,5 +1,5 @@
 """Shop — Service: one service end to end (SLO, RED, latency, dependencies, database, saturation, logs, traces)."""
-from .common import (APP_LOGS, BURN, NS, RI, VL, VM, VT, by_name, code_colors, Dash, dashboard, level_colors,
+from .common import (APP_LOGS, BURN, CADVISOR, NS, RI, VL, VM, VT, by_name, code_colors, Dash, dashboard, level_colors,
     logs_panel, right_axis, stat, table, thresholds, ts, var_service, vl, vm)
 
 FILE = "shop-service.json"
@@ -104,11 +104,11 @@ for p in (
 
 d.row("Saturation")
 d.add(ts("CPU per pod", [
-    vm(f'sum by (pod) (rate(container_cpu_usage_seconds_total{{{NS}, {POD}, container="app"}}{RI}))', "{{pod}}"),
+    vm(f'sum by (pod) (rate(container_cpu_usage_seconds_total{{{CADVISOR}, {NS}, {POD}, container="app"}}{RI}))', "{{pod}}"),
     vm(f'max(kube_pod_container_resource_requests{{{NS}, {POD}, container="app", resource="cpu"}})', "request", "B")],
     "cores", decimals=3), 6, 8)
 d.add(ts("Memory per pod", [
-    vm(f'sum by (pod) (container_memory_working_set_bytes{{{NS}, {POD}, container="app"}})', "{{pod}}"),
+    vm(f'sum by (pod) (container_memory_working_set_bytes{{{CADVISOR}, {NS}, {POD}, container="app"}})', "{{pod}}"),
     vm(f'max(kube_pod_container_resource_limits{{{NS}, {POD}, container="app", resource="memory"}})', "limit", "B")],
     "bytes"), 6, 8)
 d.add(ts("In-flight requests and goroutines", [

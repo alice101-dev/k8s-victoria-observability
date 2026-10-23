@@ -1,7 +1,7 @@
 """Observability — Pipeline health: is the stack collecting, storing and alerting? One page over vmagent, vlagent,
 VMSingle, VLSingle, VTSingle, vmalert, Alertmanager and kube-dns, each section linking to the component's own
 dashboard."""
-from .common import (COUNT, RI, VM, by_name, Dash, dashboard, restart_annotations, right_axis, stat, table,
+from .common import (CADVISOR, COUNT, RI, VM, by_name, Dash, dashboard, restart_annotations, right_axis, stat, table,
     thresholds, ts, vm)
 
 FILE = "observability-pipeline.json"
@@ -161,7 +161,7 @@ with_links(d.add(bargauge("Samples per scrape, top 10 jobs",
 
 d.row("Ingestion — metrics, logs and spans")
 with_links(d.add(ts("Metrics into VMSingle",
-                    [vm(f'sum by (type) (rate(vm_rows_inserted_total{{job="vmsingle-vmks"}}{RI}))', "{{type}}"),
+                    [vm(f'sum by (type) (rate(vm_rows_inserted_total{{job="vmsingle-vmks"}}{RI})) > 0', "{{type}}"),
                      vm(f'sum(rate(vm_new_timeseries_created_total{{job="vmsingle-vmks"}}{RI}))', "new series / s", "B")],
                     "short", min_=0, overrides=[right_axis("B", "short")],
                     desc="Samples per second by protocol (left) and new series per second (right: churn, e.g. after "
@@ -327,7 +327,7 @@ with_links(d.add(table("Restarts in the time range",
                             "liveness probe). A store restart pauses ingestion and queries for its duration."),
                  12, 8), "operator", "events")
 d.add(bargauge("Memory against the limit, top 12 pods",
-               vm(f'topk(12, sum by (pod) (container_memory_working_set_bytes{{{NS}, container!=""}}) '
+               vm(f'topk(12, sum by (pod) (container_memory_working_set_bytes{{{CADVISOR}, {NS}, container!=""}}) '
                   f'/ sum by (pod) (kube_pod_container_resource_limits{{{NS}, resource="memory"}}))', "{{pod}}", instant=True),
                "percentunit", thresholds(("green", None), ("orange", 0.8), ("red", 0.9)),
                "Working set memory of the stack's pods against their limit; at 100% the container is OOM-killed.",

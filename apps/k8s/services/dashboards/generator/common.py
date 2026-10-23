@@ -9,6 +9,10 @@ NS = 'namespace="shop"'
 RI = "[$__rate_interval]"
 APP_LOGS = '{kubernetes.pod_namespace="shop"}'
 BURN = "/ on (job, slo, kind) (1 - slo:objective:ratio)"
+# The kubelet is scraped on /metrics/cadvisor and /metrics/resource: both expose container_cpu_usage_seconds_total
+# and container_memory_working_set_bytes for every container, so container_* queries pick one endpoint (as the
+# kubernetes-mixin does) or every sum counts twice.
+CADVISOR = 'job="kubelet", metrics_path="/metrics/cadvisor"'
 
 LINKS = [
     {"title": "Shop dashboards", "type": "dashboards", "tags": ["shop"], "asDropdown": True,

@@ -1,6 +1,6 @@
 """Platform — GitOps & Secrets: Argo CD (applications, syncs, Git), External Secrets and cert-manager, from the
 scrape configs and alerts of observability/platform."""
-from .common import (COUNT, RI, SEARCH, SEARCH_VAR, VL, VM, by_name, code_colors, Dash, dashboard, logs_panel,
+from .common import (CADVISOR, COUNT, RI, SEARCH, SEARCH_VAR, VL, VM, by_name, code_colors, Dash, dashboard, logs_panel,
     restart_annotations, right_axis, stat, status_history, table, thresholds, ts, vl, vm)
 
 FILE = "platform-gitops-secrets.json"
@@ -262,9 +262,9 @@ d.add(status_history("Scrape targets up",
                      "Every metrics endpoint of Argo CD, External Secrets and cert-manager; Down means the component "
                      "is restarting or not reachable.", thresholds(("red", None), ("green", 1))), 8, 7)
 d.panels[-1]["fieldConfig"]["defaults"]["mappings"] = mappings({"1": ("Up", "green"), "0": ("Down", "red")})
-d.add(ts("CPU", [vm(f'sum by (pod) (rate(container_cpu_usage_seconds_total{{{NS_RE}, container!=""}}{RI}))', "{{pod}}")],
+d.add(ts("CPU", [vm(f'sum by (pod) (rate(container_cpu_usage_seconds_total{{{CADVISOR}, {NS_RE}, container!=""}}{RI}))', "{{pod}}")],
          "cores", min_=0, desc="CPU of every pod in argocd, external-secrets and cert-manager."), 8, 7)
-d.add(ts("Memory", [vm(f'sum by (pod) (container_memory_working_set_bytes{{{NS_RE}, container!=""}})', "{{pod}}")],
+d.add(ts("Memory", [vm(f'sum by (pod) (container_memory_working_set_bytes{{{CADVISOR}, {NS_RE}, container!=""}})', "{{pod}}")],
          "bytes", min_=0, desc="Working set memory of every pod (what counts against the memory limit)."), 8, 7)
 
 d.row("Errors in the logs")
