@@ -19,7 +19,7 @@ traffic-generator ──► api-gateway ──► /api/orders ──► order-se
 | `product-service` | PostgreSQL + Redis | Atomic `UPDATE ... RETURNING` reservations, compensation, background `restock` job |
 | `order-service` | PostgreSQL | 5-step checkout saga with compensation when payment is declined |
 | `payment-service` | PostgreSQL + Redis | Random latency (≤400ms), 10% declines, idempotency keys |
-| `notification-service` | Redis Stream | `traceparent` propagated through an async producer → consumer boundary |
+| `notification-service` | Redis Stream | `traceparent` propagated through an async producer → consumer boundary; at-least-once delivery: entries a stopped consumer left pending are reclaimed after a minute, dropped after 5 attempts |
 
 ## Instrumentation (`src/internal/platform`)
 
@@ -110,6 +110,7 @@ Alerts shipped with the application (VMRule):
   `RedisReplicationBroken`, `RedisReplicaLagging`, `RedisMemoryNearLimit`, `RedisEvictingKeys`,
   `RedisOutOfMemoryErrors`, `RedisContainerMemoryNearLimit`, `RedisRejectedConnections`,
   `RedisPersistenceFailing`, `RedisNotificationBacklog`, `RedisNotificationsStuckPending`,
+  `RedisNotificationsDropped`,
   `RedisClientPoolTimeouts`; Sentinel: `RedisSentinelQuorumLost`, `RedisSentinelsDegraded`,
   `RedisSentinelMasterDown`, `RedisSentinelsDisagree`, `RedisFailover`, `RedisSentinelTilt`; from the
   Sentinel logs (LogsQL): `RedisFailoverAborted`.

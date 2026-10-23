@@ -278,11 +278,15 @@ d.add(ts("Stream and the notifier group",
           vm(on_master(f"redis_stream_group_lag{{{NODE}, {STREAM}}}"), "not yet read (lag)", "B"),
           vm(on_master(f"redis_stream_group_messages_pending{{{NODE}, {STREAM}}}"), "read, not acknowledged", "C"),
           vm(f"sum(rate(redis_stream_entries_added_total{{{NODE}, {STREAM}}}{RI}) * on (pod) group_left () {MASTER_POD})",
-             "added / s", "D")],
-         "short", min_=0, decimals=0, overrides=[right_axis("D", "short"), fixed("read, not acknowledged", "red")],
+             "added / s", "D"),
+          vm(f'sum by (stage) (rate(notifications_total{{namespace="shop", stage=~"reclaimed|dropped"}}{RI})) > 0',
+             "{{stage}} / s", "E")],
+         "short", min_=0, decimals=0, overrides=[right_axis("D", "short"), right_axis("E", "short"),
+                                                 fixed("read, not acknowledged", "orange"), fixed("dropped / s", "red")],
          desc="The notifications stream (MAXLEN ~10000, so the length stays near 10000): entries the group has "
-              "not read yet, entries delivered but never acknowledged (a consumer died mid-delivery; nothing "
-              "reclaims them), and the enqueue rate (right)."), 12, 7)
+              "not read yet, entries delivered but not acknowledged yet, and on the right the enqueue rate and "
+              "the entries notification-service reclaimed from a consumer that stopped (after a minute) or "
+              "dropped after 5 failed deliveries."), 12, 7)
 d.add(table("Consumers",
             [instant(f"max by (consumer) (redis_stream_group_consumer_idle_seconds{{{NODE}, {STREAM}}} "
                      f"* on (pod) group_left () {MASTER_POD})", "A"),
@@ -300,8 +304,8 @@ d.add(table("Consumers",
                                            {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                                            {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}])],
             desc="Consumers of the notifier group. A live pod polls every 5s (idle < 5s); a long idle consumer is a "
-                 "pod that is gone (rescheduled), and its pending entries are never delivered. Remove it with "
-                 "XGROUP DELCONSUMER once it has none.",
+                 "pod that is gone. Its pending entries are reclaimed by a live pod after a minute, and the "
+                 "consumer itself is removed once it has been idle for an hour with nothing pending.",
             sort=[{"displayName": "Idle", "desc": True}]), 12, 7)
 
 d.row("Persistence")

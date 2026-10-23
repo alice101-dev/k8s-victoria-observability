@@ -2996,7 +2996,7 @@
     {
       "type": "timeseries",
       "title": "Stream and the notifier group",
-      "description": "The notifications stream (MAXLEN ~10000, so the length stays near 10000): entries the group has not read yet, entries delivered but never acknowledged (a consumer died mid-delivery; nothing reclaims them), and the enqueue rate (right).",
+      "description": "The notifications stream (MAXLEN ~10000, so the length stays near 10000): entries the group has not read yet, entries delivered but not acknowledged yet, and on the right the enqueue rate and the entries notification-service reclaimed from a consumer that stopped (after a minute) or dropped after 5 failed deliveries.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -3036,8 +3036,39 @@
           },
           {
             "matcher": {
+              "id": "byFrameRefID",
+              "options": "E"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          },
+          {
+            "matcher": {
               "id": "byName",
               "options": "read, not acknowledged"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "orange"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dropped / s"
             },
             "properties": [
               {
@@ -3109,6 +3140,17 @@
           "refId": "D",
           "range": true,
           "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (stage) (rate(notifications_total{namespace=\"shop\", stage=~\"reclaimed|dropped\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{stage}} / s",
+          "refId": "E",
+          "range": true,
+          "instant": false
         }
       ],
       "id": 39,
@@ -3122,7 +3164,7 @@
     {
       "type": "table",
       "title": "Consumers",
-      "description": "Consumers of the notifier group. A live pod polls every 5s (idle < 5s); a long idle consumer is a pod that is gone (rescheduled), and its pending entries are never delivered. Remove it with XGROUP DELCONSUMER once it has none.",
+      "description": "Consumers of the notifier group. A live pod polls every 5s (idle < 5s); a long idle consumer is a pod that is gone. Its pending entries are reclaimed by a live pod after a minute, and the consumer itself is removed once it has been idle for an hour with nothing pending.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"

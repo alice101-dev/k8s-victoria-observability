@@ -169,25 +169,29 @@ trimmed and lost.
 
 ## RedisNotificationsStuckPending
 
-**Meaning.** Entries were delivered to a consumer of the `notifier` group and never acknowledged for 15
-minutes: that consumer (a notification-service pod) stopped while delivering them.
+**Meaning.** Entries of the `notifier` group were delivered to a consumer and not acknowledged for 15 minutes.
+notification-service delivers at least once: every 30 seconds each pod takes over entries pending longer than
+a minute (a pod that stopped mid-delivery, or a read whose reply was lost) and delivers them, and a stopping
+pod finishes and acknowledges the delivery in progress first. Pending for 15 minutes means nobody is reclaiming.
 
-**Impact.** The service does not reclaim pending entries (no `XAUTOCLAIM`), so those notifications are never
-sent.
-
-**Fix.** The service reads only new entries (`XREADGROUP ... >`), so claiming them for a live consumer does not
-deliver them either. Re-enqueue them (read their fields with `XRANGE`, `XADD` them again, then `XACK` the
-originals), or `XACK` them if they must not be sent anymore. Then remove the dead consumers. The lasting fix is
-in notification-service: reclaim stale pending entries periodically (`XAUTOCLAIM` with a min idle time) and
-deliver them.
+**Diagnose.** notification-service pods (`kubectl -n shop get pods -l app.kubernetes.io/name=notification-service`)
+and their logs (`notification reclaimed`, `reclaim notification failed`); the Consumers table; the pending
+entries on the master:
 
 ```bash
-# On the master: pending entries with their consumer and idle time, and the consumers
 kubectl -n shop exec redis-node-0 -c redis -- sh -c 'export REDISCLI_AUTH="$REDIS_PASSWORD";
   redis-cli xpending notifications notifier - + 20; redis-cli xinfo consumers notifications notifier'
-# XACK notifications notifier <id> ...        acknowledge (after re-enqueuing with XADD if needed)
-# XGROUP DELCONSUMER notifications notifier <name>   remove a dead consumer once it has no pending entries
 ```
+
+**Fix.** Restore notification-service; it reclaims and delivers the entries on its own.
+
+## RedisNotificationsDropped
+
+**Meaning.** notification-service gave up on notifications: delivered 5 times without being acknowledged, or
+trimmed from the stream (MAXLEN ~10000) before anyone delivered them. They are not sent.
+
+**Diagnose.** notification-service ERROR logs `notification dropped` (stream id, deliveries, previous consumer,
+`trimmed`). Trimmed entries mean the consumers were down long enough for 10000 newer notifications to arrive.
 
 ## RedisClientPoolTimeouts
 

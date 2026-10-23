@@ -141,8 +141,8 @@ spec:
             summary: "{{ $value }} notifications wait in the stream for the notifier group"
             description: notification-service does not read the stream fast enough (or not at all). Notifications are delayed; past MAXLEN 10000 the oldest are trimmed unread.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnotificationbacklog
-        # Delivered but never acknowledged: the consumer died while delivering. The service does not reclaim them
-        # (no XAUTOCLAIM), so they stay pending forever.
+        # Delivered but not acknowledged. notification-service reclaims entries pending longer than a minute
+        # every 30s, so pending for 15 minutes means no consumer is reclaiming (all down, or failing).
         - alert: RedisNotificationsStuckPending
           expr: max(redis_stream_group_messages_pending{job="redis-node", stream="notifications"}) > 0
           for: 15m
@@ -150,8 +150,17 @@ spec:
             severity: warning
           annotations:
             summary: "{{ $value }} notifications were delivered to a consumer and never acknowledged"
-            description: A notification-service pod stopped while delivering them and the service never reclaims pending entries, so they are never sent. Re-enqueue them (XRANGE, XADD, XACK) or acknowledge them, then remove the dead consumers (runbook).
+            description: notification-service reclaims abandoned entries after a minute, so these are not being reclaimed. Check that notification-service runs and its logs ("reclaim notification failed").
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnotificationsstuckpending
+        # Entries delivered maxDeliveries (5) times without success, or trimmed before delivery: never sent.
+        - alert: RedisNotificationsDropped
+          expr: sum by (channel) (increase(notifications_total{namespace="shop", stage="dropped"}[15m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value | humanize }} {{ $labels.channel }} notifications were dropped in 15 minutes"
+            description: notification-service gave up on them after repeated failed deliveries (or they were trimmed from the stream before anyone delivered them). Its ERROR logs "notification dropped" list the stream ids.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnotificationsdropped
         # Client side (the services' go-redis pools, goredis_pool_*).
         - alert: RedisClientPoolTimeouts
           expr: sum by (job, client) (increase(goredis_pool_timeouts_total{namespace="shop"}[5m])) > 0
