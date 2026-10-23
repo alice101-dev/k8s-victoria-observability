@@ -573,6 +573,13 @@ prometheus-node-exporter:
 
 kubelet:
   enabled: true
+  vmScrapes:
+    # /metrics/resource repeats container_cpu_usage_seconds_total and container_memory_working_set_bytes of
+    # /metrics/cadvisor (same labels apart from metrics_path), so every sum per pod or node without a
+    # metrics_path filter counted them twice (vendor dashboards: Compute Resources / Node and Nodes Overview).
+    # Its own metrics (node_*, pod_* usage, swap) are used by no dashboard or rule.
+    resources:
+      enabled: false
   vmScrape:
     spec:
       # Chart default labelmaps ALL node labels → on GKE every kubelet/cAdvisor series gets 46–51
