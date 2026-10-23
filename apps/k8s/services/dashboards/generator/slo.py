@@ -114,10 +114,10 @@ BUDGET_HELP = ("Burn rate 1 spends the budget in exactly 30 days; alerts page at
                "Click a service to drill down.")
 d.add(slo_table("Availability — requests answered without a 5xx", "service", "Service", SVC_LINK,
                 f"Each service's share of non-5xx responses over 30 days against its objective. {BUDGET_HELP}",
-                slo="availability"), 24, 8)
+                slo="availability"), 24, 9)
 d.add(slo_table("Latency — requests faster than the service's threshold", "service", "Service", SVC_LINK,
                 f"Each service's share of requests answered within its threshold (Threshold column) over 30 days "
-                f"against its objective. {BUDGET_HELP}", slo="latency"), 24, 8)
+                f"against its objective. {BUDGET_HELP}", slo="latency"), 24, 9)
 
 d.row("Burn rate")
 d.add(ts("Burn rate — 1h window", [vm(f"slo:sli_error:ratio_rate1h {BURN}", "{{job}} · {{slo}}")], "x",
