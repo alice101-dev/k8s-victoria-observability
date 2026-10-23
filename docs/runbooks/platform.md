@@ -75,11 +75,13 @@ Applications, so syncing the root (`argocd app sync observability` or `apps`) re
 
 ## ArgoCdGitRequestsFailing
 
-**Meaning.** The repo-server's `git fetch` or `git ls-remote` of the repository keeps failing for 15 minutes.
-Nothing new is deployed; running applications are not affected.
+**Meaning.** The repo-server's `git fetch` or `git ls-remote` keeps failing for 15 minutes. Nothing new is
+deployed; running applications are not affected. The failure counters name the repo-server's local checkout path
+instead of the repository URL, so the alert does not say which repository.
 
-**Diagnose.** Repo-server logs (`kubectl -n argocd logs deploy/argocd-repo-server`); the Git requests panel of the
-dashboard. Typical causes: GitHub outage or rate limit, egress (Cloud NAT) broken, the repository renamed or
+**Diagnose.** The applications reading the repository are `Unknown` with a `ComparisonError` such as `failed to
+list refs` (Applications table, `ArgoCdAppOutOfSync`); `kubectl -n argocd get applications` and the repo-server
+logs (`kubectl -n argocd logs deploy/argocd-repo-server`) name the URL. Git requests panel of the dashboard. Typical causes: GitHub outage or rate limit, egress (Cloud NAT) broken, the repository renamed or
 made private, the target revision deleted.
 
 **Fix.** Restore access; Argo CD retries on its own. A moved repository: update the root Application in
@@ -149,7 +151,8 @@ Controller logs: `kubectl -n cert-manager logs deploy/cert-manager`.
 ## CertManagerCertificateRenewalOverdue
 
 **Meaning.** The certificate's renewal time (`renewBefore` ahead of expiry) passed more than an hour ago and it
-was not renewed. It keeps working until it expires; `CertManagerCertificateExpiringSoon` turns critical 7 days
+was not renewed. A certificate that was never issued has no renewal time and shows as
+`CertManagerCertificateNotReady` instead. It keeps working until it expires; `CertManagerCertificateExpiringSoon` turns critical 7 days
 before.
 
 **Diagnose and fix.** As for `CertManagerCertificateNotReady`.

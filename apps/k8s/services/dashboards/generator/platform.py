@@ -94,7 +94,7 @@ for p in (
          "keep the previous data.", decimals=0),
     stat("Certificates not ready", 'sum(certmanager_certificate_ready_status{condition!="True"})', "short",
          thresholds(("green", None), ("red", 1)), "Certificates cert-manager could not issue or renew.", decimals=0),
-    stat("Next certificate expiry", "min(certmanager_certificate_expiration_timestamp_seconds) - time()",
+    stat("Next certificate expiry", "min(certmanager_certificate_expiration_timestamp_seconds > 0) - time()",
          "dtdurations", TIME_LEFT, "Time until the first certificate expires. cert-manager renews ahead of expiry "
          "(renewBefore), so a low value means renewals fail.", decimals=1),
 ):
@@ -211,10 +211,11 @@ d.add(ts("Webhook requests", [vm(f'sum by (code) (rate(controller_runtime_webhoo
               "of these objects fail."), 8, 6)
 
 d.row("cert-manager")
-CERT_EXPIRY = "max by (namespace, name) (certmanager_certificate_expiration_timestamp_seconds)"
+# Timestamps are 0 until a certificate is first issued: empty cells instead of 1970.
+CERT_EXPIRY = "max by (namespace, name) (certmanager_certificate_expiration_timestamp_seconds > 0)"
 d.add(table("Certificates",
             [instant('max by (namespace, name, issuer_kind, issuer_name) (certmanager_certificate_ready_status{condition="True"})', "A"),
-             instant("max by (namespace, name) (certmanager_certificate_renewal_timestamp_seconds) * 1000", "B"),
+             instant("max by (namespace, name) (certmanager_certificate_renewal_timestamp_seconds > 0) * 1000", "B"),
              instant(f"{CERT_EXPIRY} * 1000", "C"),
              instant(f"{CERT_EXPIRY} - time()", "D")],
             merged([("namespace", "Namespace"), ("name", "Certificate"), ("issuer_kind", "Issuer kind"),

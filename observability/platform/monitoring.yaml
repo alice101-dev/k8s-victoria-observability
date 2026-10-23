@@ -109,14 +109,15 @@ spec:
             description: Git changes to {{ $labels.name }} are no longer applied and drift is no longer reverted.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdappautosyncdisabled
         # ls-remote runs on every refresh (3 minutes), so a broken repository keeps the 10-minute window non-zero.
+        # Not by repo: Argo CD v3.5 labels these counters with the local checkout path, not the repository URL.
         - alert: ArgoCdGitRequestsFailing
-          expr: sum by (repo) (increase({__name__=~"argocd_git_(fetch|lsremote)_fail_total"}[10m])) > 0
+          expr: sum(increase({__name__=~"argocd_git_(fetch|lsremote)_fail_total"}[10m])) > 0
           for: 15m
           labels:
             severity: warning
           annotations:
-            summary: "Argo CD cannot read Git repository {{ $labels.repo }}"
-            description: The repo-server's git fetch or ls-remote keeps failing (network, credentials, or the repository or revision is gone). New commits are not deployed.
+            summary: "Argo CD Git requests keep failing ({{ $value | humanize }} in 10 minutes)"
+            description: The repo-server's git fetch or ls-remote keeps failing (network, credentials, or the repository or revision is gone); the applications reading that repository are Unknown with a ComparisonError. New commits are not deployed.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdgitrequestsfailing
         - alert: ArgoCdControllerDown
           expr: absent(up{job="argocd-application-controller-metrics"} == 1)
@@ -171,9 +172,10 @@ spec:
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#certmanagercertificatenotready
         # Renewal is due at the renewal time (renewBefore ahead of expiry) and takes seconds to minutes. Relative to
         # each certificate's own renewal time, so it fits every duration (a fixed "expires in < 21 days" would fire
-        # during the normal renewal window of 90-day certificates renewed 15 days ahead).
+        # during the normal renewal window of 90-day certificates renewed 15 days ahead). The timestamps are 0 until
+        # a certificate is first issued: that case is CertManagerCertificateNotReady, so "> 0" leaves it out.
         - alert: CertManagerCertificateRenewalOverdue
-          expr: (time() - max by (namespace, name, issuer_name) (certmanager_certificate_renewal_timestamp_seconds)) > 3600
+          expr: (time() - max by (namespace, name, issuer_name) (certmanager_certificate_renewal_timestamp_seconds > 0)) > 3600
           for: 15m
           labels:
             severity: warning
@@ -182,7 +184,7 @@ spec:
             description: The certificate should have been renewed (issuer {{ $labels.issuer_name }}) but was not; it keeps working until it expires.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#certmanagercertificaterenewaloverdue
         - alert: CertManagerCertificateExpiringSoon
-          expr: (max by (namespace, name, issuer_name) (certmanager_certificate_expiration_timestamp_seconds) - time() < 7 * 86400) and on (namespace, name) (time() - max by (namespace, name) (certmanager_certificate_renewal_timestamp_seconds) > 0)
+          expr: (max by (namespace, name, issuer_name) (certmanager_certificate_expiration_timestamp_seconds > 0) - time() < 7 * 86400) and on (namespace, name) (time() - max by (namespace, name) (certmanager_certificate_renewal_timestamp_seconds > 0) > 0)
           labels:
             severity: critical
           annotations:
