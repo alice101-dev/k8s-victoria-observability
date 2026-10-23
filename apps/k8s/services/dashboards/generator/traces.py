@@ -60,9 +60,11 @@ d.add(lq_stat("5xx", f"{SERVER} | stats count() calls, count() if ({IS_5XX}) fai
               decimals=2), 4, 4)
 d.add(lq_stat("p95 latency", f"{SERVER} | stats quantile(0.95, duration) p95", "ns", thresholds(("blue", None)),
               "95th percentile duration of the server spans."), 4, 4)
-d.add(lq_stat("Slowest endpoint (p95)", f"{SERVER} | stats by (name) quantile(0.95, duration) p95 "
-                                        "| sort by (p95 desc) | limit 1", "ns", thresholds(("blue", None)),
-              "The endpoint with the highest p95; break it down in \"Where the time goes\".", name="${__field.labels.name}"), 4, 4)
+# The tail p95 hides: requests a user waits more than a second for (the slowest endpoint is in the table below).
+d.add(lq_stat("Requests slower than 1s", f"{SERVER} duration:>1000000000 | stats count() slow", "short",
+              thresholds(("green", None), ("orange", 1)),
+              "Server spans that took more than one second in the time range: what users notice as slow. The "
+              "Endpoints table and \"Where the time goes\" show which endpoint and why.", decimals=0), 4, 4)
 d.add(lq_stat("Failed operations", f"{SPANS} {FAILED} | stats count() failed", "short",
               thresholds(("green", None), ("red", 1)),
               "Spans with an error status in the time range, business outcomes excluded (4xx answers seen by a "

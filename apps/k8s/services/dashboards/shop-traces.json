@@ -460,27 +460,30 @@
     },
     {
       "type": "stat",
-      "title": "Slowest endpoint (p95)",
-      "description": "The endpoint with the highest p95; break it down in \"Where the time goes\".",
+      "title": "Requests slower than 1s",
+      "description": "Server spans that took more than one second in the time range: what users notice as slow. The Endpoints table and \"Where the time goes\" show which endpoint and why.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "ns",
-          "decimals": 1,
+          "unit": "short",
+          "decimals": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
-                "color": "blue",
+                "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
               }
             ]
           },
-          "noValue": "–",
-          "displayName": "${__field.labels.name}"
+          "noValue": "–"
         },
         "overrides": []
       },
@@ -494,7 +497,7 @@
         },
         "colorMode": "background",
         "graphMode": "none",
-        "textMode": "value_and_name"
+        "textMode": "value"
       },
       "targets": [
         {
@@ -502,7 +505,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=shop \"resource_attr:service.name\":in($service) kind:=2 | stats by (name) quantile(0.95, duration) p95 | sort by (p95 desc) | limit 1",
+          "expr": "\"resource_attr:service.namespace\":=shop \"resource_attr:service.name\":in($service) kind:=2 duration:>1000000000 | stats count() slow",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
