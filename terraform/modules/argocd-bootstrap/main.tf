@@ -44,9 +44,10 @@ locals {
     dex            = { enabled = false }
     notifications  = { enabled = false }
     applicationSet = { replicas = 1 }
+    # metrics.enabled: Services argocd-*-metrics (8082, 8083, 8084), scraped by observability/platform.
     controller = {
-      replicas  = 1
-      metrics   = { enabled = true }
+      replicas = 1
+      metrics  = { enabled = true }
       # Request = measured peak (~520Mi) so the scheduler accounts for it.
       resources = { requests = { cpu = "100m", memory = "512Mi" }, limits = { memory = "1Gi" } }
     }

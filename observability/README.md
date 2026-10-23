@@ -13,14 +13,17 @@ observability/
 │       ├── observability-config.yaml  # wave -1  Grafana admin secret (ExternalSecret)
 │       ├── vm-stack.yaml              # wave  0  victoria-metrics-k8s-stack
 │       ├── mcp.yaml                   # wave  1  MCP servers for AI assistants (metrics, logs, traces, Grafana)
-│       └── k8s-events.yaml            # wave  1  Kubernetes events → VictoriaLogs (OpenTelemetry Collector)
+│       ├── k8s-events.yaml            # wave  1  Kubernetes events → VictoriaLogs (OpenTelemetry Collector)
+│       └── platform-monitoring.yaml   # wave  1  Argo CD, External Secrets and cert-manager: scrapes, alerts, dashboard
 ├── values/                     # Helm values, referenced through Argo CD multi-source ($values)
-│   ├── external-secrets.yaml
+│   ├── external-secrets.yaml   # includes the metrics Services of controller, webhook and cert-controller
 │   ├── vm-operator.yaml
 │   ├── vm-k8s-stack.yaml       # main configuration: VMSingle / VLSingle / VTSingle / Grafana
 │   ├── mcp-{victoriametrics,victorialogs,victoriatraces,victoriatraces-logsql,grafana}.yaml   # MCP servers
 │   └── otel-k8s-events.yaml    # events collector: k8s_events receiver → VLSingle (OTLP), one stream per namespace
 ├── k8s-events/                 # Kustomize: "Cluster — Events" dashboard, event and node alerts, collector scrape
+├── platform/                   # Kustomize: "Platform — GitOps & Secrets" dashboard, scrapes and alerts of Argo CD,
+│                               #   External Secrets and cert-manager (runbook: docs/runbooks/platform.md)
 └── manifests/                  # Kustomize: Grafana admin password generator + ExternalSecret
     └── mcp-grafana/            # Grafana service account token + caller token (ExternalSecrets), VMPodScrape
 ```
@@ -118,7 +121,8 @@ Endpoints (namespace `monitoring`):
   RED metrics of their service.
 - Dashboards: VictoriaMetrics/Logs/Traces single-node, vmagent, vmalert, operator, Kubernetes views,
   node-exporter and Redis (the CloudNativePG dashboard is vendored with fixes in `apps/k8s/data/dashboards`),
-  plus **Cluster — Events** (generated with the Shop dashboards, shipped by `k8s-events`). Grafana has two folders:
+  plus **Cluster — Events** and **Platform — GitOps & Secrets** (generated with the Shop dashboards, shipped by
+  `k8s-events` and `platform-monitoring`). Grafana has two folders:
   **Shop** (application and data tier) and **Platform** (everything else); the Windows, AIX, macOS and
   multi-cluster dashboards of the mixins are disabled. Dashboard and rule URLs are **pinned to release tags**
   (the chart defaults point at `master`). Application dashboards are loaded from ConfigMaps labelled

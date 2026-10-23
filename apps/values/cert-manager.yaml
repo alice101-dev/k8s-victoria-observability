@@ -1,6 +1,7 @@
 # =============================================================================
 # cert-manager — chart jetstack/cert-manager v1.21.2
 # Issues the TLS certificates of the CloudNativePG Barman Cloud plugin (operator ↔ plugin mTLS).
+# Metrics (port 9402, on by default) are scraped by observability/platform: certificate expiry and readiness.
 # =============================================================================
 crds:
   enabled: true

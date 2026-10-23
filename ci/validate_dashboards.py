@@ -3,7 +3,7 @@
 
 usage: python3 ci/validate_dashboards.py [--offline]
 
-Checks, per dashboard JSON (generated Shop and Cluster — Events dashboards, vendored CloudNativePG):
+Checks, per dashboard JSON (generated Shop and Platform dashboards, vendored CloudNativePG):
 - valid JSON with a title and a uid that no other dashboard uses;
 - unique panel ids and panels inside the 24-column grid;
 - every datasource reference is a provisioned datasource (uids from observability/values/vm-k8s-stack.yaml),
@@ -23,7 +23,7 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DASHBOARDS = ["apps/k8s/services/dashboards/*.json", "apps/k8s/data/dashboards/*.json",
-              "observability/k8s-events/dashboards/*.json"]
+              "observability/k8s-events/dashboards/*.json", "observability/platform/dashboards/*.json"]
 STACK_VALUES = "observability/values/vm-k8s-stack.yaml"
 BUILTIN_DATASOURCES = {"-- Grafana --", "grafana", "-- Mixed --", "-- Dashboard --", "__expr__"}
 VARIABLE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)|\$([A-Za-z_][A-Za-z0-9_]*)|\[\[([A-Za-z_][A-Za-z0-9_]*)")

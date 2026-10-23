@@ -1,0 +1,22 @@
+# Wave 1: monitoring of the platform components (observability/platform): scrape configs for Argo CD, External
+# Secrets and cert-manager, their alerts, and the "Platform — GitOps & Secrets" dashboard.
+# After the stack (wave 0): it uses the VMServiceScrape / VMRule CRDs.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-monitoring
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.project }}
+  source:
+    repoURL: {{ include "app.repoURL" . }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: observability/platform
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  {{- include "app.syncPolicy" . | nindent 2 }}
