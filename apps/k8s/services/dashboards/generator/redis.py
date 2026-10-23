@@ -162,7 +162,8 @@ d.add(status_history("Role over time",
                      "Which pod was master when: a change of colour between pods is a failover.",
                      thresholds(("red", None))), 10, 8)
 d.panels[-1]["fieldConfig"]["defaults"]["mappings"] = mappings(ROLE)
-d.add(logs_panel("Sentinel events", f"{SENTINEL_LOGS} {EVENTS} | extract \"# <event>\" from _msg "
+# Sentinel prefixes warnings with "#" and notices with "*"; the event starts after it.
+d.add(logs_panel("Sentinel events", f"{SENTINEL_LOGS} {EVENTS} | extract_regexp \" [#*] (?P<event>[+-].*)\" from _msg "
                  "| format \"<kubernetes.pod_name>: <event>\" as _msg",
                  "What the sentinels decided: +sdown (one sentinel lost contact for 5s), +odown (the quorum agrees "
                  "the master is down), +try-failover / +elected-leader / +selected-slave / +promoted-slave, "
@@ -309,22 +310,25 @@ d.add(ts("Append-only file", [vm(f"max by (pod) (redis_aof_current_size_bytes{{{
          "bytes", min_=0, overrides=[right_axis("B", "short")],
          desc="AOF size per pod (appendfsync everysec); a rewrite compacts it in a forked child (memory "
               "copy-on-write: RedisContainerMemoryNearLimit)."), 8, 7)
-d.add(ts("AOF health", [vm(f"min by (pod) (redis_aof_last_write_status{{{NODE}}})", "{{pod}} last write ok"),
-                        vm(f"min by (pod) (redis_aof_last_bgrewrite_status{{{NODE}}})", "{{pod}} last rewrite ok", "B"),
-                        vm(f"sum by (pod) (rate(redis_aof_delayed_fsync{{{NODE}}}{RI})) > 0", "{{pod}} delayed fsyncs / s", "C")],
-         "short", min_=0, max_=1, decimals=0,
-         desc="1 = the last AOF write and rewrite succeeded. A failed write makes Redis refuse writes "
-              "(RedisPersistenceFailing). Delayed fsyncs: the disk is slower than the write rate."), 8, 7)
+d.add(status_history("AOF health",
+                     vm(f"min by (pod) (redis_aof_last_write_status{{{NODE}}} * redis_aof_last_bgrewrite_status{{{NODE}}})",
+                        "{{pod}}"),
+                     "Whether the last AOF write and the last AOF rewrite of each pod succeeded. A failed write makes "
+                     "Redis refuse writes (RedisPersistenceFailing).", thresholds(("red", None), ("green", 1))), 8, 7)
+d.panels[-1]["fieldConfig"]["defaults"]["mappings"] = mappings({"1": ("ok", "green"), "0": ("failing", "red")})
 d.add(ts("Data volumes", [vm('max by (persistentvolumeclaim) (1 - kubelet_volume_stats_available_bytes{namespace="shop", '
                              'persistentvolumeclaim=~"data-redis-node-[0-9]+"} / kubelet_volume_stats_capacity_bytes'
                              '{namespace="shop", persistentvolumeclaim=~"data-redis-node-[0-9]+"})', "{{persistentvolumeclaim}}")],
          "percentunit", min_=0, max_=1, desc="Used share of each pod's data volume (AOF and its rewrites)."), 8, 7)
 
 d.row("Logs")
-d.add(logs_panel("Redis and Sentinel logs", f"{REDIS_LOGS} _msg:~\" [#!*] \" -_msg:~\"Background AOF|AOF rewrite|Accepted|"
-                 "Synchronization with replica|Streamed RDB|MASTER <-> REPLICA sync|Diskless\" "
+# Redis log levels: "#" warning, "*" notice (mostly routine AOF and replication steps: only the ones about
+# roles, lost links and errors are kept).
+d.add(logs_panel("Redis and Sentinel logs", f"{REDIS_LOGS} (_msg:~\" # \" or _msg:~\"(?i)error|fail|lost|refused|OOM|MASTER MODE|"
+                 "REPLICAOF|Connecting to MASTER|unable to PSYNC|Full resync\") "
                  "| format \"<kubernetes.pod_name>/<kubernetes.container_name>: <_msg>\" as _msg",
-                 "Warnings (#) and notices of Redis and Sentinel, routine replication and AOF lines left out."), 12, 10)
+                 "Warnings of Redis and Sentinel, and notices about roles (MASTER MODE, REPLICAOF), lost links, "
+                 "full resyncs and errors; routine AOF and replication steps are left out."), 12, 10)
 d.add(logs_panel("go-redis client messages in the services",
                  '{kubernetes.pod_namespace="shop", kubernetes.container_name="app"} _msg:~"(?i)^redis: |sentinel: |'
                  'READONLY|connection pool timeout|MASTERDOWN" '
