@@ -1,7 +1,7 @@
 # Redis with Sentinel: scrape configs and alerts. Runbook: docs/runbooks/redis.md; dashboard "Shop — Redis".
 #
 # Each Redis pod runs two redis_exporters: Redis itself (port metrics, job redis-node) and the pod's Sentinel
-# (port sentinel-metrics, relabelled job redis-sentinel so Sentinel's own redis_up / redis_instance_info never
+# (port sentinel-prom, relabelled job redis-sentinel so Sentinel's own redis_up / redis_instance_info never
 # mix with the data nodes'). Every rule selects its job explicitly.
 apiVersion: operator.victoriametrics.com/v1beta1
 kind: VMServiceScrape
@@ -14,7 +14,7 @@ spec:
       app.kubernetes.io/component: node
   endpoints:
     - port: metrics
-    - port: sentinel-metrics
+    - port: sentinel-prom
       relabelConfigs:
         - targetLabel: job
           replacement: redis-sentinel

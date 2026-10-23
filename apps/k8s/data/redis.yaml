@@ -123,9 +123,9 @@ spec:
     - name: metrics
       port: 9121
       targetPort: metrics
-    - name: sentinel-metrics
+    - name: sentinel-prom
       port: 9355
-      targetPort: sentinel-metrics
+      targetPort: sentinel-prom
 ---
 # Entry point for clients: any Sentinel returns the current master.
 apiVersion: v1
@@ -359,7 +359,7 @@ spec:
             - name: REDIS_EXPORTER_WEB_LISTEN_ADDRESS
               value: ":9355"
           ports:
-            - name: sentinel-metrics
+            - name: sentinel-prom
               containerPort: 9355
           resources:
             requests: { cpu: 10m, memory: 16Mi }

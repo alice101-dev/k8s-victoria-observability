@@ -11,11 +11,14 @@ needs: helm and kustomize in the versions Argo CD bundles (CI pins them), kubeco
 3. Validates built-in kinds with kubeconform (strict, Kubernetes version of the GKE cluster) and custom
    resources against the CRDs rendered from the operators' charts (unknown fields rejected, as the API server
    prunes them silently). Kinds whose CRD is not part of this repository (Argo CD's) are listed as skipped.
+4. Checks what the OpenAPI schemas cannot express but the API server rejects: named ports (container ports,
+   string targetPorts, probe ports) must be IANA service names (at most 15 characters).
 Exits non-zero on any rendering or validation error.
 """
 import glob
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -95,6 +98,35 @@ def builtin_group(api_version):
     return "." not in group or group.endswith(".k8s.io")
 
 
+# k8s.io/apimachinery validation.IsValidPortName: lowercase letters, digits and single hyphens, at least one
+# letter, at most 15 characters.
+IANA_SVC_NAME = re.compile(r"^(?=.{1,15}$)(?=.*[a-z])[a-z0-9]+(-[a-z0-9]+)*$")
+POD_TEMPLATE = {"Pod": ("spec",), "Deployment": ("spec", "template", "spec"), "StatefulSet": ("spec", "template", "spec"),
+                "DaemonSet": ("spec", "template", "spec"), "ReplicaSet": ("spec", "template", "spec"),
+                "Job": ("spec", "template", "spec"), "CronJob": ("spec", "jobTemplate", "spec", "template", "spec")}
+
+
+def port_name_errors(d):
+    """Named ports the API server would reject (kubeconform's schemas have no length or pattern for them)."""
+    bad = []
+    if d["kind"] == "Service":
+        bad += [p["targetPort"] for p in d["spec"].get("ports", []) if isinstance(p.get("targetPort"), str)]
+    elif d["kind"] in POD_TEMPLATE and builtin_group(d["apiVersion"]):
+        spec = d
+        for k in POD_TEMPLATE[d["kind"]]:
+            spec = (spec or {}).get(k) or {}
+        for c in spec.get("containers", []) + spec.get("initContainers", []):
+            bad += [p["name"] for p in c.get("ports", []) if "name" in p]
+            for probe in ("livenessProbe", "readinessProbe", "startupProbe"):
+                for handler in ("httpGet", "tcpSocket", "grpc"):
+                    port = ((c.get(probe) or {}).get(handler) or {}).get("port")
+                    if isinstance(port, str):
+                        bad.append(port)
+    return [f"{d['kind']} {d['metadata'].get('name')}: port name {n!r} is not a valid IANA service name "
+            "(lowercase alphanumerics and '-', at least one letter, at most 15 characters)"
+            for n in bad if not IANA_SVC_NAME.match(n)]
+
+
 def load_docs(text):
     return [d for d in yaml.safe_load_all(text) if isinstance(d, dict) and d.get("kind")]
 
@@ -172,6 +204,10 @@ def main():
             path = "/".join(str(p) for p in e.absolute_path)
             errors.append(f"{app}: {d['kind']} {d['metadata'].get('name')}: {path}: {e.message[:300]}")
     print(f"custom resources validated against their CRDs: {checked}")
+
+    port_errors = [f"{app}: {e}" for app, d in docs for e in port_name_errors(d)]
+    errors += port_errors
+    print(f"named ports checked: {len(port_errors)} invalid")
     if skipped:
         print(f"no CRD in this repository, not validated: {', '.join(sorted(skipped))}")
 
