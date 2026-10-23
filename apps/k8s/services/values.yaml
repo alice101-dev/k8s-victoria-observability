@@ -6,7 +6,7 @@ image:
   # injected by Argo CD from Terraform (argocd-bootstrap → root app "apps" → Application shop-services).
   registry: ""
   # Bumped by `make -C apps release TAG=...`, then commit → Argo CD syncs automatically.
-  tag: "b2c7939a"
+  tag: "6c46935e"
   pullPolicy: IfNotPresent
 
 environment: staging
