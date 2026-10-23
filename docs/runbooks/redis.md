@@ -240,7 +240,8 @@ master the other sentinels report (`init.sh`).
 
 ## RedisFailover
 
-**Meaning.** Sentinel promoted a replica: the master moved from `old` to `new`.
+**Meaning.** Sentinel promoted a replica: the pod in the alert has been master for less than 2 minutes (from
+`redis_instance_info`; the old master is in the Sentinel events panel and the `+switch-master` log line).
 
 **Impact.** For a few seconds writes failed (connection errors, `READONLY` on the old master) until the clients
 followed. Planned during Redis rollouts (`preStop` asks Sentinel to fail over first), unplanned after a crash, an

@@ -204,20 +204,32 @@ spec:
             summary: "Redis sentinels follow {{ $value }} different masters"
             description: Clients asking different sentinels write to different nodes (split brain); the writes on the losing side are lost when it rejoins.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentinelsdisagree
-    # Sentinel events from its logs (VictoriaLogs), evaluated every minute over the last minute.
-    - name: redis-sentinel-events
-      type: vlogs
-      interval: 1m
-      rules:
-        # Every sentinel logs the switch; grouped by old and new master it is one alert per failover.
+        # A pod that is master now and was not 2 minutes ago. From the metrics, not the Sentinel logs: logs of
+        # sentinels restarting during a Redis rollout reach VictoriaLogs too late for a one-minute window.
         - alert: RedisFailover
-          expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="sentinel"} "+switch-master" | extract "+switch-master <_> <old> <_> <new> " from _msg | stats by (old, new) count() as sentinels | filter sentinels:>0'
+          expr: max by (pod) (redis_instance_info{job="redis-node", role="master"}) unless max by (pod) (redis_instance_info{job="redis-node", role="master"} offset 2m)
           labels:
             severity: warning
           annotations:
-            summary: "Redis failover: the master moved from {{ $labels.old }} to {{ $labels.new }}"
-            description: Writes failed for a few seconds while the clients followed the new master (READONLY and connection errors in the services). Planned during Redis rollouts (preStop), unplanned after a crash, OOM kill or node preemption.
+            summary: "Redis failover: {{ $labels.pod }} is the new master"
+            description: Writes failed for a few seconds while the clients followed the new master (READONLY and connection errors in the services). Planned during Redis rollouts (preStop), unplanned after a crash, OOM kill or node preemption. The Sentinel events panel of the Shop — Redis dashboard shows the old master and why.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisfailover
+        # TILT: the sentinel's clock jumped or the process stalled (CPU starvation); for at least 30s it acts as a
+        # pure observer and authorises no failover.
+        - alert: RedisSentinelTilt
+          expr: max by (pod) (max_over_time(redis_sentinel_tilt{job="redis-sentinel"}[2m])) == 1
+          labels:
+            severity: warning
+          annotations:
+            summary: "Sentinel on {{ $labels.pod }} entered TILT mode"
+            description: For at least 30s this sentinel authorises no failover. Repeated TILT points at CPU starvation or a paused node.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentineltilt
+    # Sentinel events without a metric, from its logs (VictoriaLogs). A 5-minute window tolerates the delay of
+    # logs from freshly started containers; RedisSentinelMasterDown catches the outage from the metrics anyway.
+    - name: redis-sentinel-events
+      type: vlogs
+      interval: 5m
+      rules:
         - alert: RedisFailoverAborted
           expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="sentinel"} "-failover-abort" | extract "-failover-abort-<reason> " from _msg | stats by (reason) count() as aborts | filter aborts:>0'
           labels:
@@ -226,13 +238,3 @@ spec:
             summary: "A Redis failover was aborted: {{ $labels.reason }}"
             description: Sentinel could not promote a replica (no good replica, not elected, timeout). The old master may still be down.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisfailoveraborted
-        # TILT: the sentinel's clock jumped or the process stalled (CPU starvation); for 30s it acts as a pure
-        # observer and authorises no failover.
-        - alert: RedisSentinelTilt
-          expr: '{kubernetes.pod_namespace="shop", kubernetes.container_name="sentinel"} "+tilt" | copy kubernetes.pod_name as pod | stats by (pod) count() as tilts | filter tilts:>0'
-          labels:
-            severity: warning
-          annotations:
-            summary: "Sentinel on {{ $labels.pod }} entered TILT mode"
-            description: For at least 30s this sentinel authorises no failover. Repeated TILT points at CPU starvation or a paused node.
-            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redissentineltilt

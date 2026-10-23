@@ -111,8 +111,8 @@ Alerts shipped with the application (VMRule):
   `RedisOutOfMemoryErrors`, `RedisContainerMemoryNearLimit`, `RedisRejectedConnections`,
   `RedisPersistenceFailing`, `RedisNotificationBacklog`, `RedisNotificationsStuckPending`,
   `RedisClientPoolTimeouts`; Sentinel: `RedisSentinelQuorumLost`, `RedisSentinelsDegraded`,
-  `RedisSentinelMasterDown`, `RedisSentinelsDisagree`; from the Sentinel logs (LogsQL): `RedisFailover`,
-  `RedisFailoverAborted`, `RedisSentinelTilt`.
+  `RedisSentinelMasterDown`, `RedisSentinelsDisagree`, `RedisFailover`, `RedisSentinelTilt`; from the
+  Sentinel logs (LogsQL): `RedisFailoverAborted`.
 - PostgreSQL: `PostgresDown`, `PostgresStandbyMissing`, `PostgresReplicationLagHigh`, `PostgresTooManyConnections`,
   `PostgresDiskSpaceLow`/`Critical`, `PostgresXidAgeHigh`, `PostgresLongRunningTransaction`,
   `PostgresIdleInTransaction`, `PostgresSessionsBlocked`, `PostgresWalArchivingStalled`,
