@@ -150,7 +150,7 @@ spec:
             severity: warning
           annotations:
             summary: "{{ $value }} notifications were delivered to a consumer and never acknowledged"
-            description: A notification-service pod stopped while delivering them; nothing redelivers them. Claim them for a live consumer (XAUTOCLAIM) or acknowledge them.
+            description: A notification-service pod stopped while delivering them and the service never reclaims pending entries, so they are never sent. Re-enqueue them (XRANGE, XADD, XACK) or acknowledge them, then remove the dead consumers (runbook).
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/redis.md#redisnotificationsstuckpending
         # Client side (the services' go-redis pools, goredis_pool_*).
         - alert: RedisClientPoolTimeouts
