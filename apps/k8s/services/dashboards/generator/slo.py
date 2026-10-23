@@ -105,7 +105,7 @@ d.add({"type": "bargauge", "title": "Ready pods per service", "datasource": VM,
 # Below 0.1x no SLO is singled out (all near 0, topk would name an arbitrary one); the value stays the highest.
 BURN_1H = f"slo:sli_error:ratio_rate1h {BURN}"
 p = d.add(stat("Burning fastest now",
-               f"topk(1, {BURN_1H} > 0.1) or label_replace(label_replace(max({BURN_1H}), "
+               f"topk(1, {BURN_1H} > 0.1) or on () label_replace(label_replace(max({BURN_1H}), "
                f'"job", "every SLO", "", ""), "slo", "below 0.1x", "", "")', "x",
                thresholds(("green", None), ("orange", 1), ("red", 14.4)), decimals=2,
                desc="The journey or service SLO with the highest burn rate over the last hour. Below 1 its budget "
