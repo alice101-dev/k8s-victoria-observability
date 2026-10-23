@@ -49,12 +49,14 @@ def failures(name):
                           {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}])
 
 
-def merged(columns, hide=("Time",)):
-    """Instant table queries merged on their common labels; columns = [(field, header)] in order."""
-    return [{"id": "merge", "options": {}},
-            {"id": "organize", "options": {"excludeByName": {h: True for h in hide},
-                                           "indexByName": {f: i for i, (f, _) in enumerate(columns)},
-                                           "renameByName": dict(columns)}}]
+def merged(columns, hide=("Time",), first=None):
+    """Instant table queries merged on their common labels; columns = [(field, header)] in order. first: a field
+    whose highest values come first (then hidden), e.g. a 0/1 needs-attention score."""
+    order = [{"id": "sortBy", "options": {"fields": {}, "sort": [{"field": first, "desc": True}]}}] if first else []
+    organize = {"id": "organize", "options": {"excludeByName": {h: True for h in hide},
+                                              "indexByName": {f: i for i, (f, _) in enumerate(columns)},
+                                              "renameByName": dict(columns)}}
+    return [{"id": "merge", "options": {}}] + order + [organize]
 
 
 def state_history(title, label, states, desc):
@@ -100,12 +102,17 @@ for p in (
 
 d.row("Argo CD — applications")
 d.add(table("Applications",
-            [instant(f"max by (name, project, dest_namespace, sync_status, health_status, autosync_enabled) ({APPS})", "A"),
-             instant(f"sum by (name) (round(increase({SYNCS}[$__range])))", "B"),
-             instant(f"sum by (name) (round(increase({FAILED_SYNCS}[$__range])))", "C")],
+            # A: 1 when not Synced or not Healthy, those applications come first. Merged rows keep the order of the
+            # first query (by name), so the rest stays alphabetical.
+            [instant(f'max by (name) ({APPS}{{sync_status!="Synced"}} or {APPS}{{health_status!="Healthy"}} '
+                     f"or {APPS} * 0)", "A"),
+             instant(f"max by (name, project, dest_namespace, sync_status, health_status, autosync_enabled) ({APPS})", "B"),
+             instant(f"sum by (name) (round(increase({SYNCS}[$__range])))", "C"),
+             instant(f"sum by (name) (round(increase({FAILED_SYNCS}[$__range])))", "D")],
             merged([("name", "Application"), ("project", "Project"), ("dest_namespace", "Namespace"),
-                          ("sync_status", "Sync"), ("health_status", "Health"), ("autosync_enabled", "Auto-sync"),
-                          ("Value #B", "Syncs"), ("Value #C", "Failed syncs")], hide=("Time", "Value #A")),
+                    ("sync_status", "Sync"), ("health_status", "Health"), ("autosync_enabled", "Auto-sync"),
+                    ("Value #C", "Syncs"), ("Value #D", "Failed syncs")], hide=("Time", "Value #A", "Value #B"),
+                   first="Value #A"),
             overrides=[by_name("Application", [{"id": "links", "value": APP_LOGS_LINK}]),
                        by_name("Project", [{"id": "custom.width", "value": 130}]),
                        by_name("Namespace", [{"id": "custom.width", "value": 150}]),
@@ -113,9 +120,9 @@ d.add(table("Applications",
                        mapped("Auto-sync", 100, {"true": ("On", "green"), "false": ("Off", "orange")}),
                        COUNT("Syncs", 80), failures("Failed syncs")],
             desc="Every Argo CD Application with its project, destination namespace, sync and health status, whether "
-                 "it syncs automatically, and its sync operations in the time range. Click an application to list "
-                 "its errors in the Errors in the logs row.",
-            sort=[{"displayName": "Application", "desc": False}]), 24, 14)
+                 "it syncs automatically, and its sync operations in the time range; applications that are not Synced "
+                 "and Healthy come first. Click an application to list its errors in the Errors in the logs row."),
+      24, 12)
 d.add(state_history("Health over time", "health_status", HEALTH_STATES,
                     "Health of each application: when it was Progressing (rollouts), Degraded or Missing."), 12, 10)
 d.add(state_history("Sync status over time", "sync_status", SYNC_STATES,
