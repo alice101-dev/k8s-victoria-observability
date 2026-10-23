@@ -14,7 +14,7 @@ observability/
 │       ├── vm-stack.yaml              # wave  0  victoria-metrics-k8s-stack
 │       ├── mcp.yaml                   # wave  1  MCP servers for AI assistants (metrics, logs, traces, Grafana)
 │       ├── k8s-events.yaml            # wave  1  Kubernetes events → VictoriaLogs (OpenTelemetry Collector)
-│       └── platform-monitoring.yaml   # wave  1  Argo CD, External Secrets and cert-manager: scrapes, alerts, dashboard
+│       └── platform-monitoring.yaml   # wave  1  platform monitoring (observability/platform)
 ├── values/                     # Helm values, referenced through Argo CD multi-source ($values)
 │   ├── external-secrets.yaml   # includes the metrics Services of controller, webhook and cert-controller
 │   ├── vm-operator.yaml
@@ -22,8 +22,10 @@ observability/
 │   ├── mcp-{victoriametrics,victorialogs,victoriatraces,victoriatraces-logsql,grafana}.yaml   # MCP servers
 │   └── otel-k8s-events.yaml    # events collector: k8s_events receiver → VLSingle (OTLP), one stream per namespace
 ├── k8s-events/                 # Kustomize: "Cluster — Events" dashboard, event and node alerts, collector scrape
-├── platform/                   # Kustomize: "Platform — GitOps & Secrets" dashboard, scrapes and alerts of Argo CD,
-│                               #   External Secrets and cert-manager (runbook: docs/runbooks/platform.md)
+├── platform/                   # Kustomize: scrapes and alerts of Argo CD, External Secrets and cert-manager
+│                               #   (monitoring.yaml, runbook docs/runbooks/platform.md); pipeline alerts
+│                               #   (pipeline.yaml, runbook docs/runbooks/observability.md); dashboards
+│                               #   "Platform — GitOps & Secrets" and "Observability — Pipeline health"
 └── manifests/                  # Kustomize: Grafana admin password generator + ExternalSecret
     └── mcp-grafana/            # Grafana service account token + caller token (ExternalSecrets), VMPodScrape
 ```
@@ -121,8 +123,8 @@ Endpoints (namespace `monitoring`):
   RED metrics of their service.
 - Dashboards: VictoriaMetrics/Logs/Traces single-node, vmagent, vmalert, operator, Kubernetes views,
   node-exporter and Redis (the CloudNativePG dashboard is vendored with fixes in `apps/k8s/data/dashboards`),
-  plus **Cluster — Events** and **Platform — GitOps & Secrets** (generated with the Shop dashboards, shipped by
-  `k8s-events` and `platform-monitoring`). Grafana has two folders:
+  plus **Cluster — Events**, **Platform — GitOps & Secrets** and **Observability — Pipeline health** (generated
+  with the Shop dashboards, shipped by `k8s-events` and `platform-monitoring`). Grafana has two folders:
   **Shop** (application and data tier) and **Platform** (everything else); the Windows, AIX, macOS and
   multi-cluster dashboards of the mixins are disabled. Dashboard and rule URLs are **pinned to release tags**
   (the chart defaults point at `master`). Application dashboards are loaded from ConfigMaps labelled

@@ -7,6 +7,8 @@ Every data-tier and platform alert links to its runbook section through the `run
 - [kubernetes.md](kubernetes.md): Kubernetes events, node restarts (spot preemptions), scheduling, OOM kills
 - [platform.md](platform.md): Argo CD (sync failures, drift, health, Git), External Secrets (sync, stores),
   cert-manager (certificate readiness, renewal and expiry, issuers)
+- [observability.md](observability.md): the observability pipeline itself (log and span ingestion stopped,
+  retention cut by the disk limit, log lines too long)
 
 This page describes how to investigate in general: where each signal is stored, the field names to query,
 and the order that finds a root cause fastest. It is written for on-call engineers and for AI assistants
@@ -31,7 +33,8 @@ errors, Locks and blocking, Top statements and table health, Database efficiency
 All of them mark rollouts, firing critical alerts, node restarts and container restarts as annotations.
 `cluster-events` (folder **Platform**) shows the Kubernetes events of every namespace;
 `platform-gitops-secrets` (folder **Platform**) shows Argo CD applications and syncs, ExternalSecrets and
-certificates.
+certificates; `observability-pipeline` (folder **Platform**) shows whether the stack itself collects, stores and
+alerts (when a signal looks missing, check it first).
 
 ## Investigation order
 

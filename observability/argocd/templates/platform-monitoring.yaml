@@ -1,5 +1,6 @@
 # Wave 1: monitoring of the platform components (observability/platform): scrape configs for Argo CD, External
-# Secrets and cert-manager, their alerts, and the "Platform — GitOps & Secrets" dashboard.
+# Secrets and cert-manager and their alerts, alerts on the observability pipeline itself, and the dashboards
+# "Platform — GitOps & Secrets" and "Observability — Pipeline health".
 # After the stack (wave 0): it uses the VMServiceScrape / VMRule CRDs.
 apiVersion: argoproj.io/v1alpha1
 kind: Application

@@ -1,0 +1,66 @@
+# Alerts on the observability pipeline that the upstream rule sets (vmagent, vmsingle, vmalert, vlagent, vlogs,
+# vtraces, alertmanager, *-health) do not cover. Runbook: docs/runbooks/observability.md.
+#
+# VLSingle and VTSingle run with retention.maxDiskUsagePercent=80: once the filesystem is 80% full they drop their
+# oldest daily partitions, so a full-looking disk is the steady state, not an incident. The upstream
+# DiskRunsOutOfSpace rules of the vlogs and vtraces groups (data > 80% of the disk) would fire forever in that
+# state; they are disabled in observability/values/vm-k8s-stack.yaml and replaced by the RetentionCutByDiskCap
+# rules below, which report what actually changes: the retention that is really kept.
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: observability-pipeline
+spec:
+  groups:
+    - name: observability-pipeline
+      rules:
+        # Value: days of logs actually kept. Fires once the disk holds 95% of the 80% cap for an hour.
+        - alert: VictoriaLogsRetentionCutByDiskCap
+          expr: ((time() - max by (job) (vl_storage_log_min_timestamp_seconds)) / 86400) and on (job) (max by (job) (vl_total_disk_space_bytes - vl_free_disk_space_bytes) / max by (job) (vl_max_disk_space_usage_bytes) > 0.95)
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "VictoriaLogs keeps only {{ $value | humanize }} days of logs (retention 90d): disk cap reached"
+            description: VLSingle is at its 80% disk limit and drops the oldest days to make room. Logs older than that are gone; grow the disk if the retention is needed.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#victorialogsretentioncutbydiskcap
+        - alert: VictoriaTracesRetentionCutByDiskCap
+          expr: ((time() - max by (job) (vt_storage_log_min_timestamp_seconds)) / 86400) and on (job) (max by (job) (vt_total_disk_space_bytes - vt_free_disk_space_bytes) / max by (job) (vt_max_disk_space_usage_bytes) > 0.95)
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "VictoriaTraces keeps only {{ $value | humanize }} days of spans (retention 30d): disk cap reached"
+            description: VTSingle is at its 80% disk limit and drops the oldest days to make room. Spans older than that are gone; grow the disk if the retention is needed.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#victoriatracesretentioncutbydiskcap
+        # Something in the cluster always logs (system pods, the stack itself): no line for 10 minutes means the
+        # collection or the ingestion path is broken while every component may still look up.
+        - alert: LogsIngestionStopped
+          expr: (sum(rate(vl_rows_ingested_total{job="vlsingle-vmks"}[10m])) or vector(0)) == 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: VictoriaLogs has ingested no log line for 20 minutes
+            description: vlagent delivers nothing to VLSingle (or VLSingle rejects it). New logs are buffered on the nodes until the agents' queues are full, then lost; log-based alerts are blind.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#logsingestionstopped
+        # Spans only arrive while the shop serves requests, so the alert requires traffic.
+        - alert: TracesIngestionStopped
+          expr: (sum(rate(vt_rows_ingested_total{job="vtsingle-vmks", type=~"opentelemetry.*"}[10m])) or vector(0)) == 0 and on () sum(rate(http_server_requests_total{namespace="shop"}[10m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: VictoriaTraces has received no span for 20 minutes while the shop serves requests
+            description: The services' OpenTelemetry exporters cannot reach VTSingle (DNS, network, VTSingle down) or VTSingle rejects the spans. The SDK queue holds a few seconds of spans; the rest are lost.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#tracesingestionstopped
+        # Lines longer than the insert limit (-insert.maxLineSizeBytes) are skipped whole. Info: a few are usual
+        # (huge JSON dumps); which ones is in the Dropped data row of the Pipeline health dashboard.
+        - alert: LogLinesTooLong
+          expr: sum by (job) (increase(vl_too_long_lines_skipped_total[1h])) > 0
+          labels:
+            severity: info
+          annotations:
+            summary: "{{ $labels.job }} skipped {{ $value | humanize }} too long log lines in the last hour"
+            description: These lines are not stored. Usually one component dumping large objects in a single line.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#loglinestoolong

@@ -1,0 +1,2934 @@
+{
+  "uid": "observability-pipeline",
+  "title": "Observability — Pipeline health",
+  "description": "Is the observability stack collecting, storing and alerting? Scrape targets, ingestion of metrics, logs and spans, dropped data, disk and retention per store, rule evaluation and notifications, DNS, and the stack's own restarts and memory, each linking to the component's dashboard.",
+  "tags": [
+    "platform",
+    "observability"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Component dashboards",
+      "type": "dashboards",
+      "tags": [
+        "vm-k8s-stack"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "Platform — GitOps & Secrets",
+      "type": "link",
+      "url": "/d/platform-gitops-secrets",
+      "keepTime": true
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "name": "Node restarts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "purple",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "(max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) > max_over_time((max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)))[30m:1m] offset 1m)) * on (node) group_left (label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)",
+        "titleFormat": "Node restarted: {{node}}",
+        "textFormat": "Pool {{label_cloud_google_com_gke_nodepool}} ({{label_cloud_google_com_gke_provisioning}}): spot preemption, upgrade or repair; its pods were rescheduled"
+      },
+      {
+        "name": "Container restarts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "(changes(kube_pod_container_status_restarts_total{namespace=\"monitoring\"}[1m]) > 0) * on (namespace, pod, container) group_left (reason) max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{namespace=\"monitoring\"})",
+        "titleFormat": "Restart {{pod}}: {{reason}}",
+        "textFormat": "Container {{container}} (OOMKilled: memory limit reached)"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Overview",
+      "collapsed": false,
+      "panels": [],
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Scrape targets down",
+      "description": "Targets vmagent cannot scrape right now (TargetDown alerts when more than 10% of a job is down).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count(up == 0) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Metric samples / s",
+      "description": "Samples VMSingle receives (both vmagent replicas; it deduplicates them at 30s).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vm_rows_inserted_total{job=\"vmsingle-vmks\"}[5m]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "x": 3,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Log lines / s",
+      "description": "Log lines and Kubernetes events VLSingle stores. 0 fires LogsIngestionStopped.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.01
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vl_rows_ingested_total{job=\"vlsingle-vmks\"}[5m]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "x": 6,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Spans / s",
+      "description": "Spans VTSingle receives from the services over OTLP. 0 while the shop serves requests fires TracesIngestionStopped.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0.01
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vt_rows_ingested_total{job=\"vtsingle-vmks\", type=~\"opentelemetry.*\"}[5m]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "x": 9,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Records dropped",
+      "description": "Metric samples, log lines and spans the pipeline threw away in the time range; the Dropped data row says where and why.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum (label_replace(round(sum by (reason) (increase(vm_rows_ignored_total{job=\"vmsingle-vmks\"}[$__range]))), \"cause\", \"Metrics rejected by VMSingle: $1\", \"reason\", \"(.*)\") or label_replace(round(sum(increase({__name__=~\"vm(agent)?_(hourly|daily)_series_limit_rows_dropped_total\"}[$__range]))), \"cause\", \"Metrics over the series limit\", \"\", \"(.*)\") or label_replace(round(sum(increase(vmagent_remotewrite_samples_dropped_total[$__range]))), \"cause\", \"Metric samples dropped by vmagent\", \"\", \"(.*)\") or label_replace(round(sum(increase(vmagent_remotewrite_packets_dropped_total[$__range]))), \"cause\", \"Metric blocks rejected by VMSingle\", \"\", \"(.*)\") or label_replace(round(sum by (job) (increase(vl_too_long_lines_skipped_total[$__range]))), \"cause\", \"Log lines too long ($1)\", \"job\", \"(.*)\") or label_replace(round(sum by (reason) (increase(vl_rows_dropped_total[$__range]))), \"cause\", \"Log lines rejected: $1\", \"reason\", \"(.*)\") or label_replace(round(sum(increase(vlagent_remotewrite_packets_dropped_total[$__range]))), \"cause\", \"Log blocks rejected by VLSingle\", \"\", \"(.*)\") or label_replace(round(sum by (reason) (increase(vt_rows_dropped_total[$__range]))), \"cause\", \"Spans rejected: $1\", \"reason\", \"(.*)\") or label_replace(round(sum(increase(vmalert_remotewrite_dropped_rows_total[$__range]))), \"cause\", \"Recording rule results dropped by vmalert\", \"\", \"(.*)\")) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Rule evaluation errors",
+      "description": "Rule evaluations that failed in the time range (per vmalert replica; both evaluate every rule). Failing rules cannot fire.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(sum by (pod) (increase({__name__=~\"vmalert_(alerting|recording)_rules_errors_total\"}[$__range]))) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "x": 15,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Notifications failed",
+      "description": "Alerts vmalert could not hand to Alertmanager, plus notifications Alertmanager could not deliver (Slack).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(increase(alertmanager_notifications_failed_total[$__range])) + sum(increase(vmalert_alerts_send_errors_total[$__range]))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 8,
+      "gridPos": {
+        "x": 18,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Days until a store's limit",
+      "description": "Fewest days, among VMSingle, VLSingle and VTSingle, until the disk reaches its limit at the last day's growth (the Storage row has each store).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 3
+              },
+              {
+                "color": "green",
+                "value": 14
+              }
+            ]
+          },
+          "noValue": "–",
+          "mappings": [
+            {
+              "type": "range",
+              "options": {
+                "from": 365,
+                "to": null,
+                "result": {
+                  "text": "more than a year",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "min(max by (store) (label_replace(clamp_max((max(vm_free_disk_space_bytes{job=\"vmsingle-vmks\"}) - max(vm_free_disk_space_limit_bytes{job=\"vmsingle-vmks\"})) / clamp_min(clamp_min(max(-deriv(vm_free_disk_space_bytes{job=\"vmsingle-vmks\"}[1d])) * 86400, 0), 1), 3650), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(clamp_max((max(vl_max_disk_space_usage_bytes{job=\"vlsingle-vmks\"}) - (max(vl_total_disk_space_bytes{job=\"vlsingle-vmks\"}) - max(vl_free_disk_space_bytes{job=\"vlsingle-vmks\"}))) / clamp_min(clamp_min(max(-deriv(vl_free_disk_space_bytes{job=\"vlsingle-vmks\"}[1d])) * 86400, 0), 1), 3650), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(clamp_max((max(vt_max_disk_space_usage_bytes{job=\"vtsingle-vmks\"}) - (max(vt_total_disk_space_bytes{job=\"vtsingle-vmks\"}) - max(vt_free_disk_space_bytes{job=\"vtsingle-vmks\"}))) / clamp_min(clamp_min(max(-deriv(vt_free_disk_space_bytes{job=\"vtsingle-vmks\"}[1d])) * 86400, 0), 1), 3650), \"store\", \"VictoriaTraces\", \"\", \"\")))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "x": 21,
+        "y": 1,
+        "w": 3,
+        "h": 4
+      }
+    },
+    {
+      "type": "row",
+      "title": "Collection — scrape targets",
+      "collapsed": false,
+      "panels": [],
+      "id": 10,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Targets down",
+      "description": "Every target whose last scrape failed. Empty is healthy.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "All targets up",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "cluster": true,
+              "prometheus": true,
+              "endpoint": true
+            },
+            "indexByName": {
+              "job": 0,
+              "namespace": 1,
+              "pod": 2,
+              "instance": 3
+            },
+            "renameByName": {
+              "job": "Job",
+              "namespace": "Namespace",
+              "pod": "Pod",
+              "instance": "Target"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "up == 0",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - vmagent",
+          "url": "/d/G7Z9GzMGz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Targets down and failed scrapes",
+      "description": "Down targets per job (left) and failed scrapes across both vmagent replicas (right).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count by (job) (up == 0)",
+          "legendFormat": "{{job}} down",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vm_promscrape_scrapes_failed_total[$__rate_interval]))",
+          "legendFormat": "failed scrapes / s",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "x": 8,
+        "y": 6,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - vmagent",
+          "url": "/d/G7Z9GzMGz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Samples per scrape, top 10 jobs",
+      "description": "Series each job adds per scrape: where the cardinality comes from.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "topk(10, sum by (job) (scrape_samples_post_metric_relabeling))",
+          "legendFormat": "{{job}}",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "x": 16,
+        "y": 6,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - vmagent",
+          "url": "/d/G7Z9GzMGz?${__url_time_range}"
+        }
+      ],
+      "maxDataPoints": 1
+    },
+    {
+      "type": "row",
+      "title": "Ingestion — metrics, logs and spans",
+      "collapsed": false,
+      "panels": [],
+      "id": 14,
+      "gridPos": {
+        "x": 0,
+        "y": 13,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Metrics into VMSingle",
+      "description": "Samples per second by protocol (left) and new series per second (right: churn, e.g. after rollouts).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (type) (rate(vm_rows_inserted_total{job=\"vmsingle-vmks\"}[$__rate_interval]))",
+          "legendFormat": "{{type}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vm_new_timeseries_created_total{job=\"vmsingle-vmks\"}[$__rate_interval]))",
+          "legendFormat": "new series / s",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 15,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - single-node",
+          "url": "/d/wNf0q_kZk?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaMetrics - vmagent",
+          "url": "/d/G7Z9GzMGz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Logs into VLSingle",
+      "description": "Lines per second read from container logs by vlagent and stored by VLSingle (left; Kubernetes events add to the stored lines), and the volume (right).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "Bps"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vl_rows_ingested_total{job=\"monitoring/vlagent-vmks\"}[$__rate_interval]))",
+          "legendFormat": "collected by vlagent",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vl_rows_ingested_total{job=\"vlsingle-vmks\"}[$__rate_interval]))",
+          "legendFormat": "stored by VLSingle",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vl_bytes_ingested_total{job=\"vlsingle-vmks\"}[$__rate_interval]))",
+          "legendFormat": "bytes / s",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "x": 8,
+        "y": 14,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Spans into VTSingle",
+      "description": "Spans per second over OTLP (left) next to the shop's request rate (right): the two move together; spans at 0 with traffic means the exporters cannot deliver.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "reqps"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vt_rows_ingested_total{job=\"vtsingle-vmks\", type=~\"opentelemetry.*\"}[$__rate_interval]))",
+          "legendFormat": "spans / s",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(http_server_requests_total{namespace=\"shop\"}[$__rate_interval]))",
+          "legendFormat": "shop requests / s",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "x": 16,
+        "y": 14,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaTraces - single-node",
+          "url": "/d/10dbc46d-e6fe-46c9-8ee2-57783dd70695?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Delivery backlog",
+      "description": "Data the agents hold because the store does not take it fast enough or is down. It drains after a store restart; growing for long means the store is overloaded or unreachable. Beyond the on-disk queue size the oldest data is dropped.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(vmagent_remotewrite_pending_data_bytes)",
+          "legendFormat": "vmagent → VMSingle",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(vlagent_remotewrite_pending_data_bytes)",
+          "legendFormat": "vlagent → VLSingle",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 18,
+      "gridPos": {
+        "x": 0,
+        "y": 21,
+        "w": 12,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - vmagent",
+          "url": "/d/G7Z9GzMGz?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Delivery retries and errors",
+      "description": "Failed sends per second towards the stores. Retried from the agents' queues; persistent retries fire TooManyRemoteWriteErrors (vmagent, vlagent) or RemoteWriteErrors (vmalert).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vmagent_remotewrite_retries_count_total[$__rate_interval]))",
+          "legendFormat": "vmagent retries",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vlagent_remotewrite_retries_count_total[$__rate_interval]))",
+          "legendFormat": "vlagent retries",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vmalert_remotewrite_errors_total[$__rate_interval]))",
+          "legendFormat": "vmalert remote write errors",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(otelcol_exporter_send_failed_log_records[$__rate_interval]))",
+          "legendFormat": "Kubernetes events send failures",
+          "refId": "D",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 19,
+      "gridPos": {
+        "x": 12,
+        "y": 21,
+        "w": 12,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - vmagent",
+          "url": "/d/G7Z9GzMGz?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaMetrics - vmalert",
+          "url": "/d/LzldHAVnz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Dropped data",
+      "collapsed": false,
+      "panels": [],
+      "id": 20,
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Dropped per 5 minutes",
+      "description": "Every place data is thrown away, by cause: rejected by a store (bad timestamps, too many fields, series limits), lines longer than the insert limit, blocks an agent gave up on, and bytes lost when an agent's disk queue was full.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum by (reason) (increase(vm_rows_ignored_total{job=\"vmsingle-vmks\"}[$__interval]))), \"cause\", \"Metrics rejected by VMSingle: $1\", \"reason\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum(increase({__name__=~\"vm(agent)?_(hourly|daily)_series_limit_rows_dropped_total\"}[$__interval]))), \"cause\", \"Metrics over the series limit\", \"\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum(increase(vmagent_remotewrite_samples_dropped_total[$__interval]))), \"cause\", \"Metric samples dropped by vmagent\", \"\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum(increase(vmagent_remotewrite_packets_dropped_total[$__interval]))), \"cause\", \"Metric blocks rejected by VMSingle\", \"\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "D",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum by (job) (increase(vl_too_long_lines_skipped_total[$__interval]))), \"cause\", \"Log lines too long ($1)\", \"job\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "E",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum by (reason) (increase(vl_rows_dropped_total[$__interval]))), \"cause\", \"Log lines rejected: $1\", \"reason\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "F",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum(increase(vlagent_remotewrite_packets_dropped_total[$__interval]))), \"cause\", \"Log blocks rejected by VLSingle\", \"\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "G",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum by (reason) (increase(vt_rows_dropped_total[$__interval]))), \"cause\", \"Spans rejected: $1\", \"reason\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "H",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum(increase(vmalert_remotewrite_dropped_rows_total[$__interval]))), \"cause\", \"Recording rule results dropped by vmalert\", \"\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "I",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "label_replace(round(sum by (job) (increase(vm_persistentqueue_bytes_dropped_total[$__interval]))), \"cause\", \"Agent disk queue full, bytes lost ($1)\", \"job\", \"(.*)\") > 0",
+          "legendFormat": "{{cause}}",
+          "refId": "J",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "interval": "5m",
+      "id": 21,
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 16,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - single-node",
+          "url": "/d/wNf0q_kZk?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - vlagent",
+          "url": "/d/Y5Z9GzMGz?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaTraces - single-node",
+          "url": "/d/10dbc46d-e6fe-46c9-8ee2-57783dd70695?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Dropped in the time range",
+      "description": "Totals per cause in the time range (the queue cause counts bytes).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "Nothing dropped",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Count"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Count",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "renameByName": {
+              "cause": "Cause",
+              "Value": "Count"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (cause) (label_replace(round(sum by (reason) (increase(vm_rows_ignored_total{job=\"vmsingle-vmks\"}[$__range]))), \"cause\", \"Metrics rejected by VMSingle: $1\", \"reason\", \"(.*)\") or label_replace(round(sum(increase({__name__=~\"vm(agent)?_(hourly|daily)_series_limit_rows_dropped_total\"}[$__range]))), \"cause\", \"Metrics over the series limit\", \"\", \"(.*)\") or label_replace(round(sum(increase(vmagent_remotewrite_samples_dropped_total[$__range]))), \"cause\", \"Metric samples dropped by vmagent\", \"\", \"(.*)\") or label_replace(round(sum(increase(vmagent_remotewrite_packets_dropped_total[$__range]))), \"cause\", \"Metric blocks rejected by VMSingle\", \"\", \"(.*)\") or label_replace(round(sum by (job) (increase(vl_too_long_lines_skipped_total[$__range]))), \"cause\", \"Log lines too long ($1)\", \"job\", \"(.*)\") or label_replace(round(sum by (reason) (increase(vl_rows_dropped_total[$__range]))), \"cause\", \"Log lines rejected: $1\", \"reason\", \"(.*)\") or label_replace(round(sum(increase(vlagent_remotewrite_packets_dropped_total[$__range]))), \"cause\", \"Log blocks rejected by VLSingle\", \"\", \"(.*)\") or label_replace(round(sum by (reason) (increase(vt_rows_dropped_total[$__range]))), \"cause\", \"Spans rejected: $1\", \"reason\", \"(.*)\") or label_replace(round(sum(increase(vmalert_remotewrite_dropped_rows_total[$__range]))), \"cause\", \"Recording rule results dropped by vmalert\", \"\", \"(.*)\") or label_replace(round(sum by (job) (increase(vm_persistentqueue_bytes_dropped_total[$__range]))), \"cause\", \"Agent disk queue full, bytes lost ($1)\", \"job\", \"(.*)\")) > 0",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 22,
+      "gridPos": {
+        "x": 16,
+        "y": 29,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Storage — disk and retention",
+      "collapsed": false,
+      "panels": [],
+      "id": 23,
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Stores",
+      "description": "Configured retention against the oldest data actually kept, the disk, and how long until each store hits its limit at the growth of the last day. VMSingle turns read-only below 2 GB free (DiskRunsOutOfSpaceIn3Days warns). VLSingle and VTSingle then drop their oldest days instead: the oldest data shrinks below the retention (RetentionCutByDiskCap alerts) and growing the disk (storage in vm-k8s-stack.yaml) brings it back.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Store"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Retention"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Oldest data"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dtdurations"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "noValue",
+                "value": "whole months (partitions)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Disk"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Used"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Limit"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 210
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Room before the limit"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Growth per day"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Days until the limit"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "range",
+                    "options": {
+                      "from": 365,
+                      "to": null,
+                      "result": {
+                        "text": "more than a year",
+                        "index": 0
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 3
+                    },
+                    {
+                      "color": "green",
+                      "value": 14
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        }
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value #A": true
+            },
+            "indexByName": {
+              "store": 0,
+              "value": 1,
+              "Value #B": 2,
+              "Value #C": 3,
+              "Value #D": 4,
+              "limit": 5,
+              "Value #E": 6,
+              "Value #F": 7,
+              "Value #G": 8
+            },
+            "renameByName": {
+              "store": "Store",
+              "value": "Retention",
+              "Value #B": "Oldest data",
+              "Value #C": "Disk",
+              "Value #D": "Used",
+              "limit": "Limit",
+              "Value #E": "Room before the limit",
+              "Value #F": "Growth per day",
+              "Value #G": "Days until the limit"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store, value) (label_replace(max by (value) (flag{job=\"vmsingle-vmks\", name=\"retentionPeriod\"}), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(max by (value) (flag{job=\"vlsingle-vmks\", name=\"retentionPeriod\"}), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(max by (value) (flag{job=\"vtsingle-vmks\", name=\"retentionPeriod\"}), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store) (label_replace(time() - max(vl_storage_log_min_timestamp_seconds{job=\"vlsingle-vmks\"}), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(time() - max(vt_storage_log_min_timestamp_seconds{job=\"vtsingle-vmks\"}), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "",
+          "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store) (label_replace(max(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"vmsingle-vmks\", namespace=\"monitoring\"}), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(max(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"vlsingle-vmks\", namespace=\"monitoring\"}), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(max(kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"vtsingle-vmks\", namespace=\"monitoring\"}), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "",
+          "refId": "C",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store) (label_replace(max(1 - kubelet_volume_stats_available_bytes{persistentvolumeclaim=\"vmsingle-vmks\", namespace=\"monitoring\"} / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"vmsingle-vmks\", namespace=\"monitoring\"}), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(max(1 - kubelet_volume_stats_available_bytes{persistentvolumeclaim=\"vlsingle-vmks\", namespace=\"monitoring\"} / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"vlsingle-vmks\", namespace=\"monitoring\"}), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(max(1 - kubelet_volume_stats_available_bytes{persistentvolumeclaim=\"vtsingle-vmks\", namespace=\"monitoring\"} / kubelet_volume_stats_capacity_bytes{persistentvolumeclaim=\"vtsingle-vmks\", namespace=\"monitoring\"}), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "",
+          "refId": "D",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store, limit) (label_replace(label_replace(max(vm_free_disk_space_bytes{job=\"vmsingle-vmks\"}) - max(vm_free_disk_space_limit_bytes{job=\"vmsingle-vmks\"}), \"limit\", \"read-only below 2 GB free\", \"\", \"\"), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(label_replace(max(vl_max_disk_space_usage_bytes{job=\"vlsingle-vmks\"}) - (max(vl_total_disk_space_bytes{job=\"vlsingle-vmks\"}) - max(vl_free_disk_space_bytes{job=\"vlsingle-vmks\"})), \"limit\", \"oldest days dropped at 80%\", \"\", \"\"), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(label_replace(max(vt_max_disk_space_usage_bytes{job=\"vtsingle-vmks\"}) - (max(vt_total_disk_space_bytes{job=\"vtsingle-vmks\"}) - max(vt_free_disk_space_bytes{job=\"vtsingle-vmks\"})), \"limit\", \"oldest days dropped at 80%\", \"\", \"\"), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "",
+          "refId": "E",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store) (label_replace(clamp_min(max(-deriv(vm_free_disk_space_bytes{job=\"vmsingle-vmks\"}[1d])) * 86400, 0), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(clamp_min(max(-deriv(vl_free_disk_space_bytes{job=\"vlsingle-vmks\"}[1d])) * 86400, 0), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(clamp_min(max(-deriv(vt_free_disk_space_bytes{job=\"vtsingle-vmks\"}[1d])) * 86400, 0), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "",
+          "refId": "F",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store) (label_replace(clamp_max((max(vm_free_disk_space_bytes{job=\"vmsingle-vmks\"}) - max(vm_free_disk_space_limit_bytes{job=\"vmsingle-vmks\"})) / clamp_min(clamp_min(max(-deriv(vm_free_disk_space_bytes{job=\"vmsingle-vmks\"}[1d])) * 86400, 0), 1), 3650), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(clamp_max((max(vl_max_disk_space_usage_bytes{job=\"vlsingle-vmks\"}) - (max(vl_total_disk_space_bytes{job=\"vlsingle-vmks\"}) - max(vl_free_disk_space_bytes{job=\"vlsingle-vmks\"}))) / clamp_min(clamp_min(max(-deriv(vl_free_disk_space_bytes{job=\"vlsingle-vmks\"}[1d])) * 86400, 0), 1), 3650), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(clamp_max((max(vt_max_disk_space_usage_bytes{job=\"vtsingle-vmks\"}) - (max(vt_total_disk_space_bytes{job=\"vtsingle-vmks\"}) - max(vt_free_disk_space_bytes{job=\"vtsingle-vmks\"}))) / clamp_min(clamp_min(max(-deriv(vt_free_disk_space_bytes{job=\"vtsingle-vmks\"}[1d])) * 86400, 0), 1), 3650), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "",
+          "refId": "G",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 24,
+      "gridPos": {
+        "x": 0,
+        "y": 38,
+        "w": 24,
+        "h": 6
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - single-node",
+          "url": "/d/wNf0q_kZk?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaTraces - single-node",
+          "url": "/d/10dbc46d-e6fe-46c9-8ee2-57783dd70695?${__url_time_range}"
+        },
+        {
+          "title": "Open Kubernetes / Persistent Volumes",
+          "url": "/d/919b92a8e8041bd567af9edab12c840c?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Room before the limit",
+      "description": "Free space left before each store's limit; a steady fall shows the growth.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (store) (label_replace(max(vm_free_disk_space_bytes{job=\"vmsingle-vmks\"}) - max(vm_free_disk_space_limit_bytes{job=\"vmsingle-vmks\"}), \"store\", \"VictoriaMetrics\", \"\", \"\") or label_replace(max(vl_max_disk_space_usage_bytes{job=\"vlsingle-vmks\"}) - (max(vl_total_disk_space_bytes{job=\"vlsingle-vmks\"}) - max(vl_free_disk_space_bytes{job=\"vlsingle-vmks\"})), \"store\", \"VictoriaLogs\", \"\", \"\") or label_replace(max(vt_max_disk_space_usage_bytes{job=\"vtsingle-vmks\"}) - (max(vt_total_disk_space_bytes{job=\"vtsingle-vmks\"}) - max(vt_free_disk_space_bytes{job=\"vtsingle-vmks\"})), \"store\", \"VictoriaTraces\", \"\", \"\"))",
+          "legendFormat": "{{store}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 25,
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 12,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - single-node",
+          "url": "/d/wNf0q_kZk?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaTraces - single-node",
+          "url": "/d/10dbc46d-e6fe-46c9-8ee2-57783dd70695?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Volumes in monitoring",
+      "description": "Every persistent volume of the stack: the three stores, the agents' disk queues, Alertmanager and Grafana. VLSingle and VTSingle stay around 80% once full (by design).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.75
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (persistentvolumeclaim) (1 - kubelet_volume_stats_available_bytes{namespace=\"monitoring\"} / kubelet_volume_stats_capacity_bytes{namespace=\"monitoring\"})",
+          "legendFormat": "{{persistentvolumeclaim}}",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 26,
+      "gridPos": {
+        "x": 12,
+        "y": 44,
+        "w": 12,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open Kubernetes / Persistent Volumes",
+          "url": "/d/919b92a8e8041bd567af9edab12c840c?${__url_time_range}"
+        }
+      ],
+      "maxDataPoints": 1
+    },
+    {
+      "type": "row",
+      "title": "Alerting — rules and notifications",
+      "collapsed": false,
+      "panels": [],
+      "id": 27,
+      "gridPos": {
+        "x": 0,
+        "y": 51,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Watchdog",
+      "description": "The always-firing Watchdog alert: firing means vmalert evaluates rules and writes their state. Not firing means the alerting pipeline itself is down.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "Not firing",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "1": {
+                  "text": "Firing",
+                  "index": 0
+                }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(ALERTS{alertname=\"Watchdog\", alertstate=\"firing\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 28,
+      "gridPos": {
+        "x": 0,
+        "y": 52,
+        "w": 4,
+        "h": 7
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Alertmanager peers",
+      "description": "Members of the Alertmanager gossip cluster (2 replicas). With 1, notifications still go out but are not deduplicated across replicas.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "green",
+                "value": 2
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(alertmanager_cluster_members)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 29,
+      "gridPos": {
+        "x": 4,
+        "y": 52,
+        "w": 4,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open Alertmanager / Overview",
+          "url": "/d/alertmanager-overview?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Rule errors and missed evaluations",
+      "description": "Rule groups whose evaluation failed (query error, datasource down) or ran late (an evaluation took longer than the interval).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (group) (sum by (group, pod) (increase({__name__=~\"vmalert_(alerting|recording)_rules_errors_total\"}[$__interval]))) > 0",
+          "legendFormat": "{{group}} errors",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (group) (sum by (group, pod) (increase(vmalert_iteration_missed_total[$__interval]))) > 0",
+          "legendFormat": "{{group}} missed",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "interval": "5m",
+      "id": 30,
+      "gridPos": {
+        "x": 8,
+        "y": 52,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - vmalert",
+          "url": "/d/LzldHAVnz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Notifications",
+      "description": "Notifications Alertmanager sent and failed per integration, and alerts vmalert could not deliver to Alertmanager.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*(failed|errors).*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (integration) (rate(alertmanager_notifications_total[$__rate_interval])) > 0",
+          "legendFormat": "{{integration}} sent",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (integration, reason) (rate(alertmanager_notifications_failed_total[$__rate_interval])) > 0",
+          "legendFormat": "{{integration}} failed ({{reason}})",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(vmalert_alerts_send_errors_total[$__rate_interval])) > 0",
+          "legendFormat": "vmalert → Alertmanager errors",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 31,
+      "gridPos": {
+        "x": 16,
+        "y": 52,
+        "w": 8,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open Alertmanager / Overview",
+          "url": "/d/alertmanager-overview?${__url_time_range}"
+        },
+        {
+          "title": "Open VictoriaMetrics - vmalert",
+          "url": "/d/LzldHAVnz?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "DNS (kube-dns)",
+      "collapsed": false,
+      "panels": [],
+      "id": 32,
+      "gridPos": {
+        "x": 0,
+        "y": 59,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "DNS requests",
+      "description": "Queries kube-dns answers. NXDOMAIN is mostly normal: with ndots 5 every external name is first tried with the cluster search domains. Other errors (server failures) mean resolution breaks; a failing name such as an exporter endpoint shows up as \"no such host\" in the logs.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".* errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "fixed",
+                  "fixedColor": "red"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (system) (rate(skydns_skydns_dns_request_count_total[$__rate_interval])) > 0",
+          "legendFormat": "{{system}} requests",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(skydns_skydns_dns_error_count_total{cause=\"nxdomain\"}[$__rate_interval]))",
+          "legendFormat": "NXDOMAIN",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (cause) (rate(skydns_skydns_dns_error_count_total{cause!=\"nxdomain\"}[$__rate_interval])) > 0",
+          "legendFormat": "{{cause}} errors",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 33,
+      "gridPos": {
+        "x": 0,
+        "y": 60,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "DNS latency",
+      "description": "Time kube-dns takes to answer.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(skydns_skydns_dns_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p50",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(skydns_skydns_dns_request_duration_seconds_bucket[$__rate_interval])))",
+          "legendFormat": "p99",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 34,
+      "gridPos": {
+        "x": 8,
+        "y": 60,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "kube-dns health probes",
+      "description": "The kube-dns sidecar probes its own kubedns and dnsmasq containers: latency (left) and failed probes (right).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(kubedns_probe_kubedns_latency_ms_bucket[$__rate_interval]))) / 1000",
+          "legendFormat": "kubedns p99",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(kubedns_probe_dnsmasq_latency_ms_bucket[$__rate_interval]))) / 1000",
+          "legendFormat": "dnsmasq p99",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(kubedns_probe_kubedns_errors[$__rate_interval])) + sum(rate(kubedns_probe_dnsmasq_errors[$__rate_interval]))",
+          "legendFormat": "probe errors / s",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 35,
+      "gridPos": {
+        "x": 16,
+        "y": 60,
+        "w": 8,
+        "h": 7
+      }
+    },
+    {
+      "type": "row",
+      "title": "Pipeline components",
+      "collapsed": false,
+      "panels": [],
+      "id": 36,
+      "gridPos": {
+        "x": 0,
+        "y": 67,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Restarts in the time range",
+      "description": "Containers of the stack that restarted (OOMKilled: memory limit; Error: crash or failed liveness probe). A store restart pauses ingestion and queries for its duration.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "noValue": "No restart",
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Restarts"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Restarts",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "pod": 0,
+              "container": 1,
+              "reason": 2,
+              "Value": 3
+            },
+            "renameByName": {
+              "pod": "Pod",
+              "container": "Container",
+              "reason": "Termination reason",
+              "Value": "Restarts"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (pod, container, reason) (max_over_time(kube_pod_container_status_last_terminated_reason{namespace=\"monitoring\"}[$__range])) * on (pod, container) group_left () (sum by (pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=\"monitoring\"}[$__range]))) > 0) or on (pod, container) (sum by (pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=\"monitoring\"}[$__range]))) > 0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 37,
+      "gridPos": {
+        "x": 0,
+        "y": 68,
+        "w": 12,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open VictoriaMetrics - operator",
+          "url": "/d/1H179hunk?${__url_time_range}"
+        },
+        {
+          "title": "Open Cluster — Events",
+          "url": "/d/cluster-events?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "bargauge",
+      "title": "Memory against the limit, top 12 pods",
+      "description": "Working set memory of the stack's pods against their limit; at 100% the container is OOM-killed.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.8
+              },
+              {
+                "color": "red",
+                "value": 0.9
+              }
+            ]
+          },
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "basic",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "left",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "topk(12, sum by (pod) (container_memory_working_set_bytes{namespace=\"monitoring\", container!=\"\"}) / sum by (pod) (kube_pod_container_resource_limits{namespace=\"monitoring\", resource=\"memory\"}))",
+          "legendFormat": "{{pod}}",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 38,
+      "gridPos": {
+        "x": 12,
+        "y": 68,
+        "w": 12,
+        "h": 8
+      },
+      "maxDataPoints": 1
+    }
+  ]
+}

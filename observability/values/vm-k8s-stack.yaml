@@ -106,6 +106,16 @@ defaultDashboards:
 
 defaultRules:
   enabled: true
+  # VLSingle/VTSingle drop their oldest days at 80% disk usage (retention.maxDiskUsagePercent), so the upstream
+  # "data > 80% of the disk" rules would fire forever in normal operation. Replaced by the RetentionCutByDiskCap
+  # alerts in observability/platform/pipeline.yaml. vmsingle's DiskRunsOutOfSpace stays (VM has no such limit).
+  groups:
+    vlogs:
+      rules:
+        DiskRunsOutOfSpace: { enabled: false }
+    vtraces:
+      rules:
+        DiskRunsOutOfSpace: { enabled: false }
   sources:
     alertmanager:
       url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/alertmanager-prometheusRule.yaml
