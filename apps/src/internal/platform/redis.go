@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -69,34 +70,54 @@ var (
 	redisPoolStaleDesc    = prometheus.NewDesc("goredis_pool_stale_connections_total", "Connections closed as stale or broken.", redisPoolLabels, nil)
 )
 
+// One collector for every client of the process: several collectors with the same descriptors cannot be
+// registered (the notification-service has a second client for its stream consumer).
 type redisPoolCollector struct {
-	client string
-	rdb    *redis.Client
+	mu      sync.Mutex
+	clients map[string]*redis.Client
 }
 
-// RegisterRedisPool exposes the pool metrics of rdb, labelled client (several clients per process are allowed).
+var (
+	redisPools        = &redisPoolCollector{clients: map[string]*redis.Client{}}
+	redisPoolRegister sync.Once
+)
+
+// RegisterRedisPool exposes the pool metrics of rdb, labelled client.
 func RegisterRedisPool(client string, rdb *redis.Client) {
-	prometheus.MustRegister(redisPoolCollector{client: client, rdb: rdb})
+	redisPoolRegister.Do(func() { prometheus.MustRegister(redisPools) })
+	redisPools.mu.Lock()
+	defer redisPools.mu.Unlock()
+	redisPools.clients[client] = rdb
 }
 
-func (c redisPoolCollector) Describe(ch chan<- *prometheus.Desc) { prometheus.DescribeByCollect(c, ch) }
+func (c *redisPoolCollector) Describe(ch chan<- *prometheus.Desc) {
+	for _, d := range []*prometheus.Desc{redisPoolTotalDesc, redisPoolIdleDesc, redisPoolMaxDesc, redisPoolPendingDesc,
+		redisPoolHitsDesc, redisPoolMissesDesc, redisPoolWaitsDesc, redisPoolWaitTimeDesc, redisPoolTimeoutsDesc,
+		redisPoolStaleDesc} {
+		ch <- d
+	}
+}
 
-func (c redisPoolCollector) Collect(ch chan<- prometheus.Metric) {
-	s := c.rdb.PoolStats()
-	gauge := func(d *prometheus.Desc, v float64) {
-		ch <- prometheus.MustNewConstMetric(d, prometheus.GaugeValue, v, c.client)
+func (c *redisPoolCollector) Collect(ch chan<- prometheus.Metric) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for client, rdb := range c.clients {
+		s := rdb.PoolStats()
+		gauge := func(d *prometheus.Desc, v float64) {
+			ch <- prometheus.MustNewConstMetric(d, prometheus.GaugeValue, v, client)
+		}
+		counter := func(d *prometheus.Desc, v float64) {
+			ch <- prometheus.MustNewConstMetric(d, prometheus.CounterValue, v, client)
+		}
+		gauge(redisPoolTotalDesc, float64(s.TotalConns))
+		gauge(redisPoolIdleDesc, float64(s.IdleConns))
+		gauge(redisPoolMaxDesc, float64(rdb.Options().PoolSize))
+		gauge(redisPoolPendingDesc, float64(s.PendingRequests))
+		counter(redisPoolHitsDesc, float64(s.Hits))
+		counter(redisPoolMissesDesc, float64(s.Misses))
+		counter(redisPoolWaitsDesc, float64(s.WaitCount))
+		counter(redisPoolWaitTimeDesc, time.Duration(s.WaitDurationNs).Seconds())
+		counter(redisPoolTimeoutsDesc, float64(s.Timeouts))
+		counter(redisPoolStaleDesc, float64(s.StaleConns))
 	}
-	counter := func(d *prometheus.Desc, v float64) {
-		ch <- prometheus.MustNewConstMetric(d, prometheus.CounterValue, v, c.client)
-	}
-	gauge(redisPoolTotalDesc, float64(s.TotalConns))
-	gauge(redisPoolIdleDesc, float64(s.IdleConns))
-	gauge(redisPoolMaxDesc, float64(c.rdb.Options().PoolSize))
-	gauge(redisPoolPendingDesc, float64(s.PendingRequests))
-	counter(redisPoolHitsDesc, float64(s.Hits))
-	counter(redisPoolMissesDesc, float64(s.Misses))
-	counter(redisPoolWaitsDesc, float64(s.WaitCount))
-	counter(redisPoolWaitTimeDesc, time.Duration(s.WaitDurationNs).Seconds())
-	counter(redisPoolTimeoutsDesc, float64(s.Timeouts))
-	counter(redisPoolStaleDesc, float64(s.StaleConns))
 }
