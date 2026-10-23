@@ -27,8 +27,13 @@ defaults:
     limits: { memory: 128Mi }
   logLevel: info
 
+# CPU requests follow the measured peak per pod at 50 requests/s (traffic generator), so the scheduler places
+# pods by what they use; requests without an override keep the default (≤ 10m measured).
 services:
   api-gateway:
+    resources:
+      requests: { cpu: 40m, memory: 32Mi }
+      limits: { memory: 128Mi }
     env:
       USER_SERVICE_URL: http://user-service:8080
       PRODUCT_SERVICE_URL: http://product-service:8080
@@ -37,15 +42,24 @@ services:
   user-service:
     postgres: true
     redis: true
+    resources:
+      requests: { cpu: 30m, memory: 32Mi }
+      limits: { memory: 128Mi }
 
   product-service:
     postgres: true
     redis: true
+    resources:
+      requests: { cpu: 30m, memory: 32Mi }
+      limits: { memory: 128Mi }
     env:
       RESTOCK_INTERVAL: 2m
 
   order-service:
     postgres: true
+    resources:
+      requests: { cpu: 20m, memory: 32Mi }
+      limits: { memory: 128Mi }
     env:
       USER_SERVICE_URL: http://user-service:8080
       PRODUCT_SERVICE_URL: http://product-service:8080
