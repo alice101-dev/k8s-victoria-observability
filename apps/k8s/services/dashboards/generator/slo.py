@@ -18,25 +18,28 @@ GW_LINK = [{"title": "Open api-gateway dashboard",
 pct = lambda name, dec=2: by_name(name, [{"id": "unit", "value": "percentunit"}, {"id": "decimals", "value": dec}])
 
 
-def slo_table(title, kind, first_col, link, desc, show_window=True):
+def slo_table(title, kind, first_col, link, desc, show_window=True, slo=None):
+    """One row per job and SLI; with slo, one SLI only (its column and, for availability, the threshold hidden)."""
+    sel = f'kind="{kind}"' + (f', slo="{slo}"' if slo else "")
     q = lambda e: f'sum by (job, slo) ({e})'
     return table(
         title,
         # sum by (job, slo): identical label sets in every query, so "merge" joins them into one row
         [vm(q(e), ref=ref, instant=True, fmt="table") for ref, e in (
-            ("A", f'slo:objective:ratio{{kind="{kind}"}}'),
-            ("B", f'1 - slo:sli_error:ratio_rate30d{{kind="{kind}"}}'),
-            ("C", f'slo:error_budget_remaining:ratio{{kind="{kind}"}}'),
-            ("D", f'slo:sli_error:ratio_rate1h{{kind="{kind}"}} {BURN}'),
-            ("E", f'slo:sli_error:ratio_rate6h{{kind="{kind}"}} {BURN}'),
-            ("F", f'slo:sli_window:seconds{{kind="{kind}"}}'),
-            ("G", f'slo:sli_threshold:seconds{{kind="{kind}"}}'),
+            ("A", f'slo:objective:ratio{{{sel}}}'),
+            ("B", f'1 - slo:sli_error:ratio_rate30d{{{sel}}}'),
+            ("C", f'slo:error_budget_remaining:ratio{{{sel}}}'),
+            ("D", f'slo:sli_error:ratio_rate1h{{{sel}}} {BURN}'),
+            ("E", f'slo:sli_error:ratio_rate6h{{{sel}}} {BURN}'),
+            ("F", f'slo:sli_window:seconds{{{sel}}}'),
+            ("G", f'slo:sli_threshold:seconds{{{sel}}}'),
             # Time until the 30d budget is gone at the current 1h burn rate (capped at a year).
-            ("H", f'clamp_max(clamp_min(slo:error_budget_remaining:ratio{{kind="{kind}"}}, 0) * 2592000'
-                  f' / on (job, slo, kind) (slo:sli_error:ratio_rate1h{{kind="{kind}"}} {BURN}), 31536000)'))],
+            ("H", f'clamp_max(clamp_min(slo:error_budget_remaining:ratio{{{sel}}}, 0) * 2592000'
+                  f' / on (job, slo, kind) (slo:sli_error:ratio_rate1h{{{sel}}} {BURN}), 31536000)'))],
         [{"id": "merge", "options": {}},
          {"id": "organize", "options": {
-             "excludeByName": {"Time": True, "cluster": True, "__name__": True, "Value #F": not show_window},
+             "excludeByName": {"Time": True, "cluster": True, "__name__": True, "Value #F": not show_window,
+                               "slo": slo is not None, "Value #G": slo == "availability"},
              "indexByName": {"job": 0, "slo": 1, "Value #G": 2, "Value #A": 3, "Value #B": 4, "Value #C": 5,
                              "Value #D": 6, "Value #E": 7, "Value #H": 8, "Value #F": 9},
              "renameByName": {"job": first_col, "slo": "SLI", "Value #A": "Objective", "Value #B": "Actual (30d)",
@@ -106,10 +109,15 @@ d.add(stat("SLO rules last evaluated", "time() - max(timestamp(slo:sli_error:rat
            desc="Age of the newest SLI sample. If vmalert or the metrics storage is down, the dashboard silently goes stale."), 4, 6)
 
 d.row("Services — error budget (30-day window)")
-d.add(slo_table("Service SLOs", "service", "Service", SVC_LINK,
-                "Availability = share of non-5xx responses; latency = share of requests faster than the service threshold. "
-                "Burn rate 1 spends the budget in exactly 30 days; alerts page at 14.4 (1h) or 6 (6h). "
-                "Budget gone in = remaining budget at the current 1h burn rate. Click a service to drill down."), 24, 15)
+BUDGET_HELP = ("Burn rate 1 spends the budget in exactly 30 days; alerts page at 14.4 (1h) or 6 (6h). Budget gone in = "
+               "remaining budget at the current 1h burn rate. Sorted by budget remaining, the most at risk first. "
+               "Click a service to drill down.")
+d.add(slo_table("Availability — requests answered without a 5xx", "service", "Service", SVC_LINK,
+                f"Each service's share of non-5xx responses over 30 days against its objective. {BUDGET_HELP}",
+                slo="availability"), 24, 8)
+d.add(slo_table("Latency — requests faster than the service's threshold", "service", "Service", SVC_LINK,
+                f"Each service's share of requests answered within its threshold (Threshold column) over 30 days "
+                f"against its objective. {BUDGET_HELP}", slo="latency"), 24, 8)
 
 d.row("Burn rate")
 d.add(ts("Burn rate — 1h window", [vm(f"slo:sli_error:ratio_rate1h {BURN}", "{{job}} · {{slo}}")], "x",
