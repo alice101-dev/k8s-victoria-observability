@@ -22,6 +22,13 @@ service:
   type: ClusterIP
   port: 8080
 
+# At info the server logs every MCP request with its full result: resources/list returns the embedded docs
+# (~8 MB in one line, skipped by vlagent as too long, alert LogLinesTooLong) and query results end up in the
+# logs. warn keeps errors only.
+env:
+  - name: MCP_LOG_LEVEL
+    value: warn
+
 # MCP server metrics scraped by vmagent (VMServiceScrape).
 scrape:
   enabled: true
