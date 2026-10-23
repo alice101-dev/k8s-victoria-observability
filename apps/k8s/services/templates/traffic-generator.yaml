@@ -82,7 +82,7 @@ spec:
         - name: k6
           image: {{ $tg.image }}
           # --no-usage-report: no anonymous usage statistics sent to Grafana; --quiet: no progress bar in the logs.
-          args: ["run", "--quiet", "--no-usage-report", "--no-summary", "/scripts/traffic.js"]
+          args: ["run", "--quiet", "--no-usage-report", "--summary-mode=disabled", "/scripts/traffic.js"]
           env:
             - name: CHECKOUT_RATE
               value: {{ $tg.rate.checkout | quote }}
