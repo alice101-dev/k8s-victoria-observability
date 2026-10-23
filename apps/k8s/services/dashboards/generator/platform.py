@@ -26,7 +26,7 @@ HEALTH = {"Healthy": ("Healthy", "green"), "Progressing": ("Progressing", "blue"
 HEALTH_STATES = {"Healthy": ("Healthy", "green"), "Progressing": ("Progressing", "blue"),
                  "Suspended|Missing|Unknown": ("Suspended, Missing or Unknown", "orange"), "Degraded": ("Degraded", "red")}
 READY = {"1": ("Ready", "green"), "0": ("Not ready", "red")}
-TIME_LEFT = thresholds(("red", None), ("orange", 7 * DAY), ("green", 14 * DAY))
+TIME_LEFT = thresholds(("red", None), ("orange", 7 * DAY), ("green", 14 * DAY))  # dtdurations, decimals 1: two units
 fixed = lambda name, color, matcher="byName": {"matcher": {"id": matcher, "options": name},
                                                "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": color}}]}
 
@@ -94,7 +94,7 @@ for p in (
          thresholds(("green", None), ("red", 1)), "Certificates cert-manager could not issue or renew.", decimals=0),
     stat("Next certificate expiry", "min(certmanager_certificate_expiration_timestamp_seconds) - time()",
          "dtdurations", TIME_LEFT, "Time until the first certificate expires. cert-manager renews ahead of expiry "
-         "(renewBefore), so a low value means renewals fail.", decimals=0),
+         "(renewBefore), so a low value means renewals fail.", decimals=1),
 ):
     d.add(p, 4, 4)
 
@@ -115,7 +115,7 @@ d.add(table("Applications",
             desc="Every Argo CD Application with its project, destination namespace, sync and health status, whether "
                  "it syncs automatically, and its sync operations in the time range. Click an application to list "
                  "its errors in the Errors in the logs row.",
-            sort=[{"displayName": "Application", "desc": False}]), 24, 9)
+            sort=[{"displayName": "Application", "desc": False}]), 24, 14)
 d.add(state_history("Health over time", "health_status", HEALTH_STATES,
                     "Health of each application: when it was Progressing (rollouts), Degraded or Missing."), 12, 10)
 d.add(state_history("Sync status over time", "sync_status", SYNC_STATES,
@@ -218,7 +218,8 @@ d.add(table("Certificates",
                        mapped("Ready", 110, READY, "color-background"),
                        by_name("Renews", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 130}]),
                        by_name("Expires", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 130}]),
-                       by_name("Time left", [{"id": "unit", "value": "dtdurations"}, {"id": "custom.width", "value": 190},
+                       by_name("Time left", [{"id": "unit", "value": "dtdurations"}, {"id": "decimals", "value": 1},
+                                             {"id": "custom.width", "value": 190},
                                              {"id": "custom.cellOptions", "value": {"type": "color-background"}},
                                              {"id": "thresholds", "value": TIME_LEFT}])],
             desc="Every cert-manager Certificate with its issuer, whether it is ready, when cert-manager renews it "
@@ -248,7 +249,8 @@ d.add(ts("Webhook requests", [vm(f'sum by (code) (rate(controller_runtime_webhoo
               "syncs of Certificates and Issuers fail."), 12, 7)
 
 d.row("Components")
-d.add(status_history("Scrape targets up", vm(f"min by (job) (up{{{JOBS}}})", "{{job}}"),
+d.add(status_history("Scrape targets up",
+                     vm(f'label_replace(min by (job) (up{{{JOBS}}}), "job", "$1", "job", "(.+)-metrics")', "{{job}}"),
                      "Every metrics endpoint of Argo CD, External Secrets and cert-manager; Down means the component "
                      "is restarting or not reachable.", thresholds(("red", None), ("green", 1))), 8, 7)
 d.panels[-1]["fieldConfig"]["defaults"]["mappings"] = mappings({"1": ("Up", "green"), "0": ("Down", "red")})
