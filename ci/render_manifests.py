@@ -33,6 +33,7 @@ CLUSTER = {
             "platform/project-id": "ci-project",
             "platform/image-registry": "ci.invalid/deus",
             "platform/backup-bucket": "ci-bucket",
+            "platform/apps-revision": "main",
         },
     },
 }
@@ -102,6 +103,10 @@ def git_file_params(pattern):
     return out
 
 
+class ExternalRepository(Exception):
+    pass
+
+
 def generator_params(gen):
     if "clusters" in gen:
         selector = gen["clusters"].get("selector", {})
@@ -114,6 +119,8 @@ def generator_params(gen):
                 return []
         return [copy.deepcopy(CLUSTER)]
     if "git" in gen:
+        if not local_repo(gen["git"]["repoURL"]):
+            raise ExternalRepository(gen["git"]["repoURL"])
         return [p for f in gen["git"]["files"] for p in git_file_params(f["path"])]
     if "matrix" in gen:
         first, second = gen["matrix"]["generators"]
@@ -283,7 +290,12 @@ def main():
     gitops_docs = load_docs(gitops)
     docs += [("appsets", d) for d in gitops_docs]
 
-    generated = [a for d in gitops_docs if d["kind"] == "ApplicationSet" for a in applications(d)]
+    generated = []
+    for appset in (d for d in gitops_docs if d["kind"] == "ApplicationSet"):
+        try:
+            generated += applications(appset)
+        except ExternalRepository as e:
+            print(f"not rendered: ApplicationSet {appset['metadata']['name']} reads {e} (validated by that repository)")
     components = set(enabled_components())
     for kind in ("addons", "configs"):
         for f in sorted(glob.glob(os.path.join(ROOT, kind, "*", "config.yaml"))):

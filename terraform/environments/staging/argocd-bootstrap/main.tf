@@ -28,5 +28,6 @@ module "argocd" {
     "platform/project-id"     = var.project_id
     "platform/image-registry" = local.image_registry
     "platform/backup-bucket"  = local.backup_bucket
+    "platform/apps-revision"  = var.apps_target_revision
   }
 }

@@ -4,3 +4,4 @@ resources:
   - projects.yaml
   - addons.yaml
   - configs.yaml
+  - apps.yaml

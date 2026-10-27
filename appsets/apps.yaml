@@ -1,0 +1,62 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: apps
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchLabels:
+                  enable_apps: "true"
+                matchExpressions:
+                  - key: env
+                    operator: Exists
+          - git:
+              repoURL: https://github.com/alice101-dev/microservice-deus.git
+              revision: '{{ index .metadata.annotations "platform/apps-revision" }}'
+              directories:
+                - path: services/*/deploy
+  template:
+    metadata:
+      name: "deus-{{ index .path.segments 1 }}"
+      labels:
+        layer: apps
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: apps
+      source:
+        repoURL: https://github.com/alice101-dev/microservice-deus.git
+        targetRevision: '{{ index .metadata.annotations "platform/apps-revision" }}'
+        path: charts/service
+        helm:
+          releaseName: "{{ index .path.segments 1 }}"
+          ignoreMissingValueFiles: true
+          valueFiles:
+            - ../../{{ .path.path }}/values.yaml
+            - ../../{{ .path.path }}/values-{{ .metadata.labels.env }}.yaml
+          valuesObject:
+            environment: "{{ .metadata.labels.env }}"
+            image:
+              registry: '{{ index .metadata.annotations "platform/image-registry" }}'
+      destination:
+        name: "{{ .name }}"
+        namespace: deus
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - ServerSideApply=true
+          - RespectIgnoreDifferences=true
+        retry:
+          limit: 20
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m

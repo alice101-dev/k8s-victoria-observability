@@ -34,4 +34,5 @@ enabled_components = [
   "mcp-argocd",
   "kgateway-crds",
   "kgateway",
+  "apps",
 ]

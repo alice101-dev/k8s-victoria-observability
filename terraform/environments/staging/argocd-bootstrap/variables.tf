@@ -81,3 +81,9 @@ variable "enabled_components" {
     error_message = "Component names are lowercase alphanumerics and '-', at most 56 characters (label enable_<name>)."
   }
 }
+
+variable "apps_target_revision" {
+  description = "Branch or tag of the application repository deployed by the ApplicationSet apps"
+  type        = string
+  default     = "main"
+}
