@@ -7,9 +7,9 @@ import sys
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DASHBOARDS = ["configs/*/base/dashboards/*.json"]
-DATASOURCES = "configs/grafana/base/datasources.yaml"
-STACK_VALUES = "addons/victoria-metrics-k8s-stack/values.yaml"
+DASHBOARDS = ["infrastructure/configs/*/base/dashboards/*.json"]
+DATASOURCES = "infrastructure/configs/grafana/base/datasources.yaml"
+STACK_VALUES = "infrastructure/controllers/victoria-metrics-k8s-stack/values.yaml"
 BUILTIN_DATASOURCES = {"-- Grafana --", "grafana", "-- Mixed --", "-- Dashboard --", "__expr__"}
 VARIABLE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)|\$([A-Za-z_][A-Za-z0-9_]*)|\[\[([A-Za-z_][A-Za-z0-9_]*)")
 LINK = re.compile(r"/d/([A-Za-z0-9_-]+)")

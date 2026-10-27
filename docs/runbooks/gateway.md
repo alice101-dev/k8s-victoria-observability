@@ -1,12 +1,12 @@
 # Gateway runbook (kgateway, Gateway `edge`)
 
-The alerts of the `kgateway` VMRule (`configs/kgateway/base/monitoring.yaml`) link to the sections below.
+The alerts of the `kgateway` VMRule (`infrastructure/configs/kgateway/base/monitoring.yaml`) link to the sections below.
 
 | What | Where |
 |---|---|
-| Gateway and proxy settings | `configs/kgateway/base/gateway.yaml` (Gateway `edge`, GatewayParameters `edge`) |
-| Telemetry | `configs/kgateway/base/telemetry.yaml` (ListenerPolicy `edge-telemetry`) |
-| Controller | addon `kgateway`, Deployment `kgateway` in `kgateway-system` |
+| Gateway and proxy settings | `infrastructure/configs/kgateway/base/gateway.yaml` (Gateway `edge`, GatewayParameters `edge`) |
+| Telemetry | `infrastructure/configs/kgateway/base/telemetry.yaml` (ListenerPolicy `edge-telemetry`) |
+| Controller | `infrastructure/controllers/kgateway`, Deployment `kgateway` in `kgateway-system` |
 | Proxies | Deployment `edge` in `kgateway-system`, Service `edge` (ClusterIP, port 80) |
 | Dashboard | Grafana → Platform → Gateway — Edge (`/d/gateway-edge`) |
 | Access logs | LogsQL `{service.name="edge-gateway"}` (OTLP, one record per request, with `trace_id`) |
@@ -14,7 +14,7 @@ The alerts of the `kgateway` VMRule (`configs/kgateway/base/monitoring.yaml`) li
 | Metrics | `envoy_*{job="kgateway-system/kgateway-proxy"}`; listener `envoy_http_conn_manager_prefix="http"`; upstream `envoy_cluster_name="kube_<namespace>_<service>_<port>"` |
 
 Routes are accepted from namespaces labelled `platform/gateway: edge` only. The controller only discovers those
-namespaces, `kgateway-system` and `monitoring` (`discoveryNamespaceSelectors` in `addons/kgateway/values.yaml`), so a
+namespaces, `kgateway-system` and `monitoring` (`discoveryNamespaceSelectors` in `infrastructure/controllers/kgateway/values.yaml`), so a
 backend in another namespace has no Envoy cluster.
 
 ```text

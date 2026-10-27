@@ -13,9 +13,10 @@ policy) and the shared platform they run on.
 k8s-victoria-observability/
 ├── terraform/      # GCP: VPC, Cloud NAT, firewall, GKE, Artifact Registry, Cloud Storage, Secret Manager, Argo CD bootstrap
 ├── bootstrap/      # root.yaml: the only hand-written Application, applied by Terraform
-├── appsets/        # AppProjects platform and apps, ApplicationSets addons and configs
-├── addons/         # one folder per Helm chart: config.yaml (chart, repo, version, namespace) + values.yaml + values-<env>.yaml
-├── configs/        # one folder per component: custom resources and monitoring (Kustomize base + <env> overlay)
+├── appsets/        # AppProjects platform and apps, ApplicationSets controllers, configs and apps
+├── infrastructure/
+│   ├── controllers/  # one folder per Helm chart: config.yaml (chart, repo, version, namespace) + values.yaml + values-<env>.yaml
+│   └── configs/      # one folder per component: custom resources and monitoring (Kustomize base + <env> overlay)
 ├── tools/          # dashboard generator
 ├── ci/             # render and validation scripts used by CI
 └── docs/           # observability, runbooks
@@ -33,52 +34,59 @@ flowchart LR
   subgraph gke["GKE · asia-southeast2"]
     root["Application root"]
     projects["AppProjects<br/>platform · apps"]
-    addons["ApplicationSet addons<br/>one Application per addons/*"]
-    configs["ApplicationSet configs<br/>one Application per configs/*"]
+    controllers["ApplicationSet controllers<br/>one Application per infrastructure/controllers/*"]
+    configs["ApplicationSet configs<br/>one Application per infrastructure/configs/*"]
     workloads["operators, observability,<br/>shared configuration"]
   end
 
   eng --> tf
   eng -- "pull request" --> repo
   tf -- "Argo CD, cluster secret, root" --> root
-  root --> projects & addons & configs
-  repo -. "desired state" .-> addons & configs
-  addons & configs --> workloads
+  root --> projects & controllers & configs
+  repo -. "desired state" .-> controllers & configs
+  controllers & configs --> workloads
   apprepo -. "services/*/deploy" .-> gke
 ```
 
+- **Layout**: the official Flux example layout. `infrastructure/controllers` installs operators and their CRDs,
+  `infrastructure/configs` holds the custom resources and monitoring that need them, and the applications come from
+  their own repository (ApplicationSet `apps`).
 - **Root app**: `bootstrap/root.yaml` points at `appsets/`. Terraform renders it with the repository URL and
   revision and applies it once; Git is the only way to change the cluster afterwards.
-- **ApplicationSets**: a matrix of a Git files generator and the cluster generator. `addons` creates one
-  Application per `addons/*/config.yaml` (multi-source: the upstream chart plus `values.yaml` and
-  `values-<env>.yaml` from this repository); `configs` creates one per `configs/*/config.yaml` from
-  `configs/<name>/<env>`.
+- **ApplicationSets**: a matrix of a Git files generator and the cluster generator. `controllers` creates one
+  Application per `infrastructure/controllers/*/config.yaml` (multi-source: the upstream chart plus `values.yaml` and
+  `values-<env>.yaml` from this repository); `configs` creates one per `infrastructure/configs/*/config.yaml` from
+  `infrastructure/configs/<name>/<env>`.
 - **Components per environment**: the cluster generator only selects clusters labelled `enable_<name>: "true"`,
-  where `<name>` is the addon folder, or the `requires` field of a config. Terraform sets these labels from
-  `enabled_components` in the environment's `argocd-bootstrap` tfvars, so an addon is switched on or off per
+  where `<name>` is the controller folder, or the `requires` field of a config. Terraform sets these labels from
+  `enabled_components` in the environment's `argocd-bootstrap` tfvars, so a component is switched on or off per
   environment in one reviewed list. Removing a name deletes its Application and the resources it manages.
 - **Promotion**: each environment follows one Git revision for everything (`gitops_target_revision` in its
   tfvars). Terraform renders it into the root Application, whose Kustomize patches write the same revision into
-  both ApplicationSets (Git generator and sources), so the addon list, chart versions, values and configs all come
+  both ApplicationSets (Git generator and sources), so the component list, chart versions, values and configs all come
   from that revision. Staging follows `main`; a production environment would follow a release tag such as
   `platform-v1.4.0`, moved forward once the change has run in staging.
 - **Environments**: Terraform registers the cluster in Argo CD with the label `env=<env>` and annotations
   `platform/project-id`, `platform/image-registry` and `platform/backup-bucket`. The ApplicationSets read the
   environment from the label and inject the annotations where a value contains the project ID, so no project ID
   is stored in Git. The default environment is `staging`; another one needs its own Terraform environment,
-  `values-<env>.yaml` files and `configs/*/<env>` overlays.
+  `values-<env>.yaml` files and `infrastructure/configs/*/<env>` overlays.
 - **Ordering**: operators and their custom resources are separate Applications. Every Application syncs with
   `SkipDryRunOnMissingResource` and retries with backoff, so custom resources apply as soon as their CRDs exist.
 - **Projects**: `platform` may deploy cluster-scoped resources from this repository and the pinned chart
-  repositories. `apps` only deploys namespaced workload kinds from the application repository into `deus`.
+  repositories. `apps` only deploys namespaced workload kinds from the application repository into `<env>-deus`
+  (`staging-deus`). Only the application namespace carries the environment: platform namespaces (`monitoring`,
+  `argocd`, `kgateway-system`, ...) are the same in every cluster, and the environment is in the cluster name
+  (`staging-observability`), the node pool (`staging-spot-pool`), the `env` label and every signal's
+  `deployment.environment.name`.
 - **Versions**: every chart, image, dashboard and rule URL is pinned. Renovate opens pull requests for the charts
-  in `addons/*/config.yaml`, Terraform providers and GitHub Actions.
+  in `infrastructure/controllers/*/config.yaml`, Terraform providers and GitHub Actions.
 
 ## Runtime
 
 ```mermaid
 flowchart LR
-  subgraph deus["ns deus"]
+  subgraph deus["ns staging-deus"]
     svc["services<br/>OpenTelemetry SDK"]
     db[("PostgreSQL 18<br/>CloudNativePG")]
     svc --> db
@@ -117,9 +125,9 @@ Service for now; Grafana, Argo CD, the MCP servers and the gateway itself are re
 through the IAM-gated GKE DNS endpoint. The gateway's spans and access logs go to the collector over OTLP, so a
 trace starts at the edge and the access log of every request carries its `trace_id`. Details: [docs/observability.md](docs/observability.md).
 
-## Addons
+## Controllers
 
-| Addon | Namespace | Purpose |
+| Controller | Namespace | Purpose |
 |---|---|---|
 | `cert-manager` | cert-manager | Certificates (Barman Cloud plugin mTLS) |
 | `external-secrets` | external-secrets | Generated and Secret Manager secrets |
@@ -130,7 +138,7 @@ trace starts at the edge and the access log of every request carries its `trace_
 | `otel-collector` | monitoring | OTLP gateway for the applications |
 | `kgateway-crds`, `kgateway` | kgateway-system | Gateway API implementation (Envoy) for the internal edge Gateway |
 | `k8s-events` | monitoring | Kubernetes events to VictoriaLogs |
-| `mcp-victoriametrics`, `mcp-victorialogs`, `mcp-victoriatraces`, `mcp-victoriatraces-logsql`, `mcp-grafana` | monitoring | Read-only MCP servers (plus `mcp-argocd` and `postgres-mcp` from `configs/`) |
+| `mcp-victoriametrics`, `mcp-victorialogs`, `mcp-victoriatraces`, `mcp-victoriatraces-logsql`, `mcp-grafana` | monitoring | Read-only MCP servers (plus `mcp-argocd` and `postgres-mcp` from `infrastructure/configs/`) |
 
 Configs: `namespaces`, `gateway-api` (Gateway API standard CRDs), `kgateway` (Gateway `edge`, telemetry, alerts), `argocd`, `cert-manager`, `external-secrets`, `cloudnative-pg` (cluster `deus-db`,
 backups, network policy, alerts), `postgres-mcp`, `grafana`, `victoria-metrics-k8s-stack`, `otel-collector`,
@@ -166,19 +174,19 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 
 ## Adding a component
 
-- **Helm chart**: create `addons/<name>/config.yaml` (`chart`, `repoURL`, `version`, `namespace`, optional
+- **Helm chart**: create `infrastructure/controllers/<name>/config.yaml` (`chart`, `repoURL`, `version`, `namespace`, optional
   `ignoreDifferences`), `values.yaml` and `values-staging.yaml` if the environment differs; add the chart
   repository to the `platform` AppProject.
-- **Custom resources or monitoring**: create `configs/<name>/config.yaml` (`requires`, `namespace`, optional
-  `ignoreDifferences`), `configs/<name>/base/kustomization.yaml` and `configs/<name>/staging/kustomization.yaml`.
+- **Custom resources or monitoring**: create `infrastructure/configs/<name>/config.yaml` (`requires`, `namespace`, optional
+  `ignoreDifferences`), `infrastructure/configs/<name>/base/kustomization.yaml` and `infrastructure/configs/<name>/staging/kustomization.yaml`.
 - Add the name to `enabled_components` and apply the `argocd-bootstrap` workspace **before** merging, so the label
   exists when the ApplicationSet discovers the folder.
 
 ## Exposing a service
 
-Applications publish routes from their own repository: an `HTTPRoute` in `deus` with
+Applications publish routes from their own repository: an `HTTPRoute` in `staging-deus` with
 `parentRefs: [{name: edge, namespace: kgateway-system}]`. The Gateway only accepts routes from namespaces labelled
-`platform/gateway: edge` (set in `configs/namespaces`), and the `apps` AppProject allows `HTTPRoute`.
+`platform/gateway: edge` (set in `infrastructure/configs/namespaces`), and the `apps` AppProject allows `HTTPRoute`.
 
 ```bash
 kubectl -n kgateway-system port-forward svc/edge 8080:80
@@ -192,7 +200,7 @@ make -C terraform teardown
 ```
 
 It deletes the root Application and the ApplicationSets without cascading, then the generated Applications
-layer by layer (configs first, then addons in reverse dependency order), waits until every PVC is gone so no
+layer by layer (apps, configs, then controllers in reverse dependency order), waits until every PVC is gone so no
 persistent disk keeps billing, and destroys the Terraform workspaces. `services` and `secret-manager` are kept.
 
 ## Staging defaults vs. production
@@ -219,7 +227,7 @@ persistent disk keeps billing, and destroys the Terraform workspaces. `services`
 
 The platform dashboards (Cluster — Events, Platform — GitOps & Secrets, Observability — Pipeline health) are
 generated by `tools/dashboards/generate.py`; the CloudNativePG dashboard is the upstream one with scripted fixes
-(`tools/dashboards/vendor_cloudnative_pg.py`). Both write into `configs/grafana/base/dashboards`. Edit the
+(`tools/dashboards/vendor_cloudnative_pg.py`). Both write into `infrastructure/configs/grafana/base/dashboards`. Edit the
 generator, never the JSON.
 
 `.github/workflows/ci.yaml`:

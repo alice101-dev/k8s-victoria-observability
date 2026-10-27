@@ -63,7 +63,7 @@ The `services` workspace (applied first) enables every Google API the stack need
   `platform/backup-bucket`) on the Argo CD cluster secret, which also carries the label `env=staging` that the
   ApplicationSets select on.
 - **Workload Identity without Google service accounts**: the backup bucket grants its roles directly to
-  the Kubernetes ServiceAccount `deus/deus-db` (`principal://…/subject/ns/deus/sa/deus-db`), so there is
+  the Kubernetes ServiceAccount `staging-deus/deus-db` (`principal://…/subject/ns/staging-deus/sa/deus-db`), so there is
   no key and no `iam.gke.io/gcp-service-account` annotation.
 
 ## Prerequisites
@@ -109,7 +109,7 @@ make teardown     # prompts before each destroy; AUTO_APPROVE=1 to skip prompts
 ```
 
 The script removes the root Application and the ApplicationSets without cascading, deletes the generated
-Applications layer by layer (apps, configs, then addons in reverse dependency order), waits until every PVC is
+Applications layer by layer (apps, configs, then controllers in reverse dependency order), waits until every PVC is
 gone, then runs `terraform destroy` for argocd-bootstrap → cloud-storage → artifact-registry →
 kubernetes-engine → firewall → cloud-nat → vpc, and finally lists any leftover `pvc-*` disks or IPs.
 

@@ -10,10 +10,10 @@ buckets = {
       { action = "AbortIncompleteMultipartUpload", age_days = 1 },
     ]
     workload_identity = [
-      { namespace = "deus", service_account = "deus-db", role = "roles/storage.objectAdmin" },
-      { namespace = "deus", service_account = "deus-db", role = "roles/storage.legacyBucketReader" },
-      { namespace = "deus", service_account = "deus-db-restore", role = "roles/storage.objectViewer" },
-      { namespace = "deus", service_account = "deus-db-restore", role = "roles/storage.legacyBucketReader" },
+      { namespace = "staging-deus", service_account = "deus-db", role = "roles/storage.objectAdmin" },
+      { namespace = "staging-deus", service_account = "deus-db", role = "roles/storage.legacyBucketReader" },
+      { namespace = "staging-deus", service_account = "deus-db-restore", role = "roles/storage.objectViewer" },
+      { namespace = "staging-deus", service_account = "deus-db-restore", role = "roles/storage.legacyBucketReader" },
     ]
   }
 }

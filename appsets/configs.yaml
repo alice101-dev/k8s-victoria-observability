@@ -13,7 +13,7 @@ spec:
               repoURL: https://github.com/alice101-dev/k8s-victoria-observability.git
               revision: main
               files:
-                - path: configs/*/config.yaml
+                - path: infrastructure/configs/*/config.yaml
           - clusters:
               selector:
                 matchLabels:
@@ -62,7 +62,13 @@ spec:
             factor: 2
             maxDuration: 5m
   templatePatch: |
-    {{- if hasKey . "ignoreDifferences" }}
+    {{- if or (hasKey . "ignoreDifferences") (hasKey . "envScoped") }}
     spec:
+      {{- if hasKey . "envScoped" }}
+      destination:
+        namespace: "{{ .metadata.labels.env }}-{{ .namespace }}"
+      {{- end }}
+      {{- if hasKey . "ignoreDifferences" }}
       ignoreDifferences: {{ toJson .ignoreDifferences }}
+      {{- end }}
     {{- end }}

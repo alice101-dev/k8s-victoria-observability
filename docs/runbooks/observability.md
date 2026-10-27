@@ -1,7 +1,7 @@
 # Observability pipeline runbook (collection, storage, alerting)
 
-The alerts of the `observability-pipeline` VMRule (`configs/victoria-metrics-k8s-stack/base/pipeline.yaml`) and the
-`otel-collector` VMRule (`configs/otel-collector/base/monitoring.yaml`) link to the sections below. They cover what the upstream rule sets do not: the upstream groups (`vmagent`, `vmsingle`, `vmalert`,
+The alerts of the `observability-pipeline` VMRule (`infrastructure/configs/victoria-metrics-k8s-stack/base/pipeline.yaml`) and the
+`otel-collector` VMRule (`infrastructure/configs/otel-collector/base/monitoring.yaml`) link to the sections below. They cover what the upstream rule sets do not: the upstream groups (`vmagent`, `vmsingle`, `vmalert`,
 `vlagent`, `vlogs`, `vtraces`, `alertmanager.rules`, `vm-health`, `vl-health`, `vt-health`, `general.rules`) alert on
 each component, with their own runbooks linked from the alerts.
 
@@ -34,7 +34,7 @@ usually one workload logging much more (LogsQL
 `_time:1h | stats by (service.name, kubernetes.pod_namespace, kubernetes.container_name) count() lines | sort by (lines desc)`).
 
 **Fix.** If the shorter retention is acceptable, nothing. Otherwise reduce the noisy logs, or grow the disk:
-raise `vlsingle.spec.storage.resources.requests.storage` in `addons/victoria-metrics-k8s-stack/values-staging.yaml` (the
+raise `vlsingle.spec.storage.resources.requests.storage` in `infrastructure/controllers/victoria-metrics-k8s-stack/values-staging.yaml` (the
 pd-balanced StorageClass expands online; the 80% limit follows the new size).
 
 ## VictoriaTracesRetentionCutByDiskCap
@@ -43,7 +43,7 @@ pd-balanced StorageClass expands online; the 80% limit follows the new size).
 30.
 
 **Fix.** Sample traces (head sampling in the services' SDKs, or tail sampling in the collector) or grow
-`vtsingle.spec.storage` in `addons/victoria-metrics-k8s-stack/values-staging.yaml`.
+`vtsingle.spec.storage` in `infrastructure/controllers/victoria-metrics-k8s-stack/values-staging.yaml`.
 
 ## LogsIngestionStopped
 
@@ -99,7 +99,7 @@ pushes back. Senders retry and then drop.
 **Diagnose.** OpenTelemetry Collector row: Received (refused per signal) and the memory of the collector pods in
 Pipeline components. A sudden rise in received data points to one service (`k8s.deployment.name` on its records).
 
-**Fix.** Raise the memory limit or the replica count in `addons/otel-collector`, or reduce what the noisy service
+**Fix.** Raise the memory limit or the replica count in `infrastructure/controllers/otel-collector`, or reduce what the noisy service
 sends.
 
 ## OtelCollectorExportFailing

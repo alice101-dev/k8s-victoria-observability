@@ -46,7 +46,7 @@ spec:
               registry: '{{ index .metadata.annotations "platform/image-registry" }}'
       destination:
         name: "{{ .name }}"
-        namespace: deus
+        namespace: "{{ .metadata.labels.env }}-deus"
       syncPolicy:
         automated:
           prune: true

@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
-  name: addons
+  name: controllers
   namespace: argocd
 spec:
   goTemplate: true
@@ -13,7 +13,7 @@ spec:
               repoURL: https://github.com/alice101-dev/k8s-victoria-observability.git
               revision: main
               files:
-                - path: addons/*/config.yaml
+                - path: infrastructure/controllers/*/config.yaml
           - clusters:
               selector:
                 matchLabels:
@@ -25,7 +25,7 @@ spec:
     metadata:
       name: "{{ .path.basename }}"
       labels:
-        layer: addons
+        layer: controllers
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:

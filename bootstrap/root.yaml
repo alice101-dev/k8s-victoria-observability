@@ -16,7 +16,7 @@ spec:
         - target:
             group: argoproj.io
             kind: ApplicationSet
-            name: addons
+            name: controllers
           patch: |-
             - op: replace
               path: /spec/generators/0/matrix/generators/0/git/revision

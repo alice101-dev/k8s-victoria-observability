@@ -73,7 +73,7 @@ variable "gitops_repo_password" {
 }
 
 variable "enabled_components" {
-  description = "Addons (addons/<name>) and config-only components (configs/<name> requires) deployed to this cluster; each becomes the cluster label enable_<name>=true"
+  description = "Addons (infrastructure/controllers/<name>) and config-only components (infrastructure/configs/<name> requires) deployed to this cluster; each becomes the cluster label enable_<name>=true"
   type        = list(string)
 
   validation {

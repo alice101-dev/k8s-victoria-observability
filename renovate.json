@@ -10,7 +10,7 @@
       "customType": "regex",
       "description": "Helm charts of the Argo CD addons",
       "managerFilePatterns": [
-        "/(^|/)addons/[^/]+/config\\.yaml$/"
+        "/(^|/)infrastructure/controllers/[^/]+/config\\.yaml$/"
       ],
       "matchStrings": [
         "chart: (?<depName>\\S+)\\nrepoURL: (?<registryUrl>https?://\\S+)\\nversion: (?<currentValue>\\S+)"
@@ -21,7 +21,7 @@
       "customType": "regex",
       "description": "OCI Helm charts of the Argo CD addons",
       "managerFilePatterns": [
-        "/(^|/)addons/[^/]+/config\\.yaml$/"
+        "/(^|/)infrastructure/controllers/[^/]+/config\\.yaml$/"
       ],
       "matchStrings": [
         "chart: (?<chart>\\S+)\\nrepoURL: (?<registry>[^:\\s]+)\\nversion: (?<currentValue>\\S+)"
@@ -33,7 +33,7 @@
       "customType": "regex",
       "description": "Gateway API CRDs",
       "managerFilePatterns": [
-        "/(^|/)configs/gateway-api/base/kustomization\\.yaml$/"
+        "/(^|/)infrastructure/configs/gateway-api/base/kustomization\\.yaml$/"
       ],
       "matchStrings": [
         "https://github\\.com/kubernetes-sigs/gateway-api/releases/download/(?<currentValue>v[^/]+)/"

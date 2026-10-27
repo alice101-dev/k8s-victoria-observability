@@ -7,7 +7,7 @@ AUTO_APPROVE="${AUTO_APPROVE:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TFVARS_GKE="$ROOT/environments/$ENV/kubernetes-engine/$ENV.tfvars"
 
-ADDONS_ORDER=(mcp-grafana mcp-victoriatraces-logsql mcp-victoriatraces mcp-victorialogs mcp-victoriametrics grafana k8s-events otel-collector victoria-metrics-k8s-stack plugin-barman-cloud cloudnative-pg victoria-metrics-operator external-secrets cert-manager)
+CONTROLLERS_ORDER=(kgateway kgateway-crds mcp-grafana mcp-victoriatraces-logsql mcp-victoriatraces mcp-victorialogs mcp-victoriametrics grafana k8s-events otel-collector victoria-metrics-k8s-stack plugin-barman-cloud cloudnative-pg victoria-metrics-operator external-secrets cert-manager)
 DESTROY_ORDER=(argocd-bootstrap cloud-storage artifact-registry kubernetes-engine firewall cloud-nat vpc)
 
 tfvar() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$TFVARS_GKE"; }
@@ -33,13 +33,13 @@ if gcloud container clusters describe "$CLUSTER" --location "$LOCATION" --projec
     echo "   - delete layer $layer"
     kubectl -n argocd delete applications -l layer=$layer --wait=true --timeout=15m
   done
-  for app in "${ADDONS_ORDER[@]}"; do
+  for app in "${CONTROLLERS_ORDER[@]}"; do
     if kubectl -n argocd get application "$app" >/dev/null 2>&1; then
       echo "   - delete $app"
       kubectl -n argocd delete application "$app" --wait=true --timeout=15m
     fi
   done
-  kubectl -n argocd delete applications -l layer=addons --wait=true --timeout=15m
+  kubectl -n argocd delete applications -l layer=controllers --wait=true --timeout=15m
 
   echo ">> Waiting for all PVCs to be deleted (persistent disks released)..."
   for _ in $(seq 1 60); do

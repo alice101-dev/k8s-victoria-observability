@@ -1,6 +1,6 @@
 # Kubernetes runbook (events, nodes, scheduling)
 
-The alerts of the `k8s-events` VMRule (`configs/k8s-events/base/monitoring.yaml`) link to the sections below.
+The alerts of the `k8s-events` VMRule (`infrastructure/configs/k8s-events/base/monitoring.yaml`) link to the sections below.
 Kubernetes events reach VictoriaLogs through the `k8s-events` collector (OpenTelemetry Collector, `k8s_events`
 receiver, namespace `monitoring`); the API server itself keeps them for one hour only. The **Cluster — Events**
 dashboard (Grafana folder **Platform**) shows them by reason, namespace and object, with node restarts, container
@@ -27,7 +27,7 @@ auto-repair, or a new node.
 
 **Diagnose.** Nodes row of the Cluster — Events dashboard (boot time, Ready nodes, node events such as
 `NodeNotReady`, `Rebooted`, `Starting`). `kubectl get nodes`, `kubectl get pods -A -o wide --field-selector
-spec.nodeName=<node>`. Check that the stateful workloads recovered: CloudNativePG (`kubectl -n deus get cluster
+spec.nodeName=<node>`. Check that the stateful workloads recovered: CloudNativePG (`kubectl -n staging-deus get cluster
 deus-db`), the VictoriaMetrics, VictoriaLogs and VictoriaTraces storage pods.
 
 **Fix.** Nothing when everything is back. Pods left `Pending` are covered by `KubePodsUnschedulable`.

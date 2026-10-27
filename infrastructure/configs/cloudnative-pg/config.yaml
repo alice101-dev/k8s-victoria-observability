@@ -1,2 +1,3 @@
 requires: cloudnative-pg
 namespace: deus
+envScoped: true

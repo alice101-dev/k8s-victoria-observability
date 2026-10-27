@@ -36,7 +36,7 @@ jobs:
           if [ -n "$(git status --porcelain -- '*.json')" ]; then
             git status --short -- '*.json'
             git diff --stat -- '*.json'
-            echo "::error::Dashboard JSON differs from its generator. Edit tools/dashboards, run it and commit the JSON it writes."
+            echo "::error::Dashboard JSON differs from its generator. Edit tools/dashboards, run it and commit the JSON it writes to infrastructure/configs/grafana."
             exit 1
           fi
       - name: Dashboards are valid

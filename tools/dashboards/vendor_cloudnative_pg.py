@@ -6,7 +6,7 @@ import urllib.request
 
 COMMIT = "7dd1bc255b5202530e1bae7b858a3bb41a2028c7"
 URL = f"https://raw.githubusercontent.com/cloudnative-pg/grafana-dashboards/{COMMIT}/charts/cluster/grafana-dashboard.json"
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../configs/grafana/base/dashboards/cloudnative-pg.json")
+OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../infrastructure/configs/grafana/base/dashboards/cloudnative-pg.json")
 
 RECONCILE = re.compile(r"max\((controller_runtime_reconcile_total\{[^}]*\})\)")
 

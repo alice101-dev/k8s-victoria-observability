@@ -52,19 +52,19 @@ alerts: when a signal looks missing, check it first). Service dashboards and SLO
 ## Field reference
 
 **Application logs** (OpenTelemetry log records through the collector), one stream per service
-`{service.name="<service>", k8s.namespace.name="deus"}`: the message, severity, `trace_id`, `span_id`, the record's
+`{service.name="<service>", k8s.namespace.name="staging-deus"}`: the message, severity, `trace_id`, `span_id`, the record's
 attributes and the resource attributes added by the collector (`k8s.pod.name`, `k8s.deployment.name`,
 `k8s.node.name`, `service.version`). Credential-like attribute values are masked (`****`). List the exact field
 names with the `field_names` MCP tool or the Grafana field browser.
 
 **PostgreSQL logs** (CloudNativePG JSON), stream
-`{kubernetes.pod_namespace="deus", kubernetes.container_name="postgres"}`, cluster filter
+`{kubernetes.pod_namespace="staging-deus", kubernetes.container_name="postgres"}`, cluster filter
 `"kubernetes.pod_labels.cnpg.io/cluster":in(deus-db)`, instance `kubernetes.pod_name`:
 `record.error_severity` (`LOG`, `ERROR`, `FATAL`, `PANIC`), `record.sql_state_code`, `record.message`,
 `record.detail`, `record.query`, `record.query_id`, `record.process_id`, `record.user_name`,
 `record.application_name` (the service name for application sessions), `record.database_name`.
 
-**Backup sidecar logs**: `{kubernetes.pod_namespace="deus", kubernetes.container_name="plugin-barman-cloud"}`.
+**Backup sidecar logs**: `{kubernetes.pod_namespace="staging-deus", kubernetes.container_name="plugin-barman-cloud"}`.
 
 **Metrics**:
 
@@ -83,25 +83,25 @@ names with the `field_names` MCP tool or the Grafana field browser.
 
 ```text
 # LogsQL: every log line of one request across services
-{k8s.namespace.name="deus"} trace_id:<trace id>
+{k8s.namespace.name="staging-deus"} trace_id:<trace id>
 
 # LogsQL: PostgreSQL errors by SQLSTATE in the last hour
-_time:1h {kubernetes.pod_namespace="deus", kubernetes.container_name="postgres"}
+_time:1h {kubernetes.pod_namespace="staging-deus", kubernetes.container_name="postgres"}
   record.error_severity:in(ERROR, FATAL, PANIC) | stats by (record.sql_state_code, record.message) count() n
 
 # LogsQL: lock waits with the pids holding the lock
-_time:1h {kubernetes.pod_namespace="deus", kubernetes.container_name="postgres"} record.message:"still waiting for"
+_time:1h {kubernetes.pod_namespace="staging-deus", kubernetes.container_name="postgres"} record.message:"still waiting for"
   | fields _time, record.application_name, record.message, record.detail, record.query
 
 # LogsQL: everything one PostgreSQL backend logged (e.g. the blocker pid from a lock wait)
-_time:1h {kubernetes.pod_namespace="deus", kubernetes.container_name="postgres"} record.process_id:<pid>
+_time:1h {kubernetes.pod_namespace="staging-deus", kubernetes.container_name="postgres"} record.process_id:<pid>
 
 # MetricsQL: sessions per service and state on the primary
-sum by (application_name, state) (cnpg_backends_total{namespace="deus"} * on (pod) group_left
-  (cnpg_pg_replication_in_recovery{namespace="deus"} == 0))
+sum by (application_name, state) (cnpg_backends_total{namespace="staging-deus"} * on (pod) group_left
+  (cnpg_pg_replication_in_recovery{namespace="staging-deus"} == 0))
 
 # MetricsQL: sessions holding locks others wait for (no series while nothing waits)
-max_over_time(cnpg_pg_blocking_blocked_sessions{namespace="deus"}[1h])
+max_over_time(cnpg_pg_blocking_blocked_sessions{namespace="staging-deus"}[1h])
 ```
 
 **Spans** (LogsQL on VictoriaTraces): `resource_attr:service.name`, `name` (operation), `kind` (1 internal,
@@ -111,7 +111,7 @@ max_over_time(cnpg_pg_blocking_blocked_sessions{namespace="deus"}[1h])
 
 ```text
 # LogsQL on spans: p95 and 5xx share per endpoint
-_time:1h "resource_attr:k8s.namespace.name":=deus kind:=2
+_time:1h "resource_attr:k8s.namespace.name":=staging-deus kind:=2
   | stats by ("resource_attr:service.name", name) count() calls,
       count() if ("span_attr:http.response.status_code":~"^5") e5, quantile(0.95, duration) p95
 

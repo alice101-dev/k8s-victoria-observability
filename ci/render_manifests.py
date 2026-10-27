@@ -142,8 +142,11 @@ def applications(appset):
         app = {"apiVersion": "argoproj.io/v1alpha1", "kind": "Application",
                **render_template(copy.deepcopy(spec["template"]), params)}
         app["metadata"].setdefault("namespace", appset["metadata"]["namespace"])
-        if "ignoreDifferences" in params and "ignoreDifferences" in spec.get("templatePatch", ""):
+        patch = spec.get("templatePatch", "")
+        if "ignoreDifferences" in params and "ignoreDifferences" in patch:
             app["spec"]["ignoreDifferences"] = params["ignoreDifferences"]
+        if params.get("envScoped") and "envScoped" in patch:
+            app["spec"]["destination"]["namespace"] = f"{params['metadata']['labels']['env']}-{params['namespace']}"
         apps.append(app)
     return apps
 
@@ -297,12 +300,12 @@ def main():
         except ExternalRepository as e:
             print(f"not rendered: ApplicationSet {appset['metadata']['name']} reads {e} (validated by that repository)")
     components = set(enabled_components())
-    for kind in ("addons", "configs"):
-        for f in sorted(glob.glob(os.path.join(ROOT, kind, "*", "config.yaml"))):
+    for kind in ("controllers", "configs"):
+        for f in sorted(glob.glob(os.path.join(ROOT, "infrastructure", kind, "*", "config.yaml"))):
             name = os.path.basename(os.path.dirname(f))
             needs = (yaml.safe_load(open(f)) or {}).get("requires", name) if kind == "configs" else name
             if needs not in components:
-                print(f"not enabled in {ENV}: {kind}/{name} (enable_{needs})")
+                print(f"not enabled in {ENV}: infrastructure/{kind}/{name} (enable_{needs})")
     names = [a["metadata"]["name"] for a in generated]
     for dup in sorted({n for n in names if names.count(n) > 1}):
         errors.append(f"application name {dup} generated more than once")
