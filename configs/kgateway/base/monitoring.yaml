@@ -1,0 +1,25 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: kgateway
+  namespace: kgateway-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kgateway
+  endpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: kgateway-proxy
+  namespace: kgateway-system
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: kgateway
+      app.kubernetes.io/component: proxy
+  podMetricsEndpoints:
+    - port: http-monitoring
+      path: /metrics

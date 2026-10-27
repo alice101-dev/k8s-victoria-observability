@@ -32,4 +32,6 @@ enabled_components = [
   "mcp-victoriatraces-logsql",
   "mcp-grafana",
   "mcp-argocd",
+  "kgateway-crds",
+  "kgateway",
 ]

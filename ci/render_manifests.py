@@ -146,7 +146,9 @@ def helm_template(release, chart, namespace, values_files=(), values=None, repo=
     if crds:
         cmd.append("--include-crds")
     if repo:
-        cmd += ["--repo", repo, "--version", version]
+        cmd += ["--repo", repo]
+    if version:
+        cmd += ["--version", version]
     for f in values_files:
         cmd += ["--values", f]
     with tempfile.NamedTemporaryFile("w", suffix=".yaml") as tmp:
@@ -193,8 +195,12 @@ def render_app(app):
                     files.append(path)
                 elif not helm.get("ignoreMissingValueFiles"):
                     raise RuntimeError(f"{name}: missing value file {rel}")
-            out.append(helm_template(helm.get("releaseName", name), src["chart"], namespace, files,
-                                     helm.get("valuesObject"), src["repoURL"], src["targetRevision"]))
+            if "://" in src["repoURL"]:
+                out.append(helm_template(helm.get("releaseName", name), src["chart"], namespace, files,
+                                         helm.get("valuesObject"), src["repoURL"], src["targetRevision"]))
+            else:
+                out.append(helm_template(helm.get("releaseName", name), f"oci://{src['repoURL']}/{src['chart']}",
+                                         namespace, files, helm.get("valuesObject"), version=src["targetRevision"]))
         elif "path" in src:
             assert local_repo(src["repoURL"]), f"{name}: path source outside this repository"
             path = os.path.join(ROOT, src["path"])
@@ -209,9 +215,12 @@ def render_app(app):
     return "\n---\n".join(out)
 
 
+CRD_GROUPS = set()
+
+
 def builtin_group(api_version):
     group = api_version.rpartition("/")[0]
-    return "." not in group or group.endswith(".k8s.io")
+    return group not in CRD_GROUPS and ("." not in group or group.endswith(".k8s.io"))
 
 
 def port_name_errors(d):
@@ -301,6 +310,7 @@ def main():
         docs += [(name, d) for d in app_docs]
         print(f"rendered {name}: {len(app_docs)} objects")
 
+    CRD_GROUPS.update(d["spec"]["group"] for _, d in docs if d["kind"] == "CustomResourceDefinition")
     r = subprocess.run(["kubeconform", "-strict", "-summary", "-verbose", "-ignore-missing-schemas",
                         "-kubernetes-version", KUBE_VERSION, "-output", "json", out_dir], capture_output=True, text=True)
     report = json.loads(r.stdout or "{}")

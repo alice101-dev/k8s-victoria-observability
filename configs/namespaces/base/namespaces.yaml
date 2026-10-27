@@ -4,6 +4,7 @@ metadata:
   name: deus
   labels:
     app.kubernetes.io/part-of: deus
+    platform/gateway: edge
     pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/audit: restricted

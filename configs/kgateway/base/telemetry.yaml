@@ -1,0 +1,90 @@
+apiVersion: gateway.kgateway.dev/v1alpha1
+kind: ListenerPolicy
+metadata:
+  name: edge-telemetry
+  namespace: kgateway-system
+spec:
+  targetRefs:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: edge
+  default:
+    httpSettings:
+      tracing:
+        randomSampling: 100
+        spawnUpstreamSpan: true
+        provider:
+          openTelemetry:
+            serviceName: edge-gateway
+            grpcService:
+              backendRef:
+                name: otel-collector
+                namespace: monitoring
+                port: 4317
+      accessLog:
+        - openTelemetry:
+            grpcService:
+              logName: edge-access
+              backendRef:
+                name: otel-collector
+                namespace: monitoring
+                port: 4317
+            body: '%REQ(:METHOD)% %REQ(X-ENVOY-ORIGINAL-PATH?:PATH)% %PROTOCOL% %RESPONSE_CODE% %RESPONSE_FLAGS% %DURATION%ms'
+            resourceAttributes:
+              values:
+                - key: service.name
+                  value:
+                    stringValue: edge-gateway
+            attributes:
+              values:
+                - key: http.request.method
+                  value:
+                    stringValue: '%REQ(:METHOD)%'
+                - key: url.path
+                  value:
+                    stringValue: '%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%'
+                - key: server.address
+                  value:
+                    stringValue: '%REQ(:AUTHORITY)%'
+                - key: http.response.status_code
+                  value:
+                    stringValue: '%RESPONSE_CODE%'
+                - key: envoy.response_flags
+                  value:
+                    stringValue: '%RESPONSE_FLAGS%'
+                - key: envoy.route_name
+                  value:
+                    stringValue: '%ROUTE_NAME%'
+                - key: envoy.upstream_cluster
+                  value:
+                    stringValue: '%UPSTREAM_CLUSTER%'
+                - key: envoy.upstream_host
+                  value:
+                    stringValue: '%UPSTREAM_HOST%'
+                - key: duration_ms
+                  value:
+                    stringValue: '%DURATION%'
+                - key: client.address
+                  value:
+                    stringValue: '%DOWNSTREAM_REMOTE_ADDRESS_WITHOUT_PORT%'
+                - key: user_agent.original
+                  value:
+                    stringValue: '%REQ(USER-AGENT)%'
+                - key: http.request_id
+                  value:
+                    stringValue: '%REQ(X-REQUEST-ID)%'
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: kgateway-telemetry
+  namespace: monitoring
+spec:
+  from:
+    - group: gateway.kgateway.dev
+      kind: ListenerPolicy
+      namespace: kgateway-system
+  to:
+    - group: ""
+      kind: Service
+      name: otel-collector

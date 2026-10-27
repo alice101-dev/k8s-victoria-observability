@@ -17,6 +17,7 @@ spec:
     - https://victoriametrics.github.io/helm-charts/
     - https://grafana-community.github.io/helm-charts
     - https://open-telemetry.github.io/opentelemetry-helm-charts
+    - cr.kgateway.dev/kgateway-dev/charts
   destinations:
     - server: https://kubernetes.default.svc
       namespace: "*"

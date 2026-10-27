@@ -1,22 +1,53 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
   "dependencyDashboard": true,
   "customManagers": [
     {
       "customType": "regex",
       "description": "Helm charts of the Argo CD addons",
-      "managerFilePatterns": ["/(^|/)addons/[^/]+/config\\.yaml$/"],
+      "managerFilePatterns": [
+        "/(^|/)addons/[^/]+/config\\.yaml$/"
+      ],
       "matchStrings": [
-        "chart: (?<depName>\\S+)\\nrepoURL: (?<registryUrl>\\S+)\\nversion: (?<currentValue>\\S+)"
+        "chart: (?<depName>\\S+)\\nrepoURL: (?<registryUrl>https?://\\S+)\\nversion: (?<currentValue>\\S+)"
       ],
       "datasourceTemplate": "helm"
+    },
+    {
+      "customType": "regex",
+      "description": "OCI Helm charts of the Argo CD addons",
+      "managerFilePatterns": [
+        "/(^|/)addons/[^/]+/config\\.yaml$/"
+      ],
+      "matchStrings": [
+        "chart: (?<chart>\\S+)\\nrepoURL: (?<registry>[^:\\s]+)\\nversion: (?<currentValue>\\S+)"
+      ],
+      "depNameTemplate": "{{{registry}}}/{{{chart}}}",
+      "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "description": "Gateway API CRDs",
+      "managerFilePatterns": [
+        "/(^|/)configs/gateway-api/base/kustomization\\.yaml$/"
+      ],
+      "matchStrings": [
+        "https://github\\.com/kubernetes-sigs/gateway-api/releases/download/(?<currentValue>v[^/]+)/"
+      ],
+      "depNameTemplate": "kubernetes-sigs/gateway-api",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "packageRules": [
     {
       "description": "One pull request per addon chart",
-      "matchManagers": ["custom.regex"],
+      "matchManagers": [
+        "custom.regex"
+      ],
       "commitMessageTopic": "addon {{depName}}"
     }
   ]
