@@ -13,3 +13,23 @@ gitops_target_revision = "main"
 image_repository = "deus"
 
 backup_bucket = "pg-backup"
+
+enabled_components = [
+  "namespaces",
+  "argocd",
+  "cert-manager",
+  "external-secrets",
+  "cloudnative-pg",
+  "plugin-barman-cloud",
+  "victoria-metrics-operator",
+  "victoria-metrics-k8s-stack",
+  "grafana",
+  "otel-collector",
+  "k8s-events",
+  "mcp-victoriametrics",
+  "mcp-victorialogs",
+  "mcp-victoriatraces",
+  "mcp-victoriatraces-logsql",
+  "mcp-grafana",
+  "mcp-argocd",
+]

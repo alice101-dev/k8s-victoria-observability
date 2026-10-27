@@ -14,12 +14,21 @@ import yaml
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KUBE_VERSION = "1.35.6"
 ENV = os.environ.get("RENDER_ENV", "staging")
+def tfvars_text(workspace):
+    return open(os.path.join(ROOT, "terraform/environments", ENV, workspace, f"{ENV}.tfvars")).read()
+
+
+def enabled_components():
+    block = re.search(r"^enabled_components\s*=\s*\[(.*?)\]", tfvars_text("argocd-bootstrap"), re.M | re.S).group(1)
+    return re.findall(r'"([^"]+)"', block)
+
+
 CLUSTER = {
     "name": "in-cluster",
     "nameNormalized": "in-cluster",
     "server": "https://kubernetes.default.svc",
     "metadata": {
-        "labels": {"env": ENV},
+        "labels": {"env": ENV, **{f"enable_{c}": "true" for c in enabled_components()}},
         "annotations": {
             "platform/project-id": "ci-project",
             "platform/image-registry": "ci.invalid/deus",
@@ -47,8 +56,7 @@ def load_docs(text):
 
 
 def tfvar(workspace, name):
-    text = open(os.path.join(ROOT, "terraform/environments", ENV, workspace, f"{ENV}.tfvars")).read()
-    return re.search(rf'^{name}\s*=\s*"([^"]+)"', text, re.M).group(1)
+    return re.search(rf'^{name}\s*=\s*"([^"]+)"', tfvars_text(workspace), re.M).group(1)
 
 
 def lookup(params, expr):
@@ -75,7 +83,7 @@ def render_template(obj, params):
     if isinstance(obj, str):
         return EXPR.sub(lambda m: str(lookup(params, m.group(1))), obj)
     if isinstance(obj, dict):
-        return {k: render_template(v, params) for k, v in obj.items()}
+        return {render_template(k, params): render_template(v, params) for k, v in obj.items()}
     if isinstance(obj, list):
         return [render_template(v, params) for v in obj]
     return obj
@@ -108,10 +116,10 @@ def generator_params(gen):
     if "git" in gen:
         return [p for f in gen["git"]["files"] for p in git_file_params(f["path"])]
     if "matrix" in gen:
-        a, b = (generator_params(g) for g in gen["matrix"]["generators"])
+        first, second = gen["matrix"]["generators"]
         merged = []
-        for x in a:
-            for y in b:
+        for x in generator_params(first):
+            for y in generator_params(render_template(copy.deepcopy(second), x)):
                 clash = set(x) & set(y)
                 if clash:
                     raise RuntimeError(f"matrix generators share keys {sorted(clash)}")
@@ -267,6 +275,13 @@ def main():
     docs += [("appsets", d) for d in gitops_docs]
 
     generated = [a for d in gitops_docs if d["kind"] == "ApplicationSet" for a in applications(d)]
+    components = set(enabled_components())
+    for kind in ("addons", "configs"):
+        for f in sorted(glob.glob(os.path.join(ROOT, kind, "*", "config.yaml"))):
+            name = os.path.basename(os.path.dirname(f))
+            needs = (yaml.safe_load(open(f)) or {}).get("requires", name) if kind == "configs" else name
+            if needs not in components:
+                print(f"not enabled in {ENV}: {kind}/{name} (enable_{needs})")
     names = [a["metadata"]["name"] for a in generated]
     for dup in sorted({n for n in names if names.count(n) > 1}):
         errors.append(f"application name {dup} generated more than once")

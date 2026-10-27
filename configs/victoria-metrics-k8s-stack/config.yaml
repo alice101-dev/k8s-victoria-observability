@@ -1,1 +1,2 @@
+requires: victoria-metrics-k8s-stack
 namespace: monitoring

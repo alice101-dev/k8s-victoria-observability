@@ -1,1 +1,2 @@
+requires: cloudnative-pg
 namespace: deus

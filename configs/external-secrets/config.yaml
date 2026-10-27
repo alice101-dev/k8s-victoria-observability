@@ -1,1 +1,2 @@
+requires: external-secrets
 namespace: monitoring

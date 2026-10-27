@@ -49,10 +49,19 @@ flowchart LR
 
 - **Root app**: `bootstrap/root.yaml` points at `appsets/`. Terraform renders it with the repository URL and
   revision and applies it once; Git is the only way to change the cluster afterwards.
-- **ApplicationSets**: a matrix of the cluster generator and a Git files generator. `addons` creates one
+- **ApplicationSets**: a matrix of a Git files generator and the cluster generator. `addons` creates one
   Application per `addons/*/config.yaml` (multi-source: the upstream chart plus `values.yaml` and
   `values-<env>.yaml` from this repository); `configs` creates one per `configs/*/config.yaml` from
   `configs/<name>/<env>`.
+- **Components per environment**: the cluster generator only selects clusters labelled `enable_<name>: "true"`,
+  where `<name>` is the addon folder, or the `requires` field of a config. Terraform sets these labels from
+  `enabled_components` in the environment's `argocd-bootstrap` tfvars, so an addon is switched on or off per
+  environment in one reviewed list. Removing a name deletes its Application and the resources it manages.
+- **Promotion**: each environment follows one Git revision for everything (`gitops_target_revision` in its
+  tfvars). Terraform renders it into the root Application, whose Kustomize patches write the same revision into
+  both ApplicationSets (Git generator and sources), so the addon list, chart versions, values and configs all come
+  from that revision. Staging follows `main`; a production environment would follow a release tag such as
+  `platform-v1.4.0`, moved forward once the change has run in staging.
 - **Environments**: Terraform registers the cluster in Argo CD with the label `env=<env>` and annotations
   `platform/project-id`, `platform/image-registry` and `platform/backup-bucket`. The ApplicationSets read the
   environment from the label and inject the annotations where a value contains the project ID, so no project ID
@@ -157,8 +166,10 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
 - **Helm chart**: create `addons/<name>/config.yaml` (`chart`, `repoURL`, `version`, `namespace`, optional
   `ignoreDifferences`), `values.yaml` and `values-staging.yaml` if the environment differs; add the chart
   repository to the `platform` AppProject.
-- **Custom resources or monitoring**: create `configs/<name>/config.yaml` (`namespace`),
-  `configs/<name>/base/kustomization.yaml` and `configs/<name>/staging/kustomization.yaml`.
+- **Custom resources or monitoring**: create `configs/<name>/config.yaml` (`requires`, `namespace`, optional
+  `ignoreDifferences`), `configs/<name>/base/kustomization.yaml` and `configs/<name>/staging/kustomization.yaml`.
+- Add the name to `enabled_components` and apply the `argocd-bootstrap` workspace **before** merging, so the label
+  exists when the ApplicationSet discovers the folder.
 
 ## Teardown
 

@@ -71,3 +71,13 @@ variable "gitops_repo_password" {
   default     = null
   sensitive   = true
 }
+
+variable "enabled_components" {
+  description = "Addons (addons/<name>) and config-only components (configs/<name> requires) deployed to this cluster; each becomes the cluster label enable_<name>=true"
+  type        = list(string)
+
+  validation {
+    condition     = alltrue([for name in var.enabled_components : can(regex("^[a-z0-9]([a-z0-9-]{0,54}[a-z0-9])?$", name))])
+    error_message = "Component names are lowercase alphanumerics and '-', at most 56 characters (label enable_<name>)."
+  }
+}

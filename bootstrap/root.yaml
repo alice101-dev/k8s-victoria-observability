@@ -11,6 +11,30 @@ spec:
     repoURL: ${repo_url}
     targetRevision: ${revision}
     path: appsets
+    kustomize:
+      patches:
+        - target:
+            group: argoproj.io
+            kind: ApplicationSet
+            name: addons
+          patch: |-
+            - op: replace
+              path: /spec/generators/0/matrix/generators/0/git/revision
+              value: ${revision}
+            - op: replace
+              path: /spec/template/spec/sources/1/targetRevision
+              value: ${revision}
+        - target:
+            group: argoproj.io
+            kind: ApplicationSet
+            name: configs
+          patch: |-
+            - op: replace
+              path: /spec/generators/0/matrix/generators/0/git/revision
+              value: ${revision}
+            - op: replace
+              path: /spec/template/spec/source/targetRevision
+              value: ${revision}
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

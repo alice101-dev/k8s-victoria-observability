@@ -1,1 +1,2 @@
+requires: cert-manager
 namespace: monitoring

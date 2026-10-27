@@ -20,9 +20,10 @@ module "argocd" {
     mcp-argocd = "role:readonly"
   }
 
-  cluster_labels = {
-    env = var.env
-  }
+  cluster_labels = merge(
+    { env = var.env },
+    { for name in var.enabled_components : "enable_${name}" => "true" },
+  )
   cluster_annotations = {
     "platform/project-id"     = var.project_id
     "platform/image-registry" = local.image_registry

@@ -9,16 +9,18 @@ spec:
   generators:
     - matrix:
         generators:
-          - clusters:
-              selector:
-                matchExpressions:
-                  - key: env
-                    operator: Exists
           - git:
               repoURL: https://github.com/alice101-dev/k8s-victoria-observability.git
               revision: main
               files:
                 - path: addons/*/config.yaml
+          - clusters:
+              selector:
+                matchLabels:
+                  enable_{{ .path.basename }}: "true"
+                matchExpressions:
+                  - key: env
+                    operator: Exists
   template:
     metadata:
       name: "{{ .path.basename }}"

@@ -1,1 +1,2 @@
+requires: argocd
 namespace: monitoring
