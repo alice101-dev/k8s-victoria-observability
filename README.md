@@ -112,8 +112,10 @@ flowchart LR
 | Kubernetes events | OpenTelemetry Collector `k8s_events` receiver | VLSingle | LogsQL |
 | Alerts | VMAlert evaluates MetricsQL and LogsQL rules | – | – |
 
-Nothing is exposed publicly yet: Grafana, Argo CD and the MCP servers are reached with `kubectl port-forward`
-through the IAM-gated GKE DNS endpoint. Details: [docs/observability.md](docs/observability.md).
+Nothing is exposed publicly yet. Application traffic enters through the Gateway `edge` (kgateway), a ClusterIP
+Service for now; Grafana, Argo CD, the MCP servers and the gateway itself are reached with `kubectl port-forward`
+through the IAM-gated GKE DNS endpoint. The gateway's spans and access logs go to the collector over OTLP, so a
+trace starts at the edge and the access log of every request carries its `trace_id`. Details: [docs/observability.md](docs/observability.md).
 
 ## Addons
 
@@ -126,10 +128,11 @@ through the IAM-gated GKE DNS endpoint. Details: [docs/observability.md](docs/ob
 | `victoria-metrics-k8s-stack` | monitoring | Metrics, logs and traces storage, agents, alerting, exporters, vendor dashboards and rules |
 | `grafana` | monitoring | Dashboards and exploration |
 | `otel-collector` | monitoring | OTLP gateway for the applications |
+| `kgateway-crds`, `kgateway` | kgateway-system | Gateway API implementation (Envoy) for the internal edge Gateway |
 | `k8s-events` | monitoring | Kubernetes events to VictoriaLogs |
 | `mcp-victoriametrics`, `mcp-victorialogs`, `mcp-victoriatraces`, `mcp-victoriatraces-logsql`, `mcp-grafana` | monitoring | Read-only MCP servers (plus `mcp-argocd` and `postgres-mcp` from `configs/`) |
 
-Configs: `namespaces`, `argocd`, `cert-manager`, `external-secrets`, `cloudnative-pg` (cluster `deus-db`,
+Configs: `namespaces`, `gateway-api` (Gateway API standard CRDs), `kgateway` (Gateway `edge`, telemetry, alerts), `argocd`, `cert-manager`, `external-secrets`, `cloudnative-pg` (cluster `deus-db`,
 backups, network policy, alerts), `postgres-mcp`, `grafana`, `victoria-metrics-k8s-stack`, `otel-collector`,
 `k8s-events`, `mcp-grafana`, `mcp-argocd` (read-only Argo CD MCP server and its token issuer).
 
@@ -170,6 +173,17 @@ kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.pas
   `ignoreDifferences`), `configs/<name>/base/kustomization.yaml` and `configs/<name>/staging/kustomization.yaml`.
 - Add the name to `enabled_components` and apply the `argocd-bootstrap` workspace **before** merging, so the label
   exists when the ApplicationSet discovers the folder.
+
+## Exposing a service
+
+Applications publish routes from their own repository: an `HTTPRoute` in `deus` with
+`parentRefs: [{name: edge, namespace: kgateway-system}]`. The Gateway only accepts routes from namespaces labelled
+`platform/gateway: edge` (set in `configs/namespaces`), and the `apps` AppProject allows `HTTPRoute`.
+
+```bash
+kubectl -n kgateway-system port-forward svc/edge 8080:80
+curl http://localhost:8080/<path>
+```
 
 ## Teardown
 

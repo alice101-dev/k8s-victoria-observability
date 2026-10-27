@@ -24,6 +24,15 @@ configMapGenerator:
         grafana_dashboard: "1"
       annotations:
         grafana_folder: Platform
+  - name: gateway-edge-dashboard
+    files:
+      - dashboards/gateway-edge.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
   - name: observability-pipeline-dashboard
     files:
       - dashboards/observability-pipeline.json

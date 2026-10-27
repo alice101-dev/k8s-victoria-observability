@@ -23,3 +23,67 @@ spec:
   podMetricsEndpoints:
     - port: http-monitoring
       path: /metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: kgateway
+  namespace: kgateway-system
+spec:
+  groups:
+    - name: kgateway
+      rules:
+        - alert: GatewayProxyDown
+          expr: (count(up{job="kgateway-system/kgateway-proxy"} == 1) or vector(0)) == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: No replica of the edge gateway proxy is up
+            description: Every request through the edge Gateway fails. Check the edge Deployment in kgateway-system and the kgateway controller.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#gatewayproxydown
+        - alert: GatewayProxyReplicasMissing
+          expr: (count(up{job="kgateway-system/kgateway-proxy"} == 1) or vector(0)) < 2
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Only {{ $value }} of 2 edge gateway proxy replicas are up"
+            description: The gateway still serves traffic but has no redundancy; one more failure or a Spot preemption takes it down.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#gatewayproxyreplicasmissing
+        - alert: KgatewayControllerDown
+          expr: absent(up{job="kgateway"} == 1)
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The kgateway controller is down
+            description: Running proxies keep their last configuration, but new or changed Gateways, routes and policies are not applied.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#kgatewaycontrollerdown
+        - alert: KgatewayTranslationErrors
+          expr: sum by (controller, translator) (increase({__name__=~"kgateway_(controller_reconciliations|translator_translations|status_syncer_status_syncs)_total", result!="success"}[10m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "kgateway fails to reconcile or translate ({{ $labels.controller }}{{ $labels.translator }})"
+            description: Gateway API or kgateway resources are rejected; the proxies keep the last good configuration. The resource status conditions and the controller logs name the object.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#kgatewaytranslationerrors
+        - alert: GatewayHighErrorRate
+          expr: (sum(rate(envoy_http_downstream_rq_xx{job="kgateway-system/kgateway-proxy", envoy_http_conn_manager_prefix="http", envoy_response_code_class="5"}[5m])) / sum(rate(envoy_http_downstream_rq_xx{job="kgateway-system/kgateway-proxy", envoy_http_conn_manager_prefix="http"}[5m])) > 0.05) and sum(rate(envoy_http_downstream_rq_xx{job="kgateway-system/kgateway-proxy", envoy_http_conn_manager_prefix="http"}[5m])) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $value | humanizePercentage }} of requests through the edge gateway answer 5xx"
+            description: Responses with status 5xx at the gateway listener, from the backends or from the gateway itself (no healthy upstream, timeouts). GatewayUpstreamErrors names the backend.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#gatewayhigherrorrate
+        - alert: GatewayUpstreamErrors
+          expr: (sum by (envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{job="kgateway-system/kgateway-proxy", envoy_cluster_name=~"kube_.*", envoy_response_code_class="5"}[5m])) / sum by (envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{job="kgateway-system/kgateway-proxy", envoy_cluster_name=~"kube_.*"}[5m])) > 0.05) and sum by (envoy_cluster_name) (rate(envoy_cluster_upstream_rq_xx{job="kgateway-system/kgateway-proxy", envoy_cluster_name=~"kube_.*"}[5m])) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Backend {{ $labels.envoy_cluster_name }} answers {{ $value | humanizePercentage }} 5xx through the gateway"
+            description: The upstream cluster name is kube_<namespace>_<service>_<port>. Check that service's logs and traces.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#gatewayupstreamerrors
