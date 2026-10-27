@@ -156,7 +156,7 @@ def helm_template(release, chart, namespace, values_files=(), values=None, repo=
             yaml.safe_dump(values, tmp)
             tmp.flush()
             cmd += ["--values", tmp.name]
-        return run(cmd)
+        return re.sub(r"(?m)^(Pulled|Digest): .*\n", "", run(cmd))
 
 
 def kustomize_build(path, patches=None):
