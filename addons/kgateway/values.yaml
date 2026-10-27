@@ -13,3 +13,10 @@ controller:
   resources:
     requests: { cpu: 50m, memory: 128Mi }
     limits: { memory: 512Mi }
+discoveryNamespaceSelectors:
+  - matchLabels:
+      platform/gateway: edge
+  - matchExpressions:
+      - key: kubernetes.io/metadata.name
+        operator: In
+        values: [kgateway-system, monitoring]
