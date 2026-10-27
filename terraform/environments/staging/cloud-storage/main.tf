@@ -1,8 +1,3 @@
-# Cloud Storage for the cluster workloads (needs only the storage API from the services workspace).
-# Bucket names are global, so they are prefixed here with the project ID and env (never in Git):
-# key "pg-backup" → "<project>-staging-pg-backup".
-# Access is granted to Kubernetes ServiceAccounts directly through Workload Identity Federation for
-# GKE (principal:// identifiers): no Google service account, no key, no annotation in Git.
 data "google_project" "this" {
   project_id = var.project_id
 }

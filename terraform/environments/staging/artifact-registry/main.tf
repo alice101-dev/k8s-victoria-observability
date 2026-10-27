@@ -1,5 +1,3 @@
-# Artifact Registry wrapper (needs only the artifactregistry API from the services workspace).
-# The env prefix is applied once here: key "shop" → repository_id "staging-shop".
 module "artifact_registry" {
   source = "../../../modules/artifact-registry"
 

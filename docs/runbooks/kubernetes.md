@@ -1,6 +1,6 @@
 # Kubernetes runbook (events, nodes, scheduling)
 
-The alerts of the `k8s-events` VMRule (`observability/k8s-events/monitoring.yaml`) link to the sections below.
+The alerts of the `k8s-events` VMRule (`configs/k8s-events/base/monitoring.yaml`) link to the sections below.
 Kubernetes events reach VictoriaLogs through the `k8s-events` collector (OpenTelemetry Collector, `k8s_events`
 receiver, namespace `monitoring`); the API server itself keeps them for one hour only. The **Cluster — Events**
 dashboard (Grafana folder **Platform**) shows them by reason, namespace and object, with node restarts, container
@@ -27,8 +27,8 @@ auto-repair, or a new node.
 
 **Diagnose.** Nodes row of the Cluster — Events dashboard (boot time, Ready nodes, node events such as
 `NodeNotReady`, `Rebooted`, `Starting`). `kubectl get nodes`, `kubectl get pods -A -o wide --field-selector
-spec.nodeName=<node>`. Check that the stateful workloads recovered: CloudNativePG (`kubectl -n shop get cluster
-shop-db`), Redis (`RedisNoSingleMaster`), the VictoriaMetrics, VictoriaLogs and VictoriaTraces storage pods.
+spec.nodeName=<node>`. Check that the stateful workloads recovered: CloudNativePG (`kubectl -n deus get cluster
+deus-db`), the VictoriaMetrics, VictoriaLogs and VictoriaTraces storage pods.
 
 **Fix.** Nothing when everything is back. Pods left `Pending` are covered by `KubePodsUnschedulable`.
 
@@ -38,7 +38,7 @@ shop-db`), Redis (`RedisNoSingleMaster`), the VictoriaMetrics, VictoriaLogs and 
 
 **Diagnose.** The `FailedScheduling` message says why, for example `0/3 nodes are available: 3 Insufficient
 cpu` (Warning events by object table, or `kubectl describe pod <pod>`). After a preemption the remaining nodes may
-not fit every request until the node is back; required anti-affinity (Redis, one pod per node) and volume zones
+not fit every request until the node is back; required anti-affinity (PostgreSQL, one instance per node) and volume zones
 also limit where a pod can go.
 
 **Fix.** Wait for the recreated node when a node is missing. Otherwise lower the pod's requests, or add capacity
@@ -65,7 +65,8 @@ sizes, query results).
 `denied` (registry access of the node service account), `i/o timeout` (network, Cloud NAT). `kubectl describe pod
 <pod>`.
 
-**Fix.** Correct the image tag in Git (the Shop images are released with `make -C apps release`), or the
+**Fix.** Correct the image tag in Git (`services/<service>/deploy/values-<env>.yaml` in the application
+repository), or the
 registry permissions. A rollout waits on the new pods and keeps the old ones running meanwhile.
 
 ## KubeEventsCollectorDown

@@ -1,5 +1,0 @@
-apiVersion: v2
-name: shop-apps
-description: Argo CD app-of-apps for the shop application (6 Go microservices, Redis, PostgreSQL 18 via CloudNativePG).
-type: application
-version: 1.0.0

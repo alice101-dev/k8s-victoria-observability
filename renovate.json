@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "dependencyDashboard": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Helm charts of the Argo CD addons",
+      "managerFilePatterns": ["/(^|/)addons/[^/]+/config\\.yaml$/"],
+      "matchStrings": [
+        "chart: (?<depName>\\S+)\\nrepoURL: (?<registryUrl>\\S+)\\nversion: (?<currentValue>\\S+)"
+      ],
+      "datasourceTemplate": "helm"
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "One pull request per addon chart",
+      "matchManagers": ["custom.regex"],
+      "commitMessageTopic": "addon {{depName}}"
+    }
+  ]
+}

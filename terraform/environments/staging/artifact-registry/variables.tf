@@ -1,4 +1,3 @@
-# --- GCP provider ---
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
@@ -19,7 +18,6 @@ variable "env" {
   type        = string
 }
 
-# --- Repositories ---
 variable "repositories" {
   description = "Artifact Registry repositories keyed by name (without env prefix); mirrors the module type."
   type = map(object({

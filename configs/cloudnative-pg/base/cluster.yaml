@@ -1,0 +1,77 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: deus-db
+  labels:
+    app.kubernetes.io/name: deus-db
+    app.kubernetes.io/part-of: deus
+spec:
+  instances: 2
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie
+  primaryUpdateStrategy: unsupervised
+  primaryUpdateMethod: switchover
+  smartShutdownTimeout: 15
+
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+
+  affinity:
+    enablePodAntiAffinity: true
+    podAntiAffinityType: required
+    topologyKey: kubernetes.io/hostname
+
+  postgresql:
+    synchronous:
+      method: any
+      number: 1
+      dataDurability: preferred
+    parameters:
+      max_connections: "100"
+      shared_buffers: 64MB
+      effective_cache_size: 384MB
+      random_page_cost: "1.1"
+      log_min_duration_statement: 250ms
+      log_lock_waits: "on"
+      idle_in_transaction_session_timeout: 5min
+      log_checkpoints: "on"
+      pg_stat_statements.max: "1000"
+      pg_stat_statements.track: all
+
+  storage:
+    storageClass: standard-rwo
+    size: 10Gi
+
+  plugins:
+    - name: barman-cloud.cloudnative-pg.io
+      enabled: true
+      isWALArchiver: true
+      parameters:
+        barmanObjectName: deus-backup
+
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+  managed:
+    roles:
+      - name: mcp_readonly
+        ensure: present
+        comment: Postgres MCP server (read-only diagnostics)
+        login: true
+        inherit: true
+        inRoles: [pg_monitor]
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-mcp
+
+  enablePDB: true
+
+  monitoring:
+    metricsQueriesTTL: 20s
+    customQueriesConfigMap:
+      - name: cnpg-default-monitoring
+        key: queries
+      - name: deus-db-monitoring
+        key: queries.yaml

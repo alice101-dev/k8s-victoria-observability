@@ -1,0 +1,57 @@
+fullnameOverride: grafana
+replicas: 1
+persistence:
+  enabled: true
+  type: pvc
+  storageClassName: standard-rwo
+  size: 10Gi
+  lookupVolumeName: false
+deploymentStrategy:
+  type: Recreate
+initChownData:
+  enabled: false
+admin:
+  existingSecret: grafana-admin
+  userKey: admin-user
+  passwordKey: admin-password
+plugins:
+  - victoriametrics-metrics-datasource@0.26.1
+  - victoriametrics-logs-datasource@0.33.1
+grafana.ini:
+  server:
+    root_url: http://localhost:3000
+  analytics:
+    reporting_enabled: false
+    check_for_updates: false
+    check_for_plugin_updates: false
+  users:
+    allow_sign_up: false
+  auth.anonymous:
+    enabled: false
+  security:
+    disable_gravatar: true
+  log.console:
+    format: json
+sidecar:
+  datasources:
+    enabled: true
+    label: grafana_datasource
+    labelValue: "1"
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    searchNamespace: ALL
+    folderAnnotation: grafana_folder
+    folder: /var/lib/grafana/dashboards
+    defaultFolderName: default
+    provider:
+      name: default
+      orgid: 1
+      foldersFromFilesStructure: true
+  resources:
+    requests: { cpu: 10m, memory: 64Mi }
+    limits: { memory: 128Mi }
+resources:
+  requests: { cpu: 100m, memory: 768Mi }
+  limits: { memory: 1536Mi }

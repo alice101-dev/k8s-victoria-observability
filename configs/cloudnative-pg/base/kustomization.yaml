@@ -1,0 +1,9 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: deus
+resources:
+  - cluster.yaml
+  - queries.yaml
+  - backup.yaml
+  - networkpolicy.yaml
+  - monitoring.yaml

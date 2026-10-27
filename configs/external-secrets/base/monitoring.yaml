@@ -1,0 +1,49 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: external-secrets
+spec:
+  namespaceSelector:
+    matchNames: [external-secrets]
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: external-secrets
+  endpoints:
+    - port: metrics
+      honorLabels: true
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: external-secrets
+spec:
+  groups:
+    - name: external-secrets
+      rules:
+        - alert: ExternalSecretNotSynced
+          expr: max by (namespace, name) (externalsecret_status_condition{condition="Ready", status!="True"}) == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "ExternalSecret {{ $labels.namespace }}/{{ $labels.name }} is not synced"
+            description: External Secrets cannot read or generate the data of {{ $labels.namespace }}/{{ $labels.name }} for 15 minutes. The Secret keeps its last data; new or rotated values do not arrive.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#externalsecretnotsynced
+        - alert: SecretStoreNotReady
+          expr: (max by (namespace, name) (secretstore_status_condition{condition="Ready", status!="True"}) == 1) or (max by (name) (clustersecretstore_status_condition{condition="Ready", status!="True"}) == 1)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Secret store {{ with $labels.namespace }}{{ . }}/{{ end }}{{ $labels.name }} is not ready"
+            description: External Secrets cannot authenticate to the provider (for GCP Secret Manager, Workload Identity or IAM). Every ExternalSecret using this store stops syncing.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#secretstorenotready
+        - alert: ExternalSecretsControllerDown
+          expr: absent(up{job="external-secrets-metrics"} == 1)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: No metrics from the External Secrets controller
+            description: The controller is down or no longer scraped. Secrets are not refreshed or created, and the External Secrets alerts are blind.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#externalsecretscontrollerdown

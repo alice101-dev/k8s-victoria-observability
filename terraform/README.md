@@ -12,17 +12,17 @@ terraform/
 ├── modules/
 │   ├── services/  vpc/  cloud-nat/  firewall/  artifact-registry/  cloud-storage/  secret-manager/
 │   ├── kubernetes-engine/      # GKE Standard, private nodes, Dataplane V2, Workload Identity, Spot-only pools
-│   └── argocd-bootstrap/       # helm_release argo-cd + argocd-apps (AppProjects + root applications)
+│   └── argocd-bootstrap/       # helm_release argo-cd (with the in-cluster cluster secret) + argocd-apps (root Application)
 └── environments/staging/
     ├── services/               # 1. enable Google APIs (GKE, Compute, Artifact Registry, IAM, ...)
     ├── vpc/                    # 2. staging-vpc-observability + subnet 10.120.0.0/20
     ├── cloud-nat/              # 3. Cloud NAT (auto-allocated IPs) — private nodes need egress
     ├── firewall/               # 4. SSH through IAP only
     ├── kubernetes-engine/      # 5. staging-observability (zonal) + Spot e2-standard-2 pool (2–4 nodes)
-    ├── artifact-registry/      # 6. staging-shop (Docker, immutable tags, cleanup policies)
+    ├── artifact-registry/      # 6. staging-deus (Docker, immutable tags, cleanup policies)
     ├── cloud-storage/          # 7. <project>-staging-pg-backup (PostgreSQL backups, Workload Identity access)
     ├── secret-manager/         # 8. staging-alertmanager-slack-webhook (value added with gcloud, read by External Secrets)
-    └── argocd-bootstrap/       # 9. Argo CD + root applications → everything else is GitOps
+    └── argocd-bootstrap/       # 9. Argo CD + bootstrap/root.yaml → everything else is GitOps
 ```
 
 Providers: `hashicorp/google ~> 7.35.0`, `hashicorp/helm ~> 3.1.0`.
@@ -59,9 +59,11 @@ The `services` workspace (applied first) enables every Google API the stack need
   disabled — workload telemetry goes to the Victoria stack.
 - **No project ID in the repository**: `project_id` comes from `TF_VAR_project_id`, which the Makefile
   reads from the git-ignored `../.env`. Names that contain it (image registry, backup bucket) are built
-  at apply time and injected into the root Applications by `argocd-bootstrap`.
+  at apply time and stored as annotations (`platform/project-id`, `platform/image-registry`,
+  `platform/backup-bucket`) on the Argo CD cluster secret, which also carries the label `env=staging` that the
+  ApplicationSets select on.
 - **Workload Identity without Google service accounts**: the backup bucket grants its roles directly to
-  the Kubernetes ServiceAccount `shop/shop-db` (`principal://…/subject/ns/shop/sa/shop-db`), so there is
+  the Kubernetes ServiceAccount `deus/deus-db` (`principal://…/subject/ns/deus/sa/deus-db`), so there is
   no key and no `iam.gke.io/gcp-service-account` annotation.
 
 ## Prerequisites
@@ -97,7 +99,8 @@ gcloud container clusters get-credentials staging-observability \
   --location asia-southeast2-a --project "$(gcloud config get-value project)" --dns-endpoint
 ```
 
-4. Build and push the application images — see [`apps/README.md`](../apps/README.md).
+4. Build and push the application images from the
+   [application repository](https://github.com/alice101-dev/microservice-deus).
 
 ## Teardown
 
@@ -105,9 +108,10 @@ gcloud container clusters get-credentials staging-observability \
 make teardown     # prompts before each destroy; AUTO_APPROVE=1 to skip prompts
 ```
 
-The script deletes the Argo CD applications in reverse sync-wave order (workloads → data → operators),
-waits until every PVC is gone, then runs `terraform destroy` for argocd-bootstrap → artifact-registry
-→ kubernetes-engine → firewall → cloud-nat → vpc, and finally lists any leftover `pvc-*` disks or IPs.
+The script removes the root Application and the ApplicationSets without cascading, deletes the generated
+Applications layer by layer (apps, configs, then addons in reverse dependency order), waits until every PVC is
+gone, then runs `terraform destroy` for argocd-bootstrap → cloud-storage → artifact-registry →
+kubernetes-engine → firewall → cloud-nat → vpc, and finally lists any leftover `pvc-*` disks or IPs.
 
 Destroying the cluster directly would leave the persistent disks created for PVCs behind; they are
 not managed by Terraform and keep billing. The `services` and `secret-manager` workspaces are intentionally
@@ -119,6 +123,6 @@ left in place: the secret values were added by hand and cost a few cents a month
 |---|---|
 | GKE zonal management fee | ~$0 (free tier) |
 | 2–3 × e2-standard-2 Spot | ~$25–40 |
-| 9 × 10Gi pd-balanced (VM/VL/VT storage, PostgreSQL, Redis) | ~$10 |
+| 10 × 10-30Gi pd-balanced (VM/VL/VT storage, queues, PostgreSQL, Grafana) | ~$10-15 |
 | Cloud NAT | ~$1–5 |
 | Artifact Registry (<1GB) | <$1 |

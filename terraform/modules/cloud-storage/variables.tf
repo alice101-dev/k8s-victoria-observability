@@ -23,7 +23,7 @@ variable "buckets" {
     soft_delete_retention_seconds = optional(number, 604800)
     labels                        = optional(map(string), {})
     lifecycle_rules = optional(list(object({
-      action   = string # Delete | SetStorageClass | AbortIncompleteMultipartUpload
+      action   = string
       age_days = number
     })), [])
     iam = optional(list(object({

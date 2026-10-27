@@ -5,17 +5,17 @@ variable "namespace" {
 }
 
 variable "argocd_chart_version" {
-  description = "argo/argo-cd chart version (pinned; upgrade via PR)"
+  description = "argo/argo-cd chart version"
   type        = string
 }
 
 variable "argocd_apps_chart_version" {
-  description = "argo/argocd-apps chart version (pinned)"
+  description = "argo/argocd-apps chart version"
   type        = string
 }
 
 variable "gitops_repo_url" {
-  description = "HTTPS URL of the GitOps repository (this repo), e.g. https://github.com/<org>/k8s-victoria-observability.git"
+  description = "HTTPS URL of the platform GitOps repository"
   type        = string
 
   validation {
@@ -25,43 +25,42 @@ variable "gitops_repo_url" {
 }
 
 variable "gitops_target_revision" {
-  description = "Branch, tag or commit synced by Argo CD"
+  description = "Branch, tag or commit synced by the root Application"
   type        = string
   default     = "main"
 }
 
 variable "gitops_repo_username" {
-  description = "Private repo username (any value for GitHub, e.g. \"git\"). Ignored when gitops_repo_password is null."
+  description = "Private repo username, ignored when gitops_repo_password is null"
   type        = string
   default     = "git"
 }
 
 variable "gitops_repo_password" {
-  description = "Read-only token for a private repo (GitHub fine-grained PAT, Contents: Read). null = public repo. Set via TF_VAR_gitops_repo_password, never in tfvars."
+  description = "Read-only token for a private repo, null for a public repo; set via TF_VAR_gitops_repo_password"
   type        = string
   default     = null
   sensitive   = true
 }
 
-variable "app_projects" {
-  description = "Argo CD AppProjects per domain. Key = project name."
-  type = map(object({
-    description  = string
-    namespaces   = list(string)
-    source_repos = optional(list(string), [])
-  }))
+variable "root_application_file" {
+  description = "Path of the root Application manifest (bootstrap/root.yaml), rendered with repo_url and revision"
+  type        = string
 }
 
-variable "root_app_values" {
-  description = "Extra valuesObject entries for every root Application (environment data kept out of Git, e.g. imageRegistry)"
+variable "cluster_labels" {
+  description = "Labels of the in-cluster Argo CD cluster secret, matched by the ApplicationSet cluster generators"
+  type        = map(string)
+}
+
+variable "cluster_annotations" {
+  description = "Annotations of the in-cluster Argo CD cluster secret: environment values kept out of Git"
   type        = map(string)
   default     = {}
 }
 
-variable "root_applications" {
-  description = "Root (app-of-apps) Applications. Key = Application name; path = app-of-apps chart folder; project = AppProject for child apps."
-  type = map(object({
-    path    = string
-    project = string
-  }))
+variable "api_accounts" {
+  description = "Local Argo CD accounts that may only create API tokens, mapped to their RBAC role"
+  type        = map(string)
+  default     = {}
 }

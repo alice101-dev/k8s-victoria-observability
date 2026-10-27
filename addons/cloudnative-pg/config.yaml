@@ -1,0 +1,15 @@
+chart: cloudnative-pg
+repoURL: https://cloudnative-pg.github.io/charts
+version: 0.29.1
+namespace: cnpg-system
+ignoreDifferences:
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+    name: cnpg-mutating-webhook-configuration
+    jqPathExpressions:
+      - .webhooks[]?.clientConfig.caBundle
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    name: cnpg-validating-webhook-configuration
+    jqPathExpressions:
+      - .webhooks[]?.clientConfig.caBundle

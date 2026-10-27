@@ -1,0 +1,63 @@
+fullnameOverride: grafana-mcp
+
+grafana:
+  url: http://grafana.monitoring.svc
+
+disableWrite: true
+
+metrics:
+  enabled: true
+
+extraArgs:
+  - --transport
+  - streamable-http
+  - --enabled-tools
+  - search,datasource,dashboard,folder,prometheus,loki,alerting,annotations,navigation,runpanelquery,docs,user
+  - --allowed-hosts
+  - localhost:8093,127.0.0.1:8093
+  - --healthz-address
+  - :8081
+  - --metrics-address
+  - :9090
+  - --usage-stats
+  - disabled
+
+env:
+  GRAFANA_SERVICE_ACCOUNT_TOKEN_FILE: /var/run/secrets/grafana/token
+
+envValueFrom:
+  MCP_GRAFANA_SERVER_TOKEN:
+    secretKeyRef:
+      name: mcp-grafana-server-token
+      key: token
+
+volumes:
+  - name: grafana-token
+    secret:
+      secretName: mcp-grafana-sa-token
+volumeMounts:
+  - name: grafana-token
+    mountPath: /var/run/secrets/grafana
+    readOnly: true
+
+service:
+  type: ClusterIP
+  port: 8000
+
+automountServiceAccountToken: false
+
+readinessProbe:
+  httpGet:
+    path: /healthz
+    port: 8081
+  periodSeconds: 10
+livenessProbe:
+  httpGet:
+    path: /healthz
+    port: 8081
+  periodSeconds: 20
+  failureThreshold: 3
+
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits: { memory: 128Mi }

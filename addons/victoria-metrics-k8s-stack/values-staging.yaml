@@ -1,0 +1,33 @@
+vmsingle:
+  spec:
+    retentionPeriod: 30d
+    storage:
+      resources:
+        requests:
+          storage: 30Gi
+
+vmagent:
+  spec:
+    externalLabels:
+      cluster: staging-gke
+
+vmalert:
+  spec:
+    externalLabels:
+      cluster: staging-gke
+
+vlsingle:
+  spec:
+    retentionPeriod: 90d
+    storage:
+      resources:
+        requests:
+          storage: 20Gi
+
+vtsingle:
+  spec:
+    retentionPeriod: 30d
+    storage:
+      resources:
+        requests:
+          storage: 20Gi

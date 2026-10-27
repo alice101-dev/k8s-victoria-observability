@@ -1,0 +1,33 @@
+fullnameOverride: vl-mcp
+
+image:
+  tag: v1.9.0
+
+vl:
+  entrypoint: http://vlsingle-vmks.monitoring.svc:9428
+
+mcp:
+  mode: http
+
+service:
+  type: ClusterIP
+  port: 8080
+
+scrape:
+  enabled: true
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests: { cpu: 10m, memory: 128Mi }
+  limits: { memory: 512Mi }
+
+startupProbe:
+  httpGet:
+    path: /health/liveness
+    port: http
+  periodSeconds: 10
+  failureThreshold: 30

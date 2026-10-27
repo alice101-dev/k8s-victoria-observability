@@ -1,0 +1,128 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mcp-argocd-token-issuer
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-argocd-token-issuer
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["argocd-initial-admin-secret"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-argocd-token-issuer
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mcp-argocd-token-issuer
+subjects:
+  - kind: ServiceAccount
+    name: mcp-argocd-token-issuer
+    namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mcp-argocd-token-issuer
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["mcp-argocd-token"]
+    verbs: ["get", "update"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["mcp-argocd"]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mcp-argocd-token-issuer
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mcp-argocd-token-issuer
+subjects:
+  - kind: ServiceAccount
+    name: mcp-argocd-token-issuer
+    namespace: monitoring
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mcp-argocd-token-issuer
+  namespace: monitoring
+  annotations:
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 6
+  activeDeadlineSeconds: 900
+  template:
+    spec:
+      serviceAccountName: mcp-argocd-token-issuer
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: issue-token
+          image: ghcr.io/argoproj-labs/mcp-for-argocd:v0.9.0
+          command: ["node", "/scripts/issue-token.js"]
+          env:
+            - name: ARGOCD_BASE_URL
+              value: http://argocd-server.argocd.svc.cluster.local.
+            - name: ARGOCD_ACCOUNT
+              value: mcp-argocd
+            - name: TARGET_NAMESPACE
+              value: monitoring
+            - name: TARGET_SECRET
+              value: mcp-argocd-token
+            - name: TARGET_DEPLOYMENT
+              value: mcp-argocd
+            - name: NODE_EXTRA_CA_CERTS
+              value: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+              readOnly: true
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: scripts
+          configMap:
+            name: mcp-argocd-token-issuer

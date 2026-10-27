@@ -33,8 +33,6 @@ variable "firewall_rules" {
   }))
   default = {}
 
-  # Defense in depth for what checkov cannot scan: reject 0.0.0.0/0 ingress on SSH (22)
-  # or RDP (3389).
   validation {
     condition = alltrue([
       for k, r in var.firewall_rules :

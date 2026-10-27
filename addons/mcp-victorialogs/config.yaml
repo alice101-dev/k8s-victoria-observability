@@ -1,0 +1,4 @@
+chart: victoria-logs-mcp
+repoURL: https://victoriametrics.github.io/helm-charts/
+version: 0.2.0
+namespace: monitoring

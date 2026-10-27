@@ -1,13 +1,9 @@
-# Cloud Storage buckets, map-driven (one map key per bucket): uniform access, public access
-# prevention, lifecycle rules and bucket-level IAM. No deletion guard (force_destroy): test environment.
-
 locals {
   labels = {
     env        = var.env
     managed_by = "terraform"
   }
 
-  # One entry per (bucket, role, member) for google_storage_bucket_iam_member.
   bucket_iam = merge([
     for bucket, b in var.buckets : {
       for binding in b.iam : "${bucket}|${binding.role}|${binding.member}" => merge(binding, { bucket = bucket })
@@ -17,9 +13,6 @@ locals {
 
 resource "google_storage_bucket" "bucket" {
   for_each = var.buckets
-
-  # checkov:skip=CKV_GCP_62: access logs are not needed for a backup bucket in the test environment
-  # checkov:skip=CKV_GCP_78: versioning is per bucket (versioning attribute); Barman manages backup retention itself
 
   project       = var.project_id
   name          = each.key
@@ -36,7 +29,6 @@ resource "google_storage_bucket" "bucket" {
     enabled = each.value.versioning
   }
 
-  # 0 disables soft delete: deleted objects are gone immediately (and stop costing).
   soft_delete_policy {
     retention_duration_seconds = each.value.soft_delete_retention_seconds
   }

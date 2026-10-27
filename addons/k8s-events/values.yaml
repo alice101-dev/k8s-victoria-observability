@@ -1,0 +1,84 @@
+mode: deployment
+replicaCount: 1
+fullnameOverride: k8s-events
+
+image:
+  repository: otel/opentelemetry-collector-k8s
+
+presets:
+  kubernetesEvents:
+    enabled: true
+    useK8sEventsReceiver: true
+
+config:
+  receivers:
+    jaeger: null
+    otlp: null
+    prometheus: null
+    zipkin: null
+  processors:
+    resource:
+      attributes:
+        - key: service.name
+          value: kubernetes-events
+          action: upsert
+  exporters:
+    debug: null
+    otlphttp/victorialogs:
+      logs_endpoint: http://vlsingle-vmks.monitoring.svc.cluster.local.:9428/insert/opentelemetry/v1/logs
+      headers:
+        VL-Stream-Fields: service.name,k8s.namespace.name
+  service:
+    pipelines:
+      logs:
+        receivers: []
+        processors: [memory_limiter, resource, batch]
+        exporters: [otlphttp/victorialogs]
+      metrics: null
+      traces: null
+
+ports:
+  otlp:
+    enabled: false
+  otlp-http:
+    enabled: false
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  metrics:
+    enabled: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+startupProbe:
+  httpGet: { port: 13133, path: / }
+  periodSeconds: 2
+  failureThreshold: 60
+livenessProbe:
+  httpGet: { port: 13133, path: / }
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+readinessProbe:
+  httpGet: { port: 13133, path: / }
+  periodSeconds: 10
+  timeoutSeconds: 5
+
+resources:
+  requests: { cpu: 10m, memory: 48Mi }
+  limits: { memory: 192Mi }

@@ -1,6 +1,7 @@
 # Platform runbook (Argo CD, External Secrets, cert-manager)
 
-The alerts of the `platform` VMRule (`observability/platform/monitoring.yaml`) link to the sections below. The
+The alerts of the `argocd`, `external-secrets` and `cert-manager` VMRules (`configs/<component>/base/monitoring.yaml`)
+link to the sections below. The
 same directory holds the scrape configs of the three components; the **Platform — GitOps & Secrets** dashboard
 (Grafana folder **Platform**) shows them: applications with their sync and health status, syncs, reconciliation
 and Git, ExternalSecrets and stores, certificates and issuers, the components' resources and their error logs.
@@ -134,7 +135,7 @@ on each secret (Terraform workspace `secret-manager`, `workload_identity` in `st
 created or refreshed and the External Secrets alerts cannot fire.
 
 **Diagnose.** `kubectl -n external-secrets get pods,svc` (the `external-secrets-metrics` Service is enabled in
-`observability/values/external-secrets.yaml`), the `external-secrets` VMServiceScrape in `monitoring`.
+`addons/external-secrets/values.yaml`), the `external-secrets` VMServiceScrape in `monitoring`.
 
 ## CertManagerCertificateNotReady
 

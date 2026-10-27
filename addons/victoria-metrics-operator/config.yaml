@@ -1,0 +1,4 @@
+chart: victoria-metrics-operator
+repoURL: https://victoriametrics.github.io/helm-charts/
+version: 0.68.1
+namespace: vm-operator

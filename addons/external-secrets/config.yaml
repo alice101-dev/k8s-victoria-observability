@@ -1,0 +1,15 @@
+chart: external-secrets
+repoURL: https://charts.external-secrets.io
+version: 2.13.0
+namespace: external-secrets
+ignoreDifferences:
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    jqPathExpressions:
+      - .webhooks[]?.clientConfig.caBundle
+  - group: ""
+    kind: Secret
+    name: external-secrets-webhook
+    namespace: external-secrets
+    jsonPointers:
+      - /data

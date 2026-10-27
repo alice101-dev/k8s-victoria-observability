@@ -1,0 +1,136 @@
+mode: deployment
+replicaCount: 2
+fullnameOverride: otel-collector
+
+image:
+  repository: otel/opentelemetry-collector-contrib
+
+presets:
+  kubernetesAttributes:
+    enabled: true
+
+config:
+  receivers:
+    jaeger: null
+    prometheus: null
+    zipkin: null
+    otlp:
+      protocols:
+        grpc:
+          endpoint: ${env:MY_POD_IP}:4317
+        http:
+          endpoint: ${env:MY_POD_IP}:4318
+  processors:
+    memory_limiter:
+      check_interval: 1s
+      limit_percentage: 80
+      spike_limit_percentage: 20
+    batch:
+      send_batch_size: 8192
+      send_batch_max_size: 16384
+      timeout: 2s
+    resource/metrics:
+      attributes:
+        - key: k8s.pod.uid
+          action: delete
+        - key: k8s.pod.start_time
+          action: delete
+        - key: service.instance.id
+          action: delete
+        - pattern: ^k8s\.(replicaset|daemonset|statefulset|job|cronjob|cluster)\.uid$
+          action: delete
+        - key: k8s.replicaset.name
+          action: delete
+        - pattern: ^(telemetry\.sdk|telemetry\.distro|process|host|os|container)\..*
+          action: delete
+    filter/severity:
+      error_mode: ignore
+      log_conditions:
+        - log.severity_number > SEVERITY_NUMBER_UNSPECIFIED and log.severity_number < SEVERITY_NUMBER_INFO
+    redaction:
+      allow_all_keys: true
+      redact_all_types: true
+      blocked_key_patterns:
+        - (?i).*(password|passwd|secret|token|api[_.-]?key|authorization|cookie|credential|private[_.-]?key).*
+      blocked_values:
+        - (?i)bearer\s+[a-z0-9._~+/=-]+
+        - \b4[0-9]{12}(?:[0-9]{3})?\b
+        - \b5[1-5][0-9]{14}\b
+      summary: info
+    transform/redact-body:
+      error_mode: ignore
+      log_statements:
+        - context: log
+          conditions:
+            - IsString(log.body)
+          statements:
+            - replace_pattern(log.body, "(?i)(bearer\\s+)[a-z0-9._~+/=-]+", "$$1****")
+            - replace_pattern(log.body, "(?i)((password|passwd|secret|token|api[_-]?key)\"?\\s*[:=]\\s*\"?)[^\"\\s,}]+", "$$1****")
+  exporters:
+    debug: null
+    otlp_http/victoriametrics:
+      metrics_endpoint: http://vmsingle-vmks.monitoring.svc.cluster.local.:8428/opentelemetry/v1/metrics
+      compression: gzip
+    otlp_http/victorialogs:
+      logs_endpoint: http://vlsingle-vmks.monitoring.svc.cluster.local.:9428/insert/opentelemetry/v1/logs
+      compression: gzip
+      headers:
+        VL-Stream-Fields: service.name,k8s.namespace.name
+    otlp_http/victoriatraces:
+      traces_endpoint: http://vtsingle-vmks.monitoring.svc.cluster.local.:10428/insert/opentelemetry/v1/traces
+      compression: gzip
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, k8s_attributes, redaction, batch]
+        exporters: [otlp_http/victoriatraces]
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, k8s_attributes, resource/metrics, batch]
+        exporters: [otlp_http/victoriametrics]
+      logs:
+        receivers: [otlp]
+        processors: [memory_limiter, k8s_attributes, filter/severity, redaction, transform/redact-body, batch]
+        exporters: [otlp_http/victorialogs]
+
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  metrics:
+    enabled: true
+
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: kubernetes.io/hostname
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: opentelemetry-collector
+        app.kubernetes.io/instance: otel-collector
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests: { cpu: 50m, memory: 128Mi }
+  limits: { memory: 512Mi }

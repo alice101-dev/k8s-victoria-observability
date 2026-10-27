@@ -1,5 +1,0 @@
-bin/
-*.test
-*.out
-Dockerfile
-.dockerignore

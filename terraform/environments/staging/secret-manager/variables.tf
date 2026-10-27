@@ -1,4 +1,3 @@
-# --- GCP provider ---
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
@@ -19,7 +18,6 @@ variable "env" {
   type        = string
 }
 
-# --- Secrets ---
 variable "secrets" {
   description = "Secrets keyed by name (without the <env>- prefix); workload_identity grants roles to Kubernetes ServiceAccounts."
   type = map(object({

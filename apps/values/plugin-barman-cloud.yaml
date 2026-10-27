@@ -1,8 +1,0 @@
-# =============================================================================
-# plugin-barman-cloud — chart cnpg/plugin-barman-cloud 0.8.1 (plugin v0.15.1)
-# CNPG-I plugin: base backups and WAL archiving to object storage. The per-instance work runs in a
-# sidecar injected into the PostgreSQL pods (resources set in the ObjectStore, apps/k8s/data/backup.yaml).
-# =============================================================================
-resources:
-  requests: { cpu: 10m, memory: 32Mi }
-  limits: { memory: 128Mi }

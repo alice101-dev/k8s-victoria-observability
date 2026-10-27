@@ -1,4 +1,3 @@
-# --- API Activation ---
 module "services" {
   source             = "../../../modules/services"
   project_id         = var.project_id

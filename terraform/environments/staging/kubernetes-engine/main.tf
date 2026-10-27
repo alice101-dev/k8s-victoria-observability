@@ -1,5 +1,3 @@
-# --- VPC Data Sources ---
-# VPC and subnet from the vpc workspace, looked up by name (no terraform_remote_state).
 data "google_compute_network" "vpc" {
   name = "${var.env}-${var.network_vpc_name}"
 }
@@ -9,13 +7,11 @@ data "google_compute_subnetwork" "subnet" {
   region = var.region
 }
 
-# --- GKE Cluster ---
 module "gke" {
   source     = "../../../modules/kubernetes-engine"
   project_id = var.project_id
   env        = var.env
 
-  # Zonal (default; control plane covered by the GKE free tier) or regional.
   location     = var.regional_cluster ? var.region : var.zone
   cluster_name = "${var.env}-${var.cluster_name}"
   vpc_id       = data.google_compute_network.vpc.id

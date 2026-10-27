@@ -1,0 +1,5 @@
+config:
+  processors:
+    filter/severity:
+      log_conditions:
+        - log.severity_number > SEVERITY_NUMBER_UNSPECIFIED and log.severity_number < SEVERITY_NUMBER_DEBUG

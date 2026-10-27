@@ -1,4 +1,3 @@
-# --- GCP provider ---
 variable "project_id" {
   description = "GCP project ID"
   type        = string

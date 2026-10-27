@@ -1,0 +1,32 @@
+apiVersion: barmancloud.cnpg.io/v1
+kind: ObjectStore
+metadata:
+  name: deus-backup
+spec:
+  configuration:
+    destinationPath: gs://BUCKET-INJECTED-BY-ARGOCD
+    googleCredentials:
+      gkeEnvironment: true
+    wal:
+      compression: zstd
+    data:
+      compression: gzip
+  retentionPolicy: 7d
+  instanceSidecarConfiguration:
+    resources:
+      requests: { cpu: 10m, memory: 64Mi }
+      limits: { memory: 512Mi }
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: ScheduledBackup
+metadata:
+  name: deus-db-daily
+spec:
+  cluster:
+    name: deus-db
+  schedule: "0 0 2 * * *"
+  immediate: true
+  backupOwnerReference: self
+  method: plugin
+  pluginConfiguration:
+    name: barman-cloud.cloudnative-pg.io

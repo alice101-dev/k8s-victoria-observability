@@ -1,0 +1,13 @@
+chart: cert-manager
+repoURL: https://charts.jetstack.io
+version: v1.21.2
+namespace: cert-manager
+ignoreDifferences:
+  - group: admissionregistration.k8s.io
+    kind: MutatingWebhookConfiguration
+    jqPathExpressions:
+      - .webhooks[]?.clientConfig.caBundle
+  - group: admissionregistration.k8s.io
+    kind: ValidatingWebhookConfiguration
+    jqPathExpressions:
+      - .webhooks[]?.clientConfig.caBundle

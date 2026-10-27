@@ -1,0 +1,81 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: argocd
+spec:
+  namespaceSelector:
+    matchNames: [argocd]
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [argocd-metrics, argocd-server-metrics, argocd-repo-server-metrics]
+  endpoints:
+    - port: http-metrics
+      honorLabels: true
+      metricRelabelConfigs:
+        - action: drop
+          sourceLabels: [__name__]
+          regex: grpc_server_(started|msg_received|msg_sent)_total
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: argocd
+spec:
+  groups:
+    - name: argocd
+      rules:
+        - alert: ArgoCdAppSyncFailed
+          expr: sum by (name, project, phase) (round(increase(argocd_app_sync_total{phase=~"Error|Failed", dry_run="false"}[10m]))) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo CD application {{ $labels.name }}: sync {{ $labels.phase }}"
+            description: The last sync of {{ $labels.name }} (project {{ $labels.project }}) did not complete; the cluster does not match Git. The operation message says which resource failed.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdappsyncfailed
+        - alert: ArgoCdAppOutOfSync
+          expr: max by (name, project, sync_status) (argocd_app_info{sync_status!="Synced"}) == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} is {{ $labels.sync_status }} for 15 minutes"
+            description: The live state of {{ $labels.name }} (project {{ $labels.project }}) differs from Git and Argo CD does not converge it. Changes merged to Git are not deployed.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdappoutofsync
+        - alert: ArgoCdAppUnhealthy
+          expr: max by (name, project, health_status) (argocd_app_info{health_status!~"Healthy|Progressing"}) == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} is {{ $labels.health_status }}"
+            description: At least one resource of {{ $labels.name }} (project {{ $labels.project }}) is Degraded, Missing or of unknown health for 15 minutes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdappunhealthy
+        - alert: ArgoCdAppAutoSyncDisabled
+          expr: max by (name, project) (argocd_app_info{autosync_enabled!="true"}) == 1
+          for: 2h
+          labels:
+            severity: info
+          annotations:
+            summary: "Argo CD application {{ $labels.name }} has automated sync disabled"
+            description: Git changes to {{ $labels.name }} are no longer applied and drift is no longer reverted.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdappautosyncdisabled
+        - alert: ArgoCdGitRequestsFailing
+          expr: sum(increase({__name__=~"argocd_git_(fetch|lsremote)_fail_total"}[10m])) > 0
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Argo CD Git requests keep failing ({{ $value | humanize }} in 10 minutes)"
+            description: The repo-server's git fetch or ls-remote keeps failing (network, credentials, or the repository or revision is gone); the applications reading that repository are Unknown with a ComparisonError. New commits are not deployed.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdgitrequestsfailing
+        - alert: ArgoCdControllerDown
+          expr: absent(up{job="argocd-application-controller-metrics"} == 1)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: No metrics from the Argo CD application controller
+            description: The controller is down or no longer scraped. Nothing is synced or self-healed, and the Argo CD alerts are blind.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#argocdcontrollerdown

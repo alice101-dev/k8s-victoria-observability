@@ -1,19 +1,4 @@
 #!/usr/bin/env python3
-"""Validate every Grafana dashboard shipped from this repository.
-
-usage: python3 ci/validate_dashboards.py [--offline]
-
-Checks, per dashboard JSON (generated Shop and Platform dashboards, vendored CloudNativePG):
-- valid JSON with a title and a uid that no other dashboard uses;
-- unique panel ids and panels inside the 24-column grid;
-- every datasource reference is a provisioned datasource (uids from observability/values/vm-k8s-stack.yaml),
-  a Grafana built-in, or a datasource variable of the dashboard;
-- every $variable used in queries, titles and links is defined by the dashboard (Grafana globals such as
-  $__rate_interval excepted);
-- every /d/<uid> link points at a dashboard that exists: one of these files, or a vendor dashboard from the
-  pinned sources in vm-k8s-stack.yaml (fetched; skipped with --offline).
-Exits non-zero with one line per problem.
-"""
 import glob
 import json
 import os
@@ -22,9 +7,9 @@ import sys
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DASHBOARDS = ["apps/k8s/services/dashboards/*.json", "apps/k8s/data/dashboards/*.json",
-              "observability/k8s-events/dashboards/*.json", "observability/platform/dashboards/*.json"]
-STACK_VALUES = "observability/values/vm-k8s-stack.yaml"
+DASHBOARDS = ["configs/*/base/dashboards/*.json"]
+DATASOURCES = "configs/grafana/base/datasources.yaml"
+STACK_VALUES = "addons/victoria-metrics-k8s-stack/values.yaml"
 BUILTIN_DATASOURCES = {"-- Grafana --", "grafana", "-- Mixed --", "-- Dashboard --", "__expr__"}
 VARIABLE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)|\$([A-Za-z_][A-Za-z0-9_]*)|\[\[([A-Za-z_][A-Za-z0-9_]*)")
 LINK = re.compile(r"/d/([A-Za-z0-9_-]+)")
@@ -43,7 +28,6 @@ def walk_panels(panels):
 
 
 def strings(obj):
-    """Every string value inside obj (recursively)."""
     if isinstance(obj, str):
         yield obj
     elif isinstance(obj, dict):
@@ -55,15 +39,11 @@ def strings(obj):
 
 
 def provisioned_datasources():
-    """uids of the datasources provisioned by the k8s-stack chart (defaultDatasources section)."""
-    text = open(os.path.join(ROOT, STACK_VALUES)).read()
-    section = text.split("\ndefaultDatasources:\n", 1)[1]
-    section = re.split(r"\n[a-zA-Z]", section, maxsplit=1)[0]
-    return set(re.findall(r"^\s+uid: (\S+)\s*$", section, re.M))
+    text = open(os.path.join(ROOT, DATASOURCES)).read()
+    return set(re.findall(r"^\s+uid: (\S+)\s*$", text, re.M))
 
 
 def vendor_dashboard_uids():
-    """uids of the vendor dashboards the k8s-stack sync job installs (pinned URLs in vm-k8s-stack.yaml)."""
     text = open(os.path.join(ROOT, STACK_VALUES)).read()
     section = text.split("\ndefaultDashboards:\n", 1)[1].split("\ndefaultRules:\n", 1)[0]
     uids = set()
@@ -110,7 +90,7 @@ def check(path, d, datasources, seen_uids):
         grid = p.get("gridPos", {})
         if grid.get("x", 0) + grid.get("w", 0) > 24:
             problem(name, f"{where}: wider than the 24-column grid")
-        if p.get("type") == "row":  # rows do not query (upstream rows may carry stale datasource refs)
+        if p.get("type") == "row":
             continue
         check_datasource(where, p.get("datasource"))
         for t in p.get("targets", []):
@@ -123,7 +103,6 @@ def check(path, d, datasources, seen_uids):
     def used_variables(obj):
         return {next(g for g in m.groups() if g) for s in strings(obj) for m in VARIABLE.finditer(s)}
 
-    # Server-side expressions (datasource __expr__) refer to the panel's other queries as $<refId>.
     undefined = set()
     for p in walk_panels(d.get("panels", [])):
         own = {k: v for k, v in p.items() if k != "panels"}
@@ -140,7 +119,7 @@ def main():
     offline = "--offline" in sys.argv
     datasources = provisioned_datasources()
     if not datasources:
-        sys.exit(f"no datasource uids found in {STACK_VALUES}")
+        sys.exit(f"no datasource uids found in {DATASOURCES}")
     files = sorted(f for pattern in DASHBOARDS for f in glob.glob(os.path.join(ROOT, pattern)))
     seen_uids, links = {}, {}
     for path in files:

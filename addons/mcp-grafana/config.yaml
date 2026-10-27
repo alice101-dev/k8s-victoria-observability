@@ -1,0 +1,4 @@
+chart: grafana-mcp
+repoURL: https://grafana-community.github.io/helm-charts
+version: 0.27.2
+namespace: monitoring

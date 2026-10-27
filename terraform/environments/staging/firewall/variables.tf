@@ -1,4 +1,3 @@
-# --- GCP provider ---
 variable "project_id" {
   description = "GCP project ID"
   type        = string
@@ -19,7 +18,6 @@ variable "env" {
   type        = string
 }
 
-# --- VPC & Networking ---
 variable "network_vpc_name" {
   description = "Base VPC name (without env prefix)"
   type        = string

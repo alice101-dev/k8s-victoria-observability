@@ -1,0 +1,44 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - admin-secret.yaml
+  - datasources.yaml
+  - monitoring.yaml
+configMapGenerator:
+  - name: cloudnative-pg-dashboard
+    files:
+      - dashboards/cloudnative-pg.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: cluster-events-dashboard
+    files:
+      - dashboards/cluster-events.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: observability-pipeline-dashboard
+    files:
+      - dashboards/observability-pipeline.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: platform-gitops-secrets-dashboard
+    files:
+      - dashboards/platform-gitops-secrets.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform

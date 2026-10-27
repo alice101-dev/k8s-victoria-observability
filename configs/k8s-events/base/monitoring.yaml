@@ -1,0 +1,85 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: k8s-events
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: k8s-events
+  podMetricsEndpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: k8s-events
+spec:
+  groups:
+    - name: kubernetes-nodes
+      rules:
+        - alert: KubeNodeRestarted
+          expr: '(time() - max by (node) (label_replace(node_boot_time_seconds, "internal_ip", "$1", "instance", "(.+):[0-9]+") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) < 900) * on (node) group_left (label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)'
+          labels:
+            severity: info
+          annotations:
+            summary: "Node {{ $labels.node }} (pool {{ $labels.label_cloud_google_com_gke_nodepool }}, {{ $labels.label_cloud_google_com_gke_provisioning }}) booted {{ $value | humanizeDuration }} ago"
+            description: Spot VM preemption, node upgrade or repair, or a new node. Its pods were rescheduled and stateful workloads may have failed over. The Nodes row of the Cluster — Events dashboard shows the node's events.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubenoderestarted
+    - name: kubernetes-events-collector
+      rules:
+        - alert: KubeEventsCollectorDown
+          expr: absent(up{job="monitoring/k8s-events"} == 1)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: The Kubernetes events collector is down
+            description: No Kubernetes events reach VictoriaLogs; the API server keeps them for one hour only. Check the k8s-events Deployment in monitoring.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubeeventscollectordown
+        - alert: KubeEventsCollectorStalled
+          expr: sum(increase(otelcol_receiver_accepted_log_records[30m])) == 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: The Kubernetes events collector has received no event for 30 minutes
+            description: The collector runs but its watch on the API server has stalled (or the cluster is unusually quiet). Restart it; the k8s-events-restarter CronJob does so every 20 minutes.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubeeventscollectorstalled
+        - alert: KubeEventsExportFailing
+          expr: sum(rate(otelcol_exporter_send_failed_log_records[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The events collector fails to store {{ $value | humanize }} events/s in VictoriaLogs"
+            description: Sends to VLSingle keep failing; events wait in the collector's queue and are dropped when it is full.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubeeventsexportfailing
+    - name: kubernetes-events
+      type: vlogs
+      interval: 5m
+      rules:
+        - alert: KubePodsUnschedulable
+          expr: '{service.name="kubernetes-events"} k8s.event.reason:=FailedScheduling | copy k8s.namespace.name as namespace | stats by (namespace) count_uniq(k8s.object.name) as pods | filter pods:>0'
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}: {{ $value }} pod(s) cannot be scheduled"
+            description: The scheduler finds no node for these pods (not enough CPU or memory, affinity, taints or volumes), for 10 minutes. After a spot preemption the remaining nodes may be too full.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubepodsunschedulable
+        - alert: KubeContainerOOMKilled
+          expr: '{service.name="kubernetes-events"} k8s.event.reason:=OOMKilling | extract "Killed process <_> (<process>)" from _msg | copy k8s.object.name as node | stats by (node, process) count_uniq(_msg) as kills | filter kills:>0'
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.process }} on {{ $labels.node }}: {{ $value }} OOM kill(s) in 5 minutes"
+            description: The kernel killed a process at its container's memory limit (node-problem-detector). The Container restarts table of the Cluster — Events dashboard names the pod.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubecontaineroomkilled
+        - alert: KubeImagePullFailing
+          expr: '{service.name="kubernetes-events"} k8s.event.reason:in(Failed, BackOff) _msg:~"(?i)pull(ing)? image|ErrImagePull|ImagePullBackOff" | copy k8s.namespace.name as namespace, k8s.object.name as pod | stats by (namespace, pod) count() as failures | filter failures:>0'
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }}: image pull failing"
+            description: The kubelet cannot pull the pod's image (wrong tag, missing image or registry access). A rollout with this image stays stuck.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/kubernetes.md#kubeimagepullfailing

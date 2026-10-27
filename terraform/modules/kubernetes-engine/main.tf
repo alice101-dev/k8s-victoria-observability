@@ -1,4 +1,3 @@
-# Dedicated least-privilege node service account (not the default compute SA).
 resource "google_service_account" "gke_sa" {
   account_id   = var.sa_account_id
   display_name = var.sa_display_name != "" ? var.sa_display_name : "GKE node SA ${var.cluster_name}"
@@ -11,15 +10,8 @@ resource "google_project_iam_member" "gke_sa_roles" {
   member   = "serviceAccount:${google_service_account.gke_sa.email}"
 }
 
-# GKE Standard: private nodes, Dataplane V2, Workload Identity.
 resource "google_container_cluster" "primary" {
-  # checkov:skip=CKV_GCP_12: network policy enforced by Dataplane V2 (ADVANCED_DATAPATH)
-  # checkov:skip=CKV_GCP_18: control plane reached via IAM-gated DNS endpoint
-  # checkov:skip=CKV_GCP_65: Google Groups RBAC not used
-  # checkov:skip=CKV_GCP_66: Binary Authorization not adopted
-  # checkov:skip=CKV_GCP_123: "no node pools" conflicts with the GKE Standard design
-  name = var.cluster_name
-  # Zone (zonal cluster, control plane covered by the free tier) or region (regional).
+  name     = var.cluster_name
   location = var.location
 
   network    = var.vpc_id
@@ -29,15 +21,11 @@ resource "google_container_cluster" "primary" {
   enable_shielded_nodes = true
   enable_legacy_abac    = false
 
-  # Only system components go to Cloud Logging/Monitoring; workload telemetry goes to the
-  # Victoria stack (no double ingest cost). logging_service/monitoring_service are not set:
-  # the API rejects them together with logging_config/monitoring_config (Error 400).
   logging_config {
     enable_components = var.logging_components
   }
   monitoring_config {
     enable_components = var.monitoring_components
-    # Managed Prometheus disabled — vmagent scrapes instead.
     managed_prometheus {
       enabled = false
     }
@@ -49,19 +37,15 @@ resource "google_container_cluster" "primary" {
     }
   }
 
-  # Default pool removed; workers come from google_container_node_pool below.
   remove_default_node_pool = true
   initial_node_count       = 1
 
-  # Dataplane V2 (eBPF/Cilium) enforces NetworkPolicy without Calico.
   datapath_provider = "ADVANCED_DATAPATH"
 
   release_channel {
     channel = var.release_channel
   }
 
-  # kubectl and Terraform (helm provider) use the IAM-gated DNS endpoint: no bastion/VPN,
-  # while the IP endpoint can stay restricted.
   control_plane_endpoints_config {
     dns_endpoint_config {
       allow_external_traffic = true
@@ -118,7 +102,6 @@ resource "google_container_cluster" "primary" {
     }
   }
 
-  # start_time must be UTC ("Z"); GKE normalises to UTC (avoids a permanent diff).
   maintenance_policy {
     recurring_window {
       start_time = var.maintenance_start_time
@@ -140,7 +123,6 @@ resource "google_container_cluster" "primary" {
     cluster_dns = "KUBE_DNS"
   }
 
-  # Only for the temporary initial node (removed right away), still hardened.
   node_config {
     service_account = google_service_account.gke_sa.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
@@ -155,20 +137,14 @@ resource "google_container_cluster" "primary" {
 
   lifecycle {
     ignore_changes = [
-      # Node version is managed by the release channel auto-upgrades.
       node_version,
-      # Labels may be added out of band by GKE/tooling.
       resource_labels,
-      # Computed by GKE after creation; pod/service CIDRs are immutable.
       ip_allocation_policy,
-      # Only used for the removed initial node; GKE copies pool settings here,
-      # which would otherwise force a cluster replacement.
       node_config,
     ]
   }
 }
 
-# Node pools: Spot VMs only (cheap, can be preempted at any time).
 resource "google_container_node_pool" "pools" {
   for_each = var.node_pools
 
@@ -176,7 +152,6 @@ resource "google_container_node_pool" "pools" {
   cluster  = google_container_cluster.primary.id
   location = var.location
 
-  # Zonal cluster: nodes land in the cluster zone; node_locations only when set.
   node_locations = each.value.node_locations
 
   initial_node_count = each.value.min_node_count
@@ -234,9 +209,7 @@ resource "google_container_node_pool" "pools" {
 
   lifecycle {
     ignore_changes = [
-      # The autoscaler changes the actual node count.
       initial_node_count,
-      # GKE auto-upgrade bumps the node version.
       version,
       node_config[0].labels,
       node_config[0].resource_labels,

@@ -1,23 +1,23 @@
-# PostgreSQL runbook (CloudNativePG cluster `shop-db`)
+# PostgreSQL runbook (CloudNativePG cluster `deus-db`)
 
-The `Postgres*` alerts of the `shop-data` VMRule (`apps/k8s/data/monitoring.yaml`) link to the sections
+The `Postgres*` alerts of the `postgres` VMRule (`configs/cloudnative-pg/base/monitoring.yaml`) link to the sections
 below. For the general approach, field names and query recipes see [README.md](README.md).
 
 ## Quick reference
 
 | What | Where |
 |---|---|
-| Dashboard | Grafana → Shop → CloudNativePG (`/d/cloudnative-pg-shop`) |
-| Cluster state, current primary | `kubectl -n shop get cluster shop-db` |
-| psql on the primary | `kubectl -n shop exec -it "$(kubectl -n shop get cluster shop-db -o jsonpath='{.status.currentPrimary}')" -c postgres -- psql -d app` |
-| PostgreSQL logs (VictoriaLogs) | `{kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"}` |
-| Backups | `kubectl -n shop get backups`, sidecar container `plugin-barman-cloud` |
-| Configuration | `apps/k8s/data/postgres.yaml`, changed through Git (Argo CD app `shop-data`) |
+| Dashboard | Grafana → Platform → CloudNativePG (`/d/cloudnative-pg`) |
+| Cluster state, current primary | `kubectl -n deus get cluster deus-db` |
+| psql on the primary | `kubectl -n deus exec -it "$(kubectl -n deus get cluster deus-db -o jsonpath='{.status.currentPrimary}')" -c postgres -- psql -d app` |
+| PostgreSQL logs (VictoriaLogs) | `{kubernetes.pod_namespace="deus", kubernetes.container_name="postgres"}` |
+| Backups | `kubectl -n deus get backups`, sidecar container `plugin-barman-cloud` |
+| Configuration | `configs/cloudnative-pg/base/cluster.yaml`, changed through Git (Argo CD app `config-cloudnative-pg`) |
 
-Session limits. Application sessions connect with `lock_timeout=2s`, `statement_timeout=5s`,
-`idle_in_transaction_session_timeout=30s` and `application_name` set to the service name
-(`postgres.sessionSettings` in `apps/k8s/services/values.yaml`). Every other session (psql, jobs) is ended
-after 5 minutes idle in a transaction (`postgres.yaml`).
+Session limits. Every session is ended after 5 minutes idle in a transaction (`cluster.yaml`). Application
+sessions are expected to connect with tighter limits (`lock_timeout`, `statement_timeout`,
+`idle_in_transaction_session_timeout`) and `application_name` set to the service name, so blockers and slow
+statements name their service.
 
 ## SQLSTATE reference
 
@@ -77,8 +77,8 @@ blocker has no statement to cancel, so it needs terminate.
 detected). On the standby, there is no failover candidate and commits are no longer synchronous.
 
 **Diagnose.**
-- `kubectl -n shop get cluster shop-db` and `kubectl -n shop get pods -l cnpg.io/cluster=shop-db -o wide`
-- Events: `kubectl -n shop get events --sort-by=.lastTimestamp | tail -20`. Spot preemption shows as a node
+- `kubectl -n deus get cluster deus-db` and `kubectl -n deus get pods -l cnpg.io/cluster=deus-db -o wide`
+- Events: `kubectl -n deus get events --sort-by=.lastTimestamp | tail -20`. Spot preemption shows as a node
   disappearing (`kubectl get nodes`).
 - PostgreSQL logs of that pod for `FATAL`/`PANIC`; the "Instance (re)starts" and "Role changes" annotations.
 
@@ -92,11 +92,11 @@ need different nodes (required anti-affinity), so check the cluster autoscaler. 
 
 **Impact.** No automatic failover, and commits are acknowledged without the standby (`dataDurability: preferred`).
 
-**Diagnose.** Standby pod status and logs; `kubectl -n shop get cluster shop-db -o jsonpath='{.status.instancesStatus}'`;
+**Diagnose.** Standby pod status and logs; `kubectl -n deus get cluster deus-db -o jsonpath='{.status.instancesStatus}'`;
 dashboard row Replication. A standby that fell too far behind looks for WAL in the archive (sidecar logs).
 
 **Fix.** A standby that cannot catch up is recloned by deleting its PVC and pod (never the primary's: check
-`.status.currentPrimary` first): `kubectl -n shop delete pvc/shop-db-<n> pod/shop-db-<n>`. The operator then
+`.status.currentPrimary` first): `kubectl -n deus delete pvc/deus-db-<n> pod/deus-db-<n>`. The operator then
 creates a new instance from the primary.
 
 ## PostgresReplicationLagHigh
@@ -197,8 +197,8 @@ current picture; PostgreSQL logs `record.message:"still waiting for"` name the p
 **Meaning.** PostgreSQL logged at least 5 lock waits longer than 1 second or lock timeouts (`55P03`) on an
 instance in 5 minutes (LogsQL rule on the PostgreSQL logs).
 
-**Impact.** The waiting application requests fail (`55P03` after 2 seconds) or slow down; checkout errors and
-latency SLO burn usually follow.
+**Impact.** The waiting application requests fail (`55P03` once their `lock_timeout` expires) or slow down;
+errors and latency SLO burn usually follow.
 
 **Diagnose.**
 1. Locks and blocking row, "Lock waits by statement and blocker": the waiting statement, the lock (`ShareLock on
@@ -206,7 +206,7 @@ latency SLO burn usually follow.
 2. Who is the blocker: "Blocking sessions" in the same row (pid, user, application, state, transaction age;
    kept for the selected range), [live diagnosis](#live-diagnosis) while it lasts, or its own log lines
    (`record.process_id:<pid>`).
-3. Which rows: traces of the failing requests (database span with error, `order.product_id` on checkout).
+3. Which rows: traces of the failing requests (the database span with the error and its attributes).
 
 **Fix.** A long transaction holding the lock: end it ([PostgresLongRunningTransaction](#postgreslongrunningtransaction)).
 Normal traffic on one hot row: shorten the transaction that holds it, or change the access pattern (queue,
@@ -217,7 +217,7 @@ Normal traffic on one hot row: shorten the transaction that holds it, or change 
 **Meaning.** PostgreSQL detected a deadlock (`40P01`) in the last 5 minutes and cancelled one of the transactions.
 
 **Diagnose.** The `ERROR 40P01` log line's `record.detail` lists both processes, the locks and their statements:
-`{kubernetes.pod_namespace="shop", kubernetes.container_name="postgres"} record.sql_state_code:40P01`.
+`{kubernetes.pod_namespace="deus", kubernetes.container_name="postgres"} record.sql_state_code:40P01`.
 
 **Fix.** Make the code paths lock rows in the same order (for example by primary key), or take the locks up
 front with `SELECT ... FOR UPDATE` in a fixed order.
@@ -230,8 +230,8 @@ front with `SELECT ... FOR UPDATE` in a fixed order.
 fills the disk.
 
 **Diagnose.** Backups row: "Data at risk", "WAL waiting to archive", sidecar events. Sidecar logs:
-`{kubernetes.pod_namespace="shop", kubernetes.container_name="plugin-barman-cloud"}`. Typical causes: bucket
-missing or renamed (`kubectl -n shop get objectstore shop-backup -o yaml`), Workload Identity IAM on the
+`{kubernetes.pod_namespace="deus", kubernetes.container_name="plugin-barman-cloud"}`. Typical causes: bucket
+missing or renamed (`kubectl -n deus get objectstore deus-backup -o yaml`), Workload Identity IAM on the
 bucket (Terraform workspace `cloud-storage`), sidecar out of memory.
 
 **Fix.** Restore access; the archiver resumes on its own and catches up.
@@ -247,20 +247,20 @@ to timeouts or throttling towards the bucket.
 
 **Meaning.** The newest successful base backup is more than 26 hours old (the schedule is daily at 02:00 UTC).
 
-**Diagnose.** `kubectl -n shop get backups --sort-by=.metadata.creationTimestamp` and
-`kubectl -n shop describe backup <name>`; `kubectl -n shop get scheduledbackup shop-db-daily`; sidecar logs.
+**Diagnose.** `kubectl -n deus get backups --sort-by=.metadata.creationTimestamp` and
+`kubectl -n deus describe backup <name>`; `kubectl -n deus get scheduledbackup deus-db-daily`; sidecar logs.
 
 **Fix.** Fix the cause, then take a backup now:
 
 ```bash
-kubectl -n shop create -f - <<'EOF'
+kubectl -n deus create -f - <<'EOF'
 apiVersion: postgresql.cnpg.io/v1
 kind: Backup
 metadata:
-  generateName: shop-db-manual-
+  generateName: deus-db-manual-
 spec:
   cluster:
-    name: shop-db
+    name: deus-db
   method: plugin
   pluginConfiguration:
     name: barman-cloud.cloudnative-pg.io
@@ -271,8 +271,27 @@ EOF
 
 **Meaning.** A backup attempt failed after the newest successful one.
 
-**Diagnose and fix.** The failed `Backup` object's status has the error (`kubectl -n shop describe backup
+**Diagnose and fix.** The failed `Backup` object's status has the error (`kubectl -n deus describe backup
 <name>`); then as [PostgresBackupTooOld](#postgresbackuptooold). A backup that fails while an instance is being
 recreated is retried by the next schedule; take a manual one if the next is far.
 
-To prove that backups restore, run the restore drill in `apps/README.md`.
+To prove that backups restore, run the [restore drill](#restore-drill).
+
+## Restore drill
+
+A backup only counts once it has been restored. `configs/cloudnative-pg/restore-drill/deus-db-restore.yaml`
+recovers the backups into a throwaway Cluster (not managed by Argo CD) at a point in time. Its pods run as the
+ServiceAccount `deus-db-restore`, which only has read access to the bucket (Terraform `cloud-storage`
+workspace), and it has no WAL archiver, so the drill never writes to the backups.
+
+```bash
+TARGET="2026-10-22 02:13:45+00"
+sed "s|TARGET_TIME|$TARGET|" configs/cloudnative-pg/restore-drill/deus-db-restore.yaml | kubectl apply -f -
+kubectl -n deus get cluster deus-db-restore -w
+kubectl -n deus exec -it deus-db-restore-1 -c postgres -- psql -d app -c "SELECT now()"
+kubectl -n deus delete cluster deus-db-restore
+```
+
+`TARGET` must be after the oldest backup in the recovery window. Wait for "Cluster in healthy state" (a recovery
+job replays the base backup and WAL first), check the data against the target time, then delete the Cluster (the
+PVC goes with it). In a real disaster the same `bootstrap.recovery` section creates the replacement cluster.

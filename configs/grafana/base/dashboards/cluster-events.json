@@ -1,0 +1,1863 @@
+{
+  "uid": "cluster-events",
+  "title": "Cluster — Events",
+  "description": "Kubernetes events from VictoriaLogs (all namespaces): warnings by reason and namespace, node restarts and spot preemptions, why pods fail (scheduling, probes, OOM, image pulls), restarts and the event pipeline.",
+  "tags": [
+    "kubernetes",
+    "events"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "namespace",
+        "label": "Namespace",
+        "type": "query",
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "VictoriaLogs"
+        },
+        "query": {
+          "type": "fieldValue",
+          "field": "k8s.namespace.name",
+          "query": "{service.name=\"kubernetes-events\"} k8s.namespace.name:*",
+          "limit": 200,
+          "refId": "namespace"
+        },
+        "definition": "k8s.namespace.name: {service.name=\"kubernetes-events\"}",
+        "refresh": 2,
+        "sort": 1,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        }
+      },
+      {
+        "name": "type",
+        "label": "Type",
+        "type": "custom",
+        "query": "Warning,Normal",
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "selected": true,
+          "text": [
+            "Warning"
+          ],
+          "value": [
+            "Warning"
+          ]
+        },
+        "options": [
+          {
+            "selected": true,
+            "text": "Warning",
+            "value": "Warning"
+          },
+          {
+            "selected": false,
+            "text": "Normal",
+            "value": "Normal"
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "label": "Message contains",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        },
+        "description": "Case-insensitive text in the message"
+      },
+      {
+        "name": "filters",
+        "label": "Filters",
+        "type": "adhoc",
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "VictoriaLogs"
+        }
+      }
+    ]
+  },
+  "links": [
+    {
+      "title": "Platform dashboards",
+      "type": "dashboards",
+      "tags": [
+        "platform"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "Explore traces",
+      "type": "link",
+      "url": "/explore?left={\"datasource\":\"VictoriaTraces\"}",
+      "targetBlank": true
+    },
+    {
+      "title": "Explore logs",
+      "type": "link",
+      "url": "/explore?left={\"datasource\":\"VictoriaLogs\"}",
+      "targetBlank": true
+    }
+  ],
+  "annotations": {
+    "list": [
+      {
+        "name": "Node restarts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "purple",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "(max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) > max_over_time((max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)))[30m:1m] offset 1m)) * on (node) group_left (label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning) (kube_node_labels)",
+        "titleFormat": "Node restarted: {{node}}",
+        "textFormat": "Pool {{label_cloud_google_com_gke_nodepool}} ({{label_cloud_google_com_gke_provisioning}}): spot preemption, upgrade or repair; its pods were rescheduled"
+      },
+      {
+        "name": "Container restarts",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "VictoriaMetrics"
+        },
+        "enable": true,
+        "iconColor": "orange",
+        "step": "1m",
+        "useValueForTime": false,
+        "expr": "(changes(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[1m]) > 0) * on (namespace, pod, container) group_left (reason) max by (namespace, pod, container, reason) (kube_pod_container_status_last_terminated_reason{namespace=~\"${namespace:regex}\"})",
+        "titleFormat": "Restart {{pod}}: {{reason}}",
+        "textFormat": "Container {{container}} (OOMKilled: memory limit reached)"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Overview — $namespace",
+      "collapsed": false,
+      "panels": [],
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Warning events",
+      "description": "Events of type Warning, including repeats of the same event.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} (k8s.namespace.name:in($namespace) or k8s.namespace.name:=\"\") _msg:~`(?i)\\Q${search:raw}\\E` severity_text:=Warning | stats count() events",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Pods that could not be scheduled",
+      "description": "Pods the scheduler could not place: not enough CPU or memory, node affinity, taints or volumes. After a spot preemption the remaining nodes may be too full.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} (k8s.namespace.name:in($namespace) or k8s.namespace.name:=\"\") _msg:~`(?i)\\Q${search:raw}\\E` k8s.event.reason:=FailedScheduling | stats count_uniq(k8s.object.name) pods",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Failed probes",
+      "description": "Readiness and liveness probe failures (the pod leaves its Service, or the container is restarted).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "sum"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "area",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} (k8s.namespace.name:in($namespace) or k8s.namespace.name:=\"\") _msg:~`(?i)\\Q${search:raw}\\E` k8s.event.reason:=Unhealthy | stats count() events",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "OOM kills",
+      "description": "Processes the kernel killed at a container memory limit, reported by node-problem-detector on the node (all namespaces; the event names the process, the pod shows under Container restarts).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} k8s.event.reason:=OOMKilling _msg:~`(?i)\\Q${search:raw}\\E` | stats count_uniq(_msg) kills",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Container restarts",
+      "description": "Container restarts in the time range; the reasons are in the Container restarts table.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(round(increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[$__range])))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Node restarts",
+      "description": "Nodes that booted in the time range: spot VM preemption, node upgrade or repair, or a new node. Their pods were rescheduled; the Nodes row shows when.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "0"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count(time() - max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) < $__range_s)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "row",
+      "title": "Trends",
+      "collapsed": false,
+      "panels": [],
+      "id": 8,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Warning events by reason",
+      "description": "FailedScheduling: no node fits. Unhealthy: probe failed. BackOff: crash or image pull loop. Failed: image pull or container start failed. OOMKilling: memory limit. Evicted / Preempting: node pressure or a higher-priority pod.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "sum"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} (k8s.namespace.name:in($namespace) or k8s.namespace.name:=\"\") _msg:~`(?i)\\Q${search:raw}\\E` severity_text:=Warning | stats by (k8s.event.reason) count() events",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{k8s.event.reason}}"
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "status-history",
+      "title": "Warning events per namespace",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "maxDataPoints": 60,
+      "description": "When each namespace had warnings; (cluster) is nodes and other cluster-scoped objects.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "custom": {
+            "fillOpacity": 80,
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showValue": "auto",
+        "rowHeight": 0.85,
+        "colWidth": 0.95,
+        "legend": {
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} (k8s.namespace.name:in($namespace) or k8s.namespace.name:=\"\") _msg:~`(?i)\\Q${search:raw}\\E` severity_text:=Warning | copy k8s.namespace.name as namespace | format if (namespace:=\"\") \"(cluster)\" as namespace | stats by (namespace) count() events",
+          "queryType": "statsRange",
+          "editorMode": "code",
+          "refId": "A",
+          "legendFormat": "{{namespace}}"
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      },
+      "interval": "1m"
+    },
+    {
+      "type": "row",
+      "title": "Nodes — restarts and spot preemptions",
+      "collapsed": false,
+      "panels": [],
+      "id": 11,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Nodes",
+      "description": "Every node with its GKE node pool, provisioning model and machine type, when it last booted and whether that was in the time range (a restart, or a new node). Spot (and preemptible) nodes can be reclaimed by Compute Engine at any time: a recent boot there usually is a preemption, after which GKE recreated the VM under the same name and its pods were rescheduled. On-demand nodes reboot only for upgrades or repairs. Cause: the most telling node event in the time range (autoscaler ScaleDown, Shutdown, Rebooted, RegisteredNode, NodeNotReady); a node removed by the autoscaler stays listed for a few minutes.",
+      "datasource": {
+        "type": "datasource",
+        "uid": "-- Mixed --"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Node pool"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Provisioning"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 190
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "spot": {
+                        "text": "Spot (can be preempted)",
+                        "color": "orange",
+                        "index": 0
+                      },
+                      "preemptible": {
+                        "text": "Preemptible (can be preempted)",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "standard": {
+                        "text": "On-demand",
+                        "color": "green",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Preemptible"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 100
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Machine type"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Zone"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Booted"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Booted in range"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Yes",
+                        "color": "orange",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "No",
+                        "color": "text",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Cause (time range)"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 290
+              },
+              {
+                "id": "noValue",
+                "value": "No node event"
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "5": {
+                        "text": "Autoscaler scale-down",
+                        "color": "blue",
+                        "index": 0
+                      },
+                      "4": {
+                        "text": "Shutdown: spot preemption or maintenance",
+                        "color": "orange",
+                        "index": 1
+                      },
+                      "3": {
+                        "text": "Rebooted: preemption, repair or reset",
+                        "color": "orange",
+                        "index": 2
+                      },
+                      "2": {
+                        "text": "Joined: scale-up or recreated VM",
+                        "color": "green",
+                        "index": 3
+                      },
+                      "1": {
+                        "text": "NotReady",
+                        "color": "red",
+                        "index": 4
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last node event"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Ready"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-background"
+                }
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "Ready",
+                        "color": "green",
+                        "index": 0
+                      },
+                      "0": {
+                        "text": "NotReady",
+                        "color": "red",
+                        "index": 1
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "null",
+                      "result": {
+                        "text": "Removed",
+                        "color": "#808080",
+                        "index": 2
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Node pool",
+            "desc": false
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value #D": true
+            },
+            "indexByName": {
+              "label_cloud_google_com_gke_nodepool": 0,
+              "node": 1,
+              "label_cloud_google_com_gke_provisioning": 2,
+              "label_cloud_google_com_gke_preemptible": 3,
+              "label_node_kubernetes_io_instance_type": 4,
+              "label_topology_kubernetes_io_zone": 5,
+              "Value #A": 6,
+              "Value #B": 7,
+              "cause": 8,
+              "cause_ms": 9,
+              "Value #C": 10
+            },
+            "renameByName": {
+              "label_cloud_google_com_gke_nodepool": "Node pool",
+              "node": "Node",
+              "label_cloud_google_com_gke_provisioning": "Provisioning",
+              "label_cloud_google_com_gke_preemptible": "Preemptible",
+              "label_node_kubernetes_io_instance_type": "Machine type",
+              "label_topology_kubernetes_io_zone": "Zone",
+              "Value #A": "Booted",
+              "Value #B": "Booted in range",
+              "cause": "Cause (time range)",
+              "cause_ms": "Last node event",
+              "Value #C": "Ready"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) * 1000",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "time() - max by (node) (label_replace(node_boot_time_seconds, \"internal_ip\", \"$1\", \"instance\", \"(.+):[0-9]+\") * on (internal_ip) group_left (node) max by (internal_ip, node) (kube_node_info)) < bool $__range_s",
+          "legendFormat": "",
+          "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node) (kube_node_status_condition{condition=\"Ready\", status=\"true\"})",
+          "legendFormat": "",
+          "refId": "C",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (node, label_cloud_google_com_gke_nodepool, label_cloud_google_com_gke_provisioning, label_cloud_google_com_gke_preemptible, label_node_kubernetes_io_instance_type, label_topology_kubernetes_io_zone) (kube_node_labels)",
+          "legendFormat": "",
+          "refId": "D",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} k8s.object.kind:=Node k8s.event.reason:in(ScaleDown, Shutdown, NodeShutdown, Rebooted, RegisteredNode, NodeNotReady) | copy k8s.object.name as node | format if (k8s.event.reason:=NodeNotReady) \"1\" as cause | format if (k8s.event.reason:=RegisteredNode) \"2\" as cause | format if (k8s.event.reason:=Rebooted) \"3\" as cause | format if (k8s.event.reason:in(Shutdown, NodeShutdown)) \"4\" as cause | format if (k8s.event.reason:=ScaleDown) \"5\" as cause | stats by (node) max(cause) cause, max(_time) last | math round(last/1e6) as cause_ms | delete last",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "E"
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "x": 0,
+        "y": 15,
+        "w": 24,
+        "h": 7
+      },
+      "links": [
+        {
+          "title": "Open Kubernetes / Views / Nodes",
+          "url": "/d/k8s_views_nodes/kubernetes-views-nodes?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Ready nodes by node pool",
+      "description": "Ready nodes against all nodes, per node pool: a dip is a node lost (preemption, upgrade) until it is back; a rise is the autoscaler adding a node.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (label_cloud_google_com_gke_nodepool) (kube_node_status_condition{condition=\"Ready\", status=\"true\"} * on (node) group_left (label_cloud_google_com_gke_nodepool) max by (node, label_cloud_google_com_gke_nodepool) (kube_node_labels{label_cloud_google_com_gke_nodepool!=\"\"}))",
+          "legendFormat": "{{label_cloud_google_com_gke_nodepool}} ready",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count by (label_cloud_google_com_gke_nodepool) (kube_node_info * on (node) group_left (label_cloud_google_com_gke_nodepool) max by (node, label_cloud_google_com_gke_nodepool) (kube_node_labels{label_cloud_google_com_gke_nodepool!=\"\"}))",
+          "legendFormat": "{{label_cloud_google_com_gke_nodepool}} nodes",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 22,
+        "w": 10,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open Kubernetes / Views / Nodes",
+          "url": "/d/k8s_views_nodes/kubernetes-views-nodes?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "logs",
+      "title": "Node events",
+      "description": "Events on nodes: NodeNotReady, Rebooted, Starting (kubelet), RegisteredNode, OOMKilling and other node-problem-detector findings.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} k8s.object.kind:=Node _msg:~`(?i)\\Q${search:raw}\\E` | format \"<k8s.object.kind>/<k8s.object.name> <k8s.event.reason>: <_msg>\" as _msg | format if (severity_text:=Warning) \"warning\" as level | format if (severity_text:=Normal) \"info\" as level",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 14,
+      "gridPos": {
+        "x": 10,
+        "y": 22,
+        "w": 14,
+        "h": 8
+      },
+      "links": [
+        {
+          "title": "Open Kubernetes / Views / Nodes",
+          "url": "/d/k8s_views_nodes/kubernetes-views-nodes?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "row",
+      "title": "Pods and workloads — why they fail",
+      "collapsed": false,
+      "panels": [],
+      "id": 15,
+      "gridPos": {
+        "x": 0,
+        "y": 30,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "table",
+      "title": "Warning events by object",
+      "description": "Events of the selected types per object and message (numbers collapsed), newest first. Click an object to list its events in the explorer.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Namespace"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Kind"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Object"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show this object's events in the explorer",
+                    "url": "/d/cluster-events/cluster-events?${namespace:queryparam}&${type:queryparam}&${__url_time_range}&var-filters=k8s.object.name%7C%3D%7C${__value.raw}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 280
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Reason"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 140
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Events"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last seen"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "custom.width",
+                "value": 175
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Last seen",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "namespace": 0,
+              "k8s.object.kind": 1,
+              "k8s.object.name": 2,
+              "k8s.event.reason": 3,
+              "_msg": 4,
+              "events": 5,
+              "last_ms": 6
+            },
+            "renameByName": {
+              "namespace": "Namespace",
+              "k8s.object.kind": "Kind",
+              "k8s.object.name": "Object",
+              "k8s.event.reason": "Reason",
+              "_msg": "Message",
+              "events": "Events",
+              "last_ms": "Last seen"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} (k8s.namespace.name:in($namespace) or k8s.namespace.name:=\"\") _msg:~`(?i)\\Q${search:raw}\\E` severity_text:in($type) | copy k8s.namespace.name as namespace | format if (namespace:=\"\") \"(cluster)\" as namespace | replace_regexp (\"\\\\b[0-9]+\\\\b\", \"<N>\") at _msg | stats by (namespace, k8s.object.kind, k8s.object.name, k8s.event.reason, _msg) count() events, max(_time) last | math round(last/1e6) as last_ms | delete last | sort by (last_ms desc) | limit 100",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "x": 0,
+        "y": 31,
+        "w": 24,
+        "h": 10
+      }
+    },
+    {
+      "type": "table",
+      "title": "Container restarts",
+      "description": "Containers that restarted in the time range and why their runs ended: OOMKilled (memory limit), Error (non-zero exit, failed liveness probe) or Completed. Pods deleted since keep their row.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Restarts"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Termination reason"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Restarts",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "namespace": 0,
+              "pod": 1,
+              "container": 2,
+              "reason": 3,
+              "Value": 4
+            },
+            "renameByName": {
+              "namespace": "Namespace",
+              "pod": "Pod",
+              "container": "Container",
+              "reason": "Termination reason",
+              "Value": "Restarts"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max by (namespace, pod, container, reason) (max_over_time(kube_pod_container_status_last_terminated_reason{namespace=~\"${namespace:regex}\"}[$__range])) * on (namespace, pod, container) group_left () (sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[$__range]))) > 0) or on (namespace, pod, container) (sum by (namespace, pod, container) (round(increase(kube_pod_container_status_restarts_total{namespace=~\"${namespace:regex}\"}[$__range]))) > 0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "x": 0,
+        "y": 41,
+        "w": 14,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Pending pods",
+      "description": "Pods waiting for a node or for their images. Persisting after a preemption means the remaining nodes are too full (see FailedScheduling).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (namespace) (kube_pod_status_phase{phase=\"Pending\", namespace=~\"${namespace:regex}\"}) > 0",
+          "legendFormat": "{{namespace}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 18,
+      "gridPos": {
+        "x": 14,
+        "y": 41,
+        "w": 10,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Event explorer",
+      "collapsed": false,
+      "panels": [],
+      "id": 19,
+      "gridPos": {
+        "x": 0,
+        "y": 49,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Events — $type",
+      "description": "Every event as <Kind>/<name> <reason>: <message>. Expand an event for the object, namespace, node and count. Narrow with Message contains and Filters (any field).",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "{service.name=\"kubernetes-events\"} (k8s.namespace.name:in($namespace) or k8s.namespace.name:=\"\") _msg:~`(?i)\\Q${search:raw}\\E` severity_text:in($type) | format \"<k8s.object.kind>/<k8s.object.name> <k8s.event.reason>: <_msg>\" as _msg | format if (severity_text:=Warning) \"warning\" as level | format if (severity_text:=Normal) \"info\" as level",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "x": 0,
+        "y": 50,
+        "w": 24,
+        "h": 14
+      }
+    },
+    {
+      "type": "row",
+      "title": "Event pipeline",
+      "collapsed": false,
+      "panels": [],
+      "id": 21,
+      "gridPos": {
+        "x": 0,
+        "y": 64,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Events collected",
+      "description": "Events per second through the k8s-events collector. Failed sends are retried from its queue; the KubeEventsExportFailing alert fires when they persist.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(otelcol_receiver_accepted_log_records[$__rate_interval]))",
+          "legendFormat": "received from the API server",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(otelcol_exporter_sent_log_records[$__rate_interval]))",
+          "legendFormat": "stored in VictoriaLogs",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(otelcol_exporter_send_failed_log_records[$__rate_interval]))",
+          "legendFormat": "failed to store",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 22,
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 12,
+        "h": 6
+      },
+      "links": [
+        {
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Collector queue and memory",
+      "description": "Events waiting to be sent (left) and the collector's memory (right). A full queue drops events.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "C"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "bytes"
+              },
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(otelcol_exporter_queue_size)",
+          "legendFormat": "queued events",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(otelcol_exporter_queue_capacity)",
+          "legendFormat": "queue capacity",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(otelcol_process_memory_rss)",
+          "legendFormat": "memory",
+          "refId": "C",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 23,
+      "gridPos": {
+        "x": 12,
+        "y": 65,
+        "w": 12,
+        "h": 6
+      },
+      "links": [
+        {
+          "title": "Open VictoriaLogs - single-node",
+          "url": "/d/OqPIZTX4z/victorialogs-single-node?${__url_time_range}"
+        }
+      ]
+    }
+  ]
+}

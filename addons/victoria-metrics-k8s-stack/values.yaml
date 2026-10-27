@@ -1,0 +1,356 @@
+nameOverride: vmks
+fullnameOverride: vmks
+
+global:
+  clusterLabel: cluster
+  versions:
+    metrics: v1.154.1
+    logs: v1.53.0
+    traces: v0.12.0
+    alertmanager: v0.34.1
+
+victoria-metrics-operator:
+  enabled: false
+
+external:
+  grafana:
+    host: localhost:3000
+
+internal:
+  vmauth:
+    spec:
+      image:
+        tag: v1.154.1
+      replicaCount: 2
+      podDisruptionBudget:
+        maxUnavailable: 1
+      resources:
+        requests: { cpu: 10m, memory: 32Mi }
+        limits: { memory: 128Mi }
+
+defaultDashboards:
+  enabled: true
+  annotations:
+    grafana_folder: Platform
+  dashboards:
+    victoriametrics-operator:
+      enabled: true
+      clusterMetric: vm_app_version
+    k8s-resources-multicluster: { enabled: false }
+    k8s-resources-windows-cluster: { enabled: false }
+    k8s-resources-windows-namespace: { enabled: false }
+    k8s-resources-windows-pod: { enabled: false }
+    k8s-windows-cluster-rsrc-use: { enabled: false }
+    k8s-windows-node-rsrc-use: { enabled: false }
+    nodes-aix: { enabled: false }
+    nodes-darwin: { enabled: false }
+  sources:
+    victoriatraces-single-node:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaTraces/v0.12.0/dashboards/victoriatraces.json
+    victorialogs-single-node:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/dashboards/victorialogs.json
+    victorialogs-vlagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/dashboards/vlagent.json
+    victoriametrics-vmagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/dashboards/vmagent.json
+    victoriametrics-single-node:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/dashboards/victoriametrics.json
+    victoriametrics-vmalert:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/dashboards/vmalert.json
+    victoriametrics-operator:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/dashboards/operator.json
+      enabled: true
+    kubernetes-views-global:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-global.json
+    kubernetes-views-namespaces:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-namespaces.json
+    kubernetes-views-pods:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-pods.json
+    kubernetes-views-nodes:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-views-nodes.json
+    kubernetes-system-api-server:
+      url: https://raw.githubusercontent.com/dotdc/grafana-dashboards-kubernetes/v3.0.8/dashboards/k8s-system-api-server.json
+    node-exporter-full:
+      url: https://raw.githubusercontent.com/rfmoz/grafana-dashboards/b173daed1bb163ca320cc3624206e07832219113/prometheus/node-exporter-full.json
+    kube-prometheus:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/grafana-dashboardDefinitions.yaml
+
+defaultRules:
+  enabled: true
+  groups:
+    vlogs:
+      rules:
+        DiskRunsOutOfSpace: { enabled: false }
+    vtraces:
+      rules:
+        DiskRunsOutOfSpace: { enabled: false }
+  sources:
+    alertmanager:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/alertmanager-prometheusRule.yaml
+    kubernetes-control-plane:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/kubernetesControlPlane-prometheusRule.yaml
+    kubernetes:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/kubePrometheus-prometheusRule.yaml
+    kube-state-metrics:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/kubeStateMetrics-prometheusRule.yaml
+    node-exporter:
+      url: https://raw.githubusercontent.com/prometheus-operator/kube-prometheus/v0.19.0/manifests/nodeExporter-prometheusRule.yaml
+    vmhealth:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/deployment/docker/rules/alerts-health.yml
+    vmagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/deployment/docker/rules/alerts-vmagent.yml
+    vmalert:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/deployment/docker/rules/alerts-vmalert.yml
+    vmsingle:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaMetrics/v1.154.1/deployment/docker/rules/alerts-single-node.yml
+    vmoperator:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/operator/v0.75.1/config/alerting/vmoperator-rules.yaml
+      enabled: true
+    vlhealth:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/deployment/docker/rules/alerts-health.yml
+    vlagent:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/deployment/docker/rules/alerts-vlagent.yml
+    victorialogs:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaLogs/v1.53.0/deployment/docker/rules/alerts-vlogs.yml
+    victoriatraces:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaTraces/v0.12.0/deployment/docker/rules/alerts-vtraces.yml
+    vthealth:
+      url: https://raw.githubusercontent.com/VictoriaMetrics/VictoriaTraces/v0.12.0/deployment/docker/rules/alerts-health.yml
+
+syncJob:
+  resources:
+    requests: { cpu: 10m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+vmsingle:
+  enabled: true
+  spec:
+    image:
+      tag: v1.154.1
+    storage:
+      storageClassName: standard-rwo
+      accessModes: [ReadWriteOnce]
+    removePvcAfterDelete: true
+    extraArgs:
+      dedup.minScrapeInterval: 30s
+      opentelemetry.usePrometheusNaming: "true"
+      storage.minFreeDiskSpaceBytes: "2GB"
+      storage.maxHourlySeries: "500000"
+      storage.maxDailySeries: "1500000"
+      search.maxConcurrentRequests: "8"
+      search.maxMemoryPerQuery: "128MB"
+    resources:
+      requests: { cpu: 200m, memory: 1Gi }
+      limits: { memory: 2Gi }
+
+vmcluster:
+  enabled: false
+
+vmagent:
+  enabled: true
+  spec:
+    image:
+      tag: v1.154.1
+    replicaCount: 2
+    scrapeInterval: 30s
+    extraArgs:
+      promscrape.streamParse: "true"
+      promscrape.dropOriginalLabels: "false"
+    statefulMode: true
+    statefulStorage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard-rwo
+          resources:
+            requests:
+              storage: 10Gi
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
+    remoteWriteSettings:
+      maxDiskUsagePerURL: 8GiB
+    podDisruptionBudget:
+      maxUnavailable: 1
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: vmagent
+            app.kubernetes.io/instance: vmks
+    resources:
+      requests: { cpu: 50m, memory: 192Mi }
+      limits: { memory: 512Mi }
+
+vmalert:
+  enabled: true
+  spec:
+    image:
+      tag: v1.154.1
+    replicaCount: 2
+    evaluationInterval: 30s
+    podDisruptionBudget:
+      maxUnavailable: 1
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: vmalert
+            app.kubernetes.io/instance: vmks
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+alertmanager:
+  enabled: true
+  spec:
+    replicaCount: 2
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: standard-rwo
+          resources:
+            requests:
+              storage: 10Gi
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete
+      whenScaled: Delete
+    podDisruptionBudget:
+      maxUnavailable: 1
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app.kubernetes.io/name: vmalertmanager
+            app.kubernetes.io/instance: vmks
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+  config:
+    route:
+      receiver: blackhole
+      group_by: [alertname, namespace, cluster]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 12h
+      routes:
+        - matchers: ['alertname=~"InfoInhibitor|Watchdog"']
+          receiver: blackhole
+    inhibit_rules:
+      - target_matchers: ['severity=~"warning|info"']
+        source_matchers: ['severity="critical"']
+        equal: [cluster, namespace, alertname]
+      - target_matchers: ['severity="info"']
+        source_matchers: ['alertname="InfoInhibitor"']
+        equal: [cluster, namespace]
+    receivers:
+      - name: blackhole
+
+vlsingle:
+  enabled: true
+  spec:
+    extraArgs:
+      retention.maxDiskUsagePercent: "80"
+    storage:
+      storageClassName: standard-rwo
+      accessModes: [ReadWriteOnce]
+    removePvcAfterDelete: true
+    resources:
+      requests: { cpu: 100m, memory: 384Mi }
+      limits: { memory: 1536Mi }
+
+vlcluster:
+  enabled: false
+
+vlagent:
+  enabled: true
+  spec:
+    k8sCollector:
+      enabled: true
+      msgFields: [msg, message, log]
+      timeFields: [time, timestamp, ts]
+      includePodLabels: true
+    tolerations:
+      - operator: Exists
+    resources:
+      requests: { cpu: 25m, memory: 64Mi }
+      limits: { memory: 256Mi }
+
+vtsingle:
+  enabled: true
+  spec:
+    storage:
+      storageClassName: standard-rwo
+      accessModes: [ReadWriteOnce]
+    removePvcAfterDelete: true
+    extraArgs:
+      retention.maxDiskUsagePercent: "80"
+      servicegraph.enableTask: "true"
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 1536Mi }
+
+vtcluster:
+  enabled: false
+
+defaultDatasources:
+  victoriametrics:
+    datasources:
+      - name: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        uid: VictoriaMetrics
+        isDefault: true
+
+grafana:
+  enabled: false
+
+kube-state-metrics:
+  enabled: true
+  metricLabelsAllowlist:
+    - nodes=[topology.kubernetes.io/zone,cloud.google.com/gke-nodepool,cloud.google.com/gke-provisioning,cloud.google.com/gke-preemptible,node.kubernetes.io/instance-type]
+  resources:
+    requests: { cpu: 10m, memory: 48Mi }
+    limits: { memory: 192Mi }
+
+prometheus-node-exporter:
+  enabled: true
+  resources:
+    requests: { cpu: 10m, memory: 24Mi }
+    limits: { memory: 64Mi }
+
+kubelet:
+  enabled: true
+  vmScrapes:
+    resources:
+      enabled: false
+  vmScrape:
+    spec:
+      relabelConfigs:
+        - sourceLabels: [__meta_kubernetes_node_label_cloud_google_com_gke_nodepool]
+          targetLabel: nodepool
+        - sourceLabels: [__metrics_path__]
+          targetLabel: metrics_path
+        - targetLabel: job
+          replacement: kubelet
+kubeApiServer:
+  enabled: true
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+kubeProxy:
+  enabled: false
+coreDns:
+  enabled: false
+kubeDns:
+  enabled: true
+  service:
+    enabled: true

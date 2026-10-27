@@ -1,4 +1,3 @@
-# --- GCP provider ---
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
@@ -19,7 +18,6 @@ variable "env" {
   type        = string
 }
 
-# --- Target cluster (looked up by name) ---
 variable "cluster_name" {
   description = "Base cluster name (without env prefix), as in the kubernetes-engine workspace"
   type        = string
@@ -30,7 +28,6 @@ variable "cluster_location" {
   type        = string
 }
 
-# --- Argo CD ---
 variable "argocd_chart_version" {
   description = "argo/argo-cd chart version"
   type        = string
@@ -73,21 +70,4 @@ variable "gitops_repo_password" {
   type        = string
   default     = null
   sensitive   = true
-}
-
-variable "app_projects" {
-  description = "Argo CD AppProjects per domain"
-  type = map(object({
-    description  = string
-    namespaces   = list(string)
-    source_repos = optional(list(string), [])
-  }))
-}
-
-variable "root_applications" {
-  description = "Root (app-of-apps) Applications"
-  type = map(object({
-    path    = string
-    project = string
-  }))
 }

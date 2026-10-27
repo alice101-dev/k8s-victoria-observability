@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# =============================================================================
-# Safe teardown of the test environment:
-#   1. Delete the GitOps applications in reverse sync-wave order, so PVCs and their persistent
-#      disks are removed. Destroying the cluster directly leaves PVC disks behind (still billed).
-#   2. terraform destroy each workspace in reverse apply order. "services" is kept
-#      (APIs stay enabled; disable_on_destroy = false).
-#   3. List leftover billable resources.
-# =============================================================================
 set -euo pipefail
 
 ENV="${ENV:-staging}"
@@ -15,11 +7,7 @@ AUTO_APPROVE="${AUTO_APPROVE:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TFVARS_GKE="$ROOT/environments/$ENV/kubernetes-engine/$ENV.tfvars"
 
-# Child Applications in reverse sync-wave order: workloads first, operators and CRDs last
-# (operators must still run to process their custom resource finalizers).
-CHILD_APPS=(shop-services shop-data plugin-barman-cloud cloudnative-pg cert-manager platform-monitoring k8s-events mcp-grafana mcp-victoriatraces-logsql mcp-victoriatraces mcp-victorialogs mcp-victoriametrics vm-stack observability-config vm-operator external-secrets)
-ROOT_APPS=(apps observability)
-# Kept: services (enabled APIs) and secret-manager (secret values added by hand, a few cents a month).
+ADDONS_ORDER=(mcp-grafana mcp-victoriatraces-logsql mcp-victoriatraces mcp-victorialogs mcp-victoriametrics grafana k8s-events otel-collector victoria-metrics-k8s-stack plugin-barman-cloud cloudnative-pg victoria-metrics-operator external-secrets cert-manager)
 DESTROY_ORDER=(argocd-bootstrap cloud-storage artifact-registry kubernetes-engine firewall cloud-nat vpc)
 
 tfvar() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$TFVARS_GKE"; }
@@ -36,20 +24,22 @@ if gcloud container clusters describe "$CLUSTER" --location "$LOCATION" --projec
   trap 'rm -f "$KUBECONFIG_TMP"' EXIT
   gcloud container clusters get-credentials "$CLUSTER" --location "$LOCATION" --project "$PROJECT" --dns-endpoint >/dev/null
 
-  # Remove root apps without cascading (finalizer dropped) so selfHeal cannot recreate children.
-  for app in "${ROOT_APPS[@]}"; do
-    if kubectl -n argocd get application "$app" >/dev/null 2>&1; then
-      kubectl -n argocd patch application "$app" --type json -p '[{"op":"remove","path":"/metadata/finalizers"}]' >/dev/null 2>&1 || true
-      kubectl -n argocd delete application "$app" --wait=true
-    fi
+  if kubectl -n argocd get application root >/dev/null 2>&1; then
+    kubectl -n argocd patch application root --type json -p '[{"op":"remove","path":"/metadata/finalizers"}]' >/dev/null 2>&1 || true
+    kubectl -n argocd delete application root --wait=true
+  fi
+  kubectl -n argocd delete applicationsets --all --cascade=orphan --wait=true
+  for layer in apps configs; do
+    echo "   - delete layer $layer"
+    kubectl -n argocd delete applications -l layer=$layer --wait=true --timeout=15m
   done
-  # Delete child apps one by one with cascade (the Argo CD finalizer deletes their resources).
-  for app in "${CHILD_APPS[@]}"; do
+  for app in "${ADDONS_ORDER[@]}"; do
     if kubectl -n argocd get application "$app" >/dev/null 2>&1; then
       echo "   - delete $app"
       kubectl -n argocd delete application "$app" --wait=true --timeout=15m
     fi
   done
+  kubectl -n argocd delete applications -l layer=addons --wait=true --timeout=15m
 
   echo ">> Waiting for all PVCs to be deleted (persistent disks released)..."
   for _ in $(seq 1 60); do

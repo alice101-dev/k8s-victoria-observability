@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  labels:
+    grafana_datasource: "1"
+data:
+  datasources.yaml: |-
+    apiVersion: 1
+    datasources:
+      - name: VictoriaMetrics
+        uid: VictoriaMetrics
+        type: prometheus
+        access: proxy
+        url: http://vmsingle-vmks.monitoring.svc.cluster.local.:8428
+        isDefault: true
+        jsonData:
+          timeInterval: 30s
+      - name: VictoriaMetrics (DS)
+        uid: VictoriaMetricsDS
+        type: victoriametrics-metrics-datasource
+        access: proxy
+        url: http://vmsingle-vmks.monitoring.svc.cluster.local.:8428
+        isDefault: false
+      - name: VictoriaLogs
+        uid: VictoriaLogs
+        type: victoriametrics-logs-datasource
+        access: proxy
+        url: http://vlsingle-vmks.monitoring.svc.cluster.local.:9428
+        jsonData:
+          maxLines: 1000
+          derivedFields:
+            - name: trace_id
+              matcherType: label
+              matcherRegex: trace_id
+              url: ${__value.raw}
+              urlDisplayLabel: View trace
+              datasourceUid: VictoriaTraces
+      - name: VictoriaTraces
+        uid: VictoriaTraces
+        type: jaeger
+        access: proxy
+        url: http://vtsingle-vmks.monitoring.svc.cluster.local.:10428/select/jaeger
+        jsonData:
+          nodeGraph:
+            enabled: true
+          tracesToLogsV2:
+            datasourceUid: VictoriaLogs
+            spanStartTimeShift: -5m
+            spanEndTimeShift: 5m
+            customQuery: true
+            query: trace_id:="${__trace.traceId}"
+          tracesToMetrics:
+            datasourceUid: VictoriaMetrics
+            spanStartTimeShift: -5m
+            spanEndTimeShift: 5m
+            tags:
+              - key: service.name
+                value: service_name
+            queries:
+              - name: Request rate
+                query: sum(rate(http_server_request_duration_seconds_count{$__tags}[1m]))
+              - name: Error rate (5xx)
+                query: sum(rate(http_server_request_duration_seconds_count{$__tags,http_response_status_code=~"5.."}[1m]))
+              - name: p95 latency
+                query: histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket{$__tags}[1m])) by (le))
+      - name: VictoriaTraces (LogsQL)
+        uid: VictoriaTracesLogsQL
+        type: victoriametrics-logs-datasource
+        access: proxy
+        url: http://vtsingle-vmks.monitoring.svc.cluster.local.:10428
+        jsonData:
+          maxLines: 1000
+          derivedFields:
+            - name: trace_id
+              matcherType: label
+              matcherRegex: trace_id
+              url: ${__value.raw}
+              urlDisplayLabel: View trace
+              datasourceUid: VictoriaTraces
+      - name: Alertmanager
+        uid: Alertmanager
+        type: alertmanager
+        access: proxy
+        url: http://vmalertmanager-vmks.monitoring.svc.cluster.local.:9093
+        jsonData:
+          implementation: prometheus

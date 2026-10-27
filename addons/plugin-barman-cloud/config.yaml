@@ -1,0 +1,4 @@
+chart: plugin-barman-cloud
+repoURL: https://cloudnative-pg.github.io/charts
+version: 0.8.1
+namespace: cnpg-system

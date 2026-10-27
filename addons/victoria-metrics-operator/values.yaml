@@ -1,0 +1,23 @@
+fullnameOverride: vm-operator
+
+crds:
+  enabled: true
+  plain: false
+
+image:
+  tag: v0.75.1
+
+replicaCount: 1
+
+operator:
+  disable_prometheus_converter: true
+
+admissionWebhooks:
+  enabled: false
+
+serviceMonitor:
+  enabled: true
+
+resources:
+  requests: { cpu: 25m, memory: 80Mi }
+  limits: { memory: 256Mi }

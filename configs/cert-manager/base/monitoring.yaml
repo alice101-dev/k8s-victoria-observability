@@ -1,0 +1,68 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMServiceScrape
+metadata:
+  name: cert-manager
+spec:
+  namespaceSelector:
+    matchNames: [cert-manager]
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: cert-manager
+  endpoints:
+    - port: http-metrics
+      honorLabels: true
+    - port: metrics
+      honorLabels: true
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: cert-manager
+spec:
+  groups:
+    - name: cert-manager
+      rules:
+        - alert: CertManagerCertificateNotReady
+          expr: max by (namespace, name, issuer_name) (certmanager_certificate_ready_status{condition!="True"}) == 1
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} is not ready"
+            description: cert-manager cannot issue or renew the certificate (issuer {{ $labels.issuer_name }}); its Secret may be missing or outdated.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#certmanagercertificatenotready
+        - alert: CertManagerCertificateRenewalOverdue
+          expr: (time() - max by (namespace, name, issuer_name) (certmanager_certificate_renewal_timestamp_seconds > 0)) > 3600
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }}: renewal overdue by {{ $value | humanizeDuration }}"
+            description: The certificate should have been renewed (issuer {{ $labels.issuer_name }}) but was not; it keeps working until it expires.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#certmanagercertificaterenewaloverdue
+        - alert: CertManagerCertificateExpiringSoon
+          expr: (max by (namespace, name, issuer_name) (certmanager_certificate_expiration_timestamp_seconds > 0) - time() < 7 * 86400) and on (namespace, name) (time() - max by (namespace, name) (certmanager_certificate_renewal_timestamp_seconds > 0) > 0)
+          labels:
+            severity: critical
+          annotations:
+            summary: "Certificate {{ $labels.namespace }}/{{ $labels.name }} expires in {{ $value | humanizeDuration }}"
+            description: The renewal is overdue and the certificate expires within 7 days. When it expires, TLS to the service fails (CloudNativePG backups through the Barman Cloud plugin stop).
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#certmanagercertificateexpiringsoon
+        - alert: CertManagerIssuerNotReady
+          expr: (max by (namespace, name) (certmanager_issuer_ready_status{condition!="True"}) == 1) or (max by (name) (certmanager_clusterissuer_ready_status{condition!="True"}) == 1)
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Issuer {{ with $labels.namespace }}{{ . }}/{{ end }}{{ $labels.name }} is not ready"
+            description: Certificates of this issuer can be neither issued nor renewed.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#certmanagerissuernotready
+        - alert: CertManagerDown
+          expr: absent(up{job="cert-manager"} == 1)
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: No metrics from the cert-manager controller
+            description: The controller is down or no longer scraped. Certificates are not issued or renewed, and the cert-manager alerts are blind.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/platform.md#certmanagerdown

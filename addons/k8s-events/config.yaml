@@ -1,0 +1,10 @@
+chart: opentelemetry-collector
+repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+version: 0.177.0
+namespace: monitoring
+ignoreDifferences:
+  - group: apps
+    kind: Deployment
+    name: k8s-events
+    jsonPointers:
+      - /spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt

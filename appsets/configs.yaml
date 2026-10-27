@@ -1,0 +1,66 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: configs
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - matrix:
+        generators:
+          - clusters:
+              selector:
+                matchExpressions:
+                  - key: env
+                    operator: Exists
+          - git:
+              repoURL: https://github.com/alice101-dev/k8s-victoria-observability.git
+              revision: main
+              files:
+                - path: configs/*/config.yaml
+  template:
+    metadata:
+      name: "config-{{ .path.basename }}"
+      labels:
+        layer: configs
+      finalizers:
+        - resources-finalizer.argocd.argoproj.io
+    spec:
+      project: platform
+      source:
+        repoURL: https://github.com/alice101-dev/k8s-victoria-observability.git
+        targetRevision: main
+        path: "{{ .path.path }}/{{ .metadata.labels.env }}"
+        kustomize:
+          patches:
+            - target:
+                group: barmancloud.cnpg.io
+                kind: ObjectStore
+              patch: |-
+                - op: replace
+                  path: /spec/configuration/destinationPath
+                  value: gs://{{ index .metadata.annotations "platform/backup-bucket" }}
+      destination:
+        name: "{{ .name }}"
+        namespace: "{{ .namespace }}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+          - RespectIgnoreDifferences=true
+          - SkipDryRunOnMissingResource=true
+        retry:
+          limit: 20
+          backoff:
+            duration: 30s
+            factor: 2
+            maxDuration: 5m
+  templatePatch: |
+    {{- if hasKey . "ignoreDifferences" }}
+    spec:
+      ignoreDifferences: {{ toJson .ignoreDifferences }}
+    {{- end }}

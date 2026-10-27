@@ -1,0 +1,30 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: deus-db-restore
+  namespace: deus
+spec:
+  instances: 1
+  imageName: ghcr.io/cloudnative-pg/postgresql:18.6-standard-trixie
+
+  bootstrap:
+    recovery:
+      source: deus-db
+      recoveryTarget:
+        targetTime: "TARGET_TIME"
+
+  externalClusters:
+    - name: deus-db
+      plugin:
+        name: barman-cloud.cloudnative-pg.io
+        parameters:
+          barmanObjectName: deus-backup
+          serverName: deus-db
+
+  storage:
+    storageClass: standard-rwo
+    size: 10Gi
+
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }

@@ -1,5 +1,3 @@
-# --- Identity & project ---
-
 variable "project_id" {
   description = "GCP project ID for the repositories."
   type        = string
@@ -14,8 +12,6 @@ variable "env" {
   description = "Environment name (e.g. staging), used for labels."
   type        = string
 }
-
-# --- Repository Definitions ---
 
 variable "repositories" {
   description = <<-EOT
@@ -34,30 +30,30 @@ variable "repositories" {
             }
             "delete-old-untagged" = {
               action    = "DELETE"
-              condition = { tag_state = "UNTAGGED", older_than = "2592000s" } # 30 days
+              condition = { tag_state = "UNTAGGED", older_than = "2592000s" }
             }
           }
         }
       }
   EOT
   type = map(object({
-    format                 = string           # DOCKER, MAVEN, NPM, PYTHON, APT, YUM, GO, KUBEFLOW, GENERIC
-    location               = optional(string) # default var.region
+    format                 = string
+    location               = optional(string)
     mode                   = optional(string, "STANDARD_REPOSITORY")
     description            = optional(string, "")
-    kms_key_name           = optional(string) # CMEK; null = Google-managed key
+    kms_key_name           = optional(string)
     labels                 = optional(map(string), {})
-    immutable_tags         = optional(bool)        # docker_config.immutable_tags (DOCKER only)
-    vulnerability_scanning = optional(string)      # INHERITED | ENABLED | DISABLED
-    cleanup_policy_dry_run = optional(bool, false) # true = report only, delete nothing
+    immutable_tags         = optional(bool)
+    vulnerability_scanning = optional(string)
+    cleanup_policy_dry_run = optional(bool, false)
     cleanup_policies = optional(map(object({
-      action = string # KEEP | DELETE
+      action = string
       condition = optional(object({
-        tag_state             = optional(string) # TAGGED | UNTAGGED | ANY
+        tag_state             = optional(string)
         tag_prefixes          = optional(list(string))
         version_name_prefixes = optional(list(string))
         package_name_prefixes = optional(list(string))
-        older_than            = optional(string) # duration, e.g. "2592000s"
+        older_than            = optional(string)
         newer_than            = optional(string)
       }))
       most_recent_versions = optional(object({

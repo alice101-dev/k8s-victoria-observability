@@ -1,0 +1,4 @@
+chart: opentelemetry-collector
+repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+version: 0.177.0
+namespace: monitoring

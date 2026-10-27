@@ -1,0 +1,55 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: otel-collector
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opentelemetry-collector
+      app.kubernetes.io/instance: otel-collector
+  podMetricsEndpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: otel-collector
+spec:
+  groups:
+    - name: otel-collector
+      rules:
+        - alert: OtelCollectorDown
+          expr: absent(up{job="monitoring/otel-collector"} == 1)
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: No OpenTelemetry Collector replica is up
+            description: The services cannot deliver metrics, logs or spans; their SDKs buffer briefly, then drop. Check the otel-collector Deployment in monitoring.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#otelcollectordown
+        - alert: OtelCollectorRefusingTelemetry
+          expr: sum by (signal) (label_replace(rate({__name__=~"otelcol_receiver_refused_(spans|metric_points|log_records)(_total)?", job="monitoring/otel-collector"}[5m]) keep_metric_names, "signal", "$1", "__name__", "otelcol_receiver_refused_([a-z_]+?)(_total)?")) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "The OpenTelemetry Collector refuses {{ $value | humanize }} {{ $labels.signal }}/s"
+            description: The memory limiter pushes back. Senders retry and then drop; raise the collector's memory limit or replicas.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#otelcollectorrefusingtelemetry
+        - alert: OtelCollectorExportFailing
+          expr: sum by (exporter) (rate({__name__=~"otelcol_exporter_send_failed_(spans|metric_points|log_records)(_total)?", job="monitoring/otel-collector"}[5m])) > 0
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.exporter }} fails to deliver {{ $value | humanize }} items/s"
+            description: Sends to the store keep failing and are retried from the sending queue; once it is full, new telemetry is dropped.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#otelcollectorexportfailing
+        - alert: OtelCollectorQueueFull
+          expr: sum by (exporter) (increase({__name__=~"otelcol_exporter_enqueue_failed_(spans|metric_points|log_records)(_total)?", job="monitoring/otel-collector"}[5m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.exporter }} dropped {{ $value | humanize }} items in 5 minutes: sending queue full"
+            description: The store behind this exporter is down or too slow for longer than the queue can hold. These items are lost.
+            runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/observability.md#otelcollectorqueuefull
