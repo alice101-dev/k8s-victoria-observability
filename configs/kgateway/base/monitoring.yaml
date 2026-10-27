@@ -18,7 +18,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      app.kubernetes.io/managed-by: kgateway
+      gateway.networking.k8s.io/gateway-class-name: kgateway
       app.kubernetes.io/component: proxy
   podMetricsEndpoints:
     - port: http-monitoring
