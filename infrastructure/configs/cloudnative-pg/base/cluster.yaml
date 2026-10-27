@@ -65,6 +65,22 @@ spec:
         connectionLimit: 3
         passwordSecret:
           name: deus-db-mcp
+      - name: identity_migrator
+        ensure: present
+        comment: identity schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-identity-migrator
+      - name: identity_app
+        ensure: present
+        comment: identity application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 20
+        passwordSecret:
+          name: deus-db-identity-app
 
   enablePDB: true
 
