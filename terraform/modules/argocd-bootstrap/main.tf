@@ -27,7 +27,7 @@ locals {
     }
     dex            = { enabled = false }
     notifications  = { enabled = false }
-    applicationSet = { replicas = 1 }
+    applicationSet = { replicas = 1, metrics = { enabled = true } }
     controller = {
       replicas  = 1
       metrics   = { enabled = true }
