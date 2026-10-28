@@ -29,14 +29,15 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Committed dashboards match their generators
+      - name: Committed dashboards and rules match their generators
         run: |
           python3 tools/dashboards/generate.py
           python3 tools/dashboards/vendor_cloudnative_pg.py
-          if [ -n "$(git status --porcelain -- '*.json')" ]; then
-            git status --short -- '*.json'
-            git diff --stat -- '*.json'
-            echo "::error::Dashboard JSON differs from its generator. Edit tools/dashboards, run it and commit the JSON it writes to infrastructure/configs/grafana."
+          generated="'*.json' infrastructure/configs/victoria-metrics-k8s-stack/base/deus.yaml"
+          if [ -n "$(eval git status --porcelain -- $generated)" ]; then
+            eval git status --short -- $generated
+            eval git diff --stat -- $generated
+            echo "::error::Generated files differ from their generator. Edit tools/dashboards, run it and commit the dashboards and rules it writes."
             exit 1
           fi
       - name: Dashboards are valid

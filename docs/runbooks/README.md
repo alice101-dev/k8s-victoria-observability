@@ -2,6 +2,8 @@
 
 Every data-tier and platform alert links to its runbook section through the `runbook_url` annotation:
 
+- [deus.md](deus.md): the deus services (SLO burn rates, a service down, outbox events dead or waiting, database
+  pool exhausted, error log spikes)
 - [postgres.md](postgres.md): CloudNativePG cluster `deus-db` (availability, replication, locks, disk, backups)
 - [gateway.md](gateway.md): the edge Gateway (kgateway): proxies, controller, error rate per listener and backend
 - [kubernetes.md](kubernetes.md): Kubernetes events, node restarts (spot preemptions), scheduling, OOM kills
@@ -30,7 +32,9 @@ Dashboards (Grafana folder **Platform**): `cloudnative-pg` (CloudNativePG, one r
 errors, Locks and blocking, Top statements and table health, Database efficiency, Replication, Backups),
 `cluster-events` (the Kubernetes events of every namespace), `platform-gitops-secrets` (Argo CD applications and
 syncs, ExternalSecrets and certificates) and `observability-pipeline` (whether the stack itself collects, stores and
-alerts: when a signal looks missing, check it first). Service dashboards and SLOs arrive with the application.
+alerts: when a signal looks missing, check it first). Folder **Deus**: `deus-overview`, `deus-slo` (journey and service
+SLOs, budgets, burn rates, alerts), `deus-service` (one service: RED, latency, dependencies, outbox, database,
+saturation, logs, traces), `deus-logs` and `deus-traces`.
 
 ## Investigation order
 
@@ -70,7 +74,7 @@ names with the `field_names` MCP tool or the Grafana field browser.
 
 | Prefix | Source | Useful labels |
 |---|---|---|
-| `slo:*` | SLO recording rules | `job`, `slo` (`availability`, `latency`), `kind` (`service`, `journey`) |
+| `slo:*` | SLO recording rules (`deus` VMRule) | `target`, `slo` (`availability`, `latency`), `kind` (`service`, `journey`) |
 | `http_server_request_duration_seconds_*`, `http_client_request_duration_seconds_*` | services (OTLP, Prometheus naming) | `service_name`, `http_route`, `http_request_method`, `http_response_status_code`, `k8s_pod_name` |
 | `otelcol_*` | OpenTelemetry Collector | `job` (`monitoring/otel-collector`, `monitoring/k8s-events`), `exporter`, `receiver` |
 | `cnpg_*` | CloudNativePG exporter, every instance | `pod`, `datname`, `usename`, `application_name`, `state` |
@@ -132,7 +136,6 @@ _time:1h trace_id:in(_time:1h kind:=2 name:="POST /api/<route>" | fields trace_i
   usually because the application's own timeout expired. The trace shows which call gave up.
 - Timestamps in Grafana, the MCP servers and the logs are UTC unless an offset is given.
 - A span with `status_code` 2 is not always a failure: HTTP client spans mark 4xx answers as errors (OTel
-  semantic conventions) and the payment provider span marks declined cards. The Traces dashboard counts
-  neither as failed.
+  semantic conventions). The Traces dashboard does not count them as failed.
 - In LogsQL `format` patterns, `<a:b>` reads `a` as a modifier: copy span attributes to a plain name first
   (`| copy "span_attr:server.address" as peer | format "<peer>" as x`).

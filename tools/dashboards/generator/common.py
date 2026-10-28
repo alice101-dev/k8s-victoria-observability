@@ -3,6 +3,9 @@ import os
 
 VM = {"type": "prometheus", "uid": "VictoriaMetrics"}
 VL = {"type": "victoriametrics-logs-datasource", "uid": "VictoriaLogs"}
+VT = {"type": "jaeger", "uid": "VictoriaTraces"}
+VTL = {"type": "victoriametrics-logs-datasource", "uid": "VictoriaTracesLogsQL"}
+LEVEL_COLORS = {"ERROR": "red", "WARN": "orange", "INFO": "green", "DEBUG": "blue"}
 RI = "[$__rate_interval]"
 CADVISOR = 'job="kubelet", metrics_path="/metrics/cadvisor"'
 
@@ -122,6 +125,12 @@ def by_name(name, props):
     return {"matcher": {"id": "byName", "options": name}, "properties": props}
 
 
+def level_colors():
+    return [{"matcher": {"id": "byName", "options": lvl},
+             "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}}]}
+            for lvl, c in LEVEL_COLORS.items()]
+
+
 def code_colors():
     return [{"matcher": {"id": "byRegexp", "options": rx},
              "properties": [{"id": "color", "value": {"mode": "fixed", "fixedColor": c}}]}
@@ -168,16 +177,30 @@ def logsql_table(title, expr, columns, desc, ds, overrides=(), sort=None, hide=(
 
 COUNT = lambda name, width=80: by_name(name, [{"id": "unit", "value": "short"}, {"id": "decimals", "value": 0},
                                                {"id": "custom.width", "value": width}])
+PCT = lambda name, orange, red: by_name(name, [
+    {"id": "unit", "value": "percent"}, {"id": "decimals", "value": 2}, {"id": "custom.width", "value": 80},
+    {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+    {"id": "thresholds", "value": thresholds(("green", None), ("orange", orange), ("red", red))}])
 LINKS_ON = lambda name, links, width=None: by_name(name, [{"id": "links", "value": links}]
                                                     + ([{"id": "custom.width", "value": width}] if width else []))
 
 
-def dashboard(uid, title, tags, panels, variables, desc, time_from="now-3h"):
+def dashboard(uid, title, tags, panels, variables, desc, time_from="now-3h", links=None, annotations=()):
     return {"uid": uid, "title": title, "description": desc, "tags": tags, "timezone": "browser",
             "schemaVersion": 39, "version": 1, "editable": True, "graphTooltip": 1,
             "time": {"from": time_from, "to": "now"}, "refresh": "1m",
-            "templating": {"list": variables}, "links": LINKS, "annotations": {"list": []},
+            "templating": {"list": variables}, "links": links or LINKS, "annotations": {"list": list(annotations)},
             "panels": panels}
+
+
+def describe(panels, descriptions):
+    found = set()
+    for p in panels:
+        if p.get("title") in descriptions:
+            p["description"] = descriptions[p["title"]]
+            found.add(p["title"])
+    missing = set(descriptions) - found
+    assert not missing, f"no panel titled {sorted(missing)}"
 
 
 def write(name, dash, out):

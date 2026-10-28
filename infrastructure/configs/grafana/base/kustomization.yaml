@@ -51,3 +51,48 @@ configMapGenerator:
         grafana_dashboard: "1"
       annotations:
         grafana_folder: Platform
+  - name: deus-overview-dashboard
+    files:
+      - dashboards/deus-overview.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-slo-dashboard
+    files:
+      - dashboards/deus-slo.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-service-dashboard
+    files:
+      - dashboards/deus-service.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-logs-dashboard
+    files:
+      - dashboards/deus-logs.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-traces-dashboard
+    files:
+      - dashboards/deus-traces.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
