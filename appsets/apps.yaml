@@ -21,9 +21,10 @@ spec:
               revision: '{{ index .metadata.annotations "platform/apps-revision" }}'
               directories:
                 - path: services/*/deploy
+                - path: web/deploy
   template:
     metadata:
-      name: "deus-{{ index .path.segments 1 }}"
+      name: "deus-{{ index .path.segments (sub (len .path.segments) 2) }}"
       labels:
         layer: apps
       finalizers:
@@ -35,7 +36,7 @@ spec:
         targetRevision: '{{ index .metadata.annotations "platform/apps-revision" }}'
         path: charts/service
         helm:
-          releaseName: "{{ index .path.segments 1 }}"
+          releaseName: "{{ index .path.segments (sub (len .path.segments) 2) }}"
           ignoreMissingValueFiles: true
           valueFiles:
             - ../../{{ .path.path }}/values.yaml
