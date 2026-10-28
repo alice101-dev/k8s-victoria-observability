@@ -14,7 +14,7 @@ export TF_VAR_gitops_repo_url := $(GITOPS_REPO_URL)
 TF_APPROVE := $(if $(filter 1,$(AUTO_APPROVE)),-auto-approve,)
 WS_DIR      = environments/$(ENV)/$(1)
 
-.PHONY: check-project init validate plan apply apply-all teardown
+.PHONY: check-project init validate plan apply apply-all converge teardown
 
 check-project:
 	@test -n "$(PROJECT_ID)" || { echo "ERROR: PROJECT_ID is empty — run: cp ../.env.example ../.env and set PROJECT_ID"; exit 1; }
@@ -47,6 +47,10 @@ apply-all: check-project
 		echo ""; echo "================ apply $$ws ================"; \
 		terraform -chdir=$(call WS_DIR,$$ws) apply -var-file=$(ENV).tfvars $(TF_APPROVE) || exit 1; \
 	done
+	@$(MAKE) --no-print-directory converge
+
+converge: check-project
+	ENV=$(ENV) PROJECT_ID=$(PROJECT_ID) ./scripts/converge.sh
 
 teardown: check-project
 	ENV=$(ENV) PROJECT_ID=$(PROJECT_ID) AUTO_APPROVE=$(AUTO_APPROVE) ./scripts/teardown.sh

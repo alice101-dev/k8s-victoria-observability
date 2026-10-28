@@ -92,6 +92,14 @@ make apply-all    # services → vpc → cloud-nat → firewall → kubernetes-e
 # or one workspace at a time: make plan WS=vpc && make apply WS=vpc
 ```
 
+   `apply-all` ends with `make converge` (`scripts/converge.sh`): it waits up to 40 minutes
+   (`CONVERGE_TIMEOUT_MIN`) until every Application of the `controllers` and `configs` layers is Synced and
+   Healthy, and fails with the list of the others. On a fresh cluster the CRDs of many controllers register at
+   once while the Argo CD cluster cache resyncs, and an Application can end OutOfSync after a sync that
+   reported success. The script requests one hard refresh and one sync for such an Application after 5 minutes
+   (`CONVERGE_STALL_SEC`). The application layer (`deus-*`) is not waited for: its images are pushed by
+   `make release` in microservice-deus after the registry is recreated.
+
 3. Get cluster credentials:
 
 ```bash
