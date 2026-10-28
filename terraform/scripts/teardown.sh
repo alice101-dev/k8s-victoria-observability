@@ -12,6 +12,34 @@ DESTROY_ORDER=(argocd-bootstrap cloud-storage artifact-registry kubernetes-engin
 
 tfvar() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$TFVARS_GKE"; }
 
+release_completed_hooks() {
+  kubectl get jobs -A -o jsonpath='{range .items[?(@.metadata.annotations.argocd\.argoproj\.io/hook)]}{.metadata.namespace}{" "}{.metadata.name}{" x"}{.status.succeeded}{.status.failed}{" "}{.metadata.finalizers}{"\n"}{end}' |
+    while read -r ns name done finalizers; do
+      [ "$done" != x ] && [ "$finalizers" = '["argocd.argoproj.io/hook-finalizer"]' ] || continue
+      echo "   - release the hook finalizer of finished job $ns/$name"
+      kubectl -n "$ns" patch job "$name" --type json -p '[{"op":"remove","path":"/metadata/finalizers"}]' >/dev/null
+    done
+}
+
+report_blockers() {
+  for app in $(kubectl -n argocd get applications "$@" -o name 2>/dev/null); do
+    echo "   ! $app is still deleting; its resources that still exist:"
+    kubectl -n argocd get "$app" -o jsonpath='{range .status.resources[*]}{.kind}{"|"}{.group}{"|"}{.namespace}{"|"}{.name}{"\n"}{end}' |
+      while IFS='|' read -r kind group ns name; do
+        state="$(kubectl get "$kind${group:+.$group}" "$name" ${ns:+-n "$ns"} -o jsonpath='deleting since {.metadata.deletionTimestamp} finalizers {.metadata.finalizers}' 2>/dev/null)" || continue
+        echo "     $kind ${ns:+$ns/}$name: $state"
+      done
+  done
+}
+
+delete_applications() {
+  release_completed_hooks
+  if ! kubectl -n argocd delete applications "$@" --wait=true --timeout=15m; then
+    report_blockers "$@"
+    exit 1
+  fi
+}
+
 [ "$(gcloud config get-value project 2>/dev/null)" = "$PROJECT" ] || { echo "active gcloud project is not $PROJECT"; exit 1; }
 
 CLUSTER="$(tfvar env)-$(tfvar cluster_name)"
@@ -31,15 +59,15 @@ if gcloud container clusters describe "$CLUSTER" --location "$LOCATION" --projec
   kubectl -n argocd delete applicationsets --all --cascade=orphan --wait=true
   for layer in apps configs; do
     echo "   - delete layer $layer"
-    kubectl -n argocd delete applications -l layer=$layer --wait=true --timeout=15m
+    delete_applications -l "layer=$layer"
   done
   for app in "${CONTROLLERS_ORDER[@]}"; do
     if kubectl -n argocd get application "$app" >/dev/null 2>&1; then
       echo "   - delete $app"
-      kubectl -n argocd delete application "$app" --wait=true --timeout=15m
+      delete_applications "$app"
     fi
   done
-  kubectl -n argocd delete applications -l layer=controllers --wait=true --timeout=15m
+  delete_applications -l layer=controllers
 
   echo ">> Waiting for all PVCs to be deleted (persistent disks released)..."
   for _ in $(seq 1 60); do

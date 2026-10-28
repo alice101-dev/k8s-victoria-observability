@@ -121,6 +121,13 @@ Applications layer by layer (apps, configs, then controllers in reverse dependen
 gone, then runs `terraform destroy` for argocd-bootstrap → cloud-storage → artifact-registry →
 kubernetes-engine → firewall → cloud-nat → vpc, and finally lists any leftover `pvc-*` disks or IPs.
 
+Applications are deleted with foreground cascading: each waits until all of its resources are gone. Before each
+layer the script removes the `argocd.argoproj.io/hook-finalizer` from hook Jobs that already finished, which is what
+Argo CD itself does when it terminates a sync; Argo CD 3.5.5 can leak that finalizer when a hook's live object is
+briefly missing from its cache (argoproj/argo-cd#29464, fixed after 3.5.6), and the Application would wait forever.
+If a layer still does not finish within 15 minutes, the script stops and lists, for every Application left, its
+resources that still exist with their deletion time and finalizers.
+
 Destroying the cluster directly would leave the persistent disks created for PVCs behind; they are
 not managed by Terraform and keep billing. The `services` and `secret-manager` workspaces are intentionally
 left in place: the secret values were added by hand and cost a few cents a month.
