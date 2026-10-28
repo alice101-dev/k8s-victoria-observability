@@ -20,6 +20,11 @@ config:
           endpoint: ${env:MY_POD_IP}:4317
         http:
           endpoint: ${env:MY_POD_IP}:4318
+    otlp/browser:
+      protocols:
+        http:
+          endpoint: ${env:MY_POD_IP}:4319
+          max_request_body_size: 1048576
   processors:
     memory_limiter:
       check_interval: 1s
@@ -42,6 +47,19 @@ config:
         - key: k8s.replicaset.name
           action: delete
         - pattern: ^(telemetry\.sdk|telemetry\.distro|process|host|os|container)\..*
+          action: delete
+    resource/browser:
+      attributes:
+        - key: service.name
+          value: web
+          action: upsert
+        - key: service.namespace
+          value: deus
+          action: upsert
+        - key: telemetry.source
+          value: browser
+          action: upsert
+        - pattern: ^k8s\..*
           action: delete
     filter/severity:
       error_mode: ignore
@@ -93,6 +111,14 @@ config:
         receivers: [otlp]
         processors: [memory_limiter, k8s_attributes, filter/severity, redaction, transform/redact-body, batch]
         exporters: [otlp_http/victorialogs]
+      traces/browser:
+        receivers: [otlp/browser]
+        processors: [memory_limiter, resource/browser, redaction, batch]
+        exporters: [otlp_http/victoriatraces]
+      logs/browser:
+        receivers: [otlp/browser]
+        processors: [memory_limiter, resource/browser, filter/severity, redaction, transform/redact-body, batch]
+        exporters: [otlp_http/victorialogs]
 
 ports:
   jaeger-compact:
@@ -105,6 +131,12 @@ ports:
     enabled: false
   metrics:
     enabled: true
+  otlp-browser:
+    enabled: true
+    containerPort: 4319
+    servicePort: 4319
+    protocol: TCP
+    appProtocol: http
 
 podDisruptionBudget:
   enabled: true

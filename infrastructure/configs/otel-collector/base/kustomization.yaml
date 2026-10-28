@@ -3,3 +3,4 @@ kind: Kustomization
 namespace: monitoring
 resources:
   - monitoring.yaml
+  - browser.yaml
