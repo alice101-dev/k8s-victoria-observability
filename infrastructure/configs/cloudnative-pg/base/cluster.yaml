@@ -209,6 +209,54 @@ spec:
         connectionLimit: 15
         passwordSecret:
           name: deus-db-payments-app
+      - name: reporting_migrator
+        ensure: present
+        comment: reporting schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-reporting-migrator
+      - name: reporting_app
+        ensure: present
+        comment: reporting application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-reporting-app
+      - name: tax_migrator
+        ensure: present
+        comment: tax schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-tax-migrator
+      - name: tax_app
+        ensure: present
+        comment: tax application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-tax-app
+      - name: banking_migrator
+        ensure: present
+        comment: banking schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-banking-migrator
+      - name: banking_app
+        ensure: present
+        comment: banking application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-banking-app
 
   enablePDB: true
 
