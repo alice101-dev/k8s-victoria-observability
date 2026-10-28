@@ -57,6 +57,7 @@ spec:
           - SkipDryRunOnMissingResource=true
         retry:
           limit: 20
+          refresh: true
           backoff:
             duration: 30s
             factor: 2

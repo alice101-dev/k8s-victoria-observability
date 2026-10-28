@@ -71,6 +71,12 @@ flowchart LR
   environment from the label and inject the annotations where a value contains the project ID, so no project ID
   is stored in Git. The default environment is `staging`; another one needs its own Terraform environment,
   `values-<env>.yaml` files and `infrastructure/configs/*/<env>` overlays.
+- **Drift**: every generated Application syncs automatically with `prune` and `selfHeal`, so a resource that is
+  deleted or edited by hand (kubectl, the GKE console) is restored within seconds (self-heal timeout 5s), and a
+  resource removed from Git is deleted. Retries switch to the newest commit (`retry.refresh`). Not under this rule:
+  Argo CD itself and the root Application, which Terraform installs (`make -C terraform apply WS=argocd-bootstrap`
+  restores them), and objects created by operators (kgateway proxies, VictoriaMetrics, CloudNativePG pods), which
+  their operators recreate. While an Application is being deleted, Argo CD does not sync it.
 - **Ordering**: operators and their custom resources are separate Applications. Every Application syncs with
   `SkipDryRunOnMissingResource` and retries with backoff, so custom resources apply as soon as their CRDs exist.
 - **Projects**: `platform` may deploy cluster-scoped resources from this repository and the pinned chart
