@@ -174,9 +174,11 @@ spec:
             - --allowed-hosts=localhost,127.0.0.1
             - --allowed-origins=http://localhost:8094
             - --disable-version-check
-            - --telemetry-otlp=http://otel-collector.monitoring.svc.cluster.local.:4318
+            - --telemetry-otlp=otel-collector.monitoring.svc.cluster.local.:4318
             - --telemetry-service-name=postgres-mcp
           env:
+            - name: OTEL_EXPORTER_OTLP_INSECURE
+              value: "true"
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
