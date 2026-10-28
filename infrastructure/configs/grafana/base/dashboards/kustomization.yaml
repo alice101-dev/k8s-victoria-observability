@@ -91,6 +91,15 @@ configMapGenerator:
         grafana_dashboard: "1"
       annotations:
         grafana_folder: Platform
+  - name: platform-grafana-dashboard
+    files:
+      - platform-grafana.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
   - name: platform-mcp-dashboard
     files:
       - platform-mcp.json
