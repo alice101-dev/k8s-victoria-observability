@@ -18,6 +18,7 @@ spec:
   target:
     name: deus-db-mcp
     creationPolicy: Owner
+    immutable: true
     template:
       type: kubernetes.io/basic-auth
       metadata:
