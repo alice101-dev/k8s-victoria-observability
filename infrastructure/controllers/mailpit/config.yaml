@@ -1,0 +1,4 @@
+chart: mailpit
+repoURL: https://jouve.github.io/charts
+version: 0.39.0
+namespace: mailpit

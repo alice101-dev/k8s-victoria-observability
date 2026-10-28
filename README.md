@@ -138,6 +138,7 @@ trace starts at the edge and the access log of every request carries its `trace_
 | `otel-collector` | monitoring | OTLP gateway for the applications |
 | `kgateway-crds`, `kgateway` | kgateway-system | Gateway API implementation (Envoy) for the internal edge Gateway |
 | `k8s-events` | monitoring | Kubernetes events to VictoriaLogs |
+| `mailpit` | mailpit | SMTP sink with a web UI for the staging email of the applications (`mailpit-smtp:25`); production uses a real SMTP provider |
 | `mcp-victoriametrics`, `mcp-victorialogs`, `mcp-victoriatraces`, `mcp-victoriatraces-logsql`, `mcp-grafana` | monitoring | Read-only MCP servers (plus `mcp-argocd` and `postgres-mcp` from `infrastructure/configs/`) |
 
 Configs: `namespaces`, `gateway-api` (Gateway API standard CRDs), `kgateway` (Gateway `edge`, telemetry, alerts), `argocd`, `cert-manager`, `external-secrets`, `cloudnative-pg` (cluster `deus-db`,
@@ -170,6 +171,7 @@ kubectl -n monitoring port-forward svc/grafana 3000:80
 kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo
 kubectl -n argocd port-forward svc/argocd-server 8080:80
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
+kubectl -n mailpit port-forward svc/mailpit-http 8025:80
 ```
 
 ## Adding a component

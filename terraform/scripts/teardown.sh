@@ -7,7 +7,7 @@ AUTO_APPROVE="${AUTO_APPROVE:-}"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TFVARS_GKE="$ROOT/environments/$ENV/kubernetes-engine/$ENV.tfvars"
 
-CONTROLLERS_ORDER=(kgateway kgateway-crds mcp-grafana mcp-victoriatraces-logsql mcp-victoriatraces mcp-victorialogs mcp-victoriametrics grafana k8s-events otel-collector victoria-metrics-k8s-stack plugin-barman-cloud cloudnative-pg victoria-metrics-operator external-secrets cert-manager)
+CONTROLLERS_ORDER=(mailpit kgateway kgateway-crds mcp-grafana mcp-victoriatraces-logsql mcp-victoriatraces mcp-victorialogs mcp-victoriametrics grafana k8s-events otel-collector victoria-metrics-k8s-stack plugin-barman-cloud cloudnative-pg victoria-metrics-operator external-secrets cert-manager)
 DESTROY_ORDER=(argocd-bootstrap cloud-storage artifact-registry kubernetes-engine firewall cloud-nat vpc)
 
 tfvar() { sed -nE "s/^$1 *= *\"([^\"]+)\".*/\1/p" "$TFVARS_GKE"; }

@@ -1,0 +1,12 @@
+fullnameOverride: mailpit
+resourcesPreset: none
+resources:
+  requests: { cpu: 10m, memory: 32Mi }
+  limits: { memory: 128Mi }
+persistence:
+  enabled: false
+extraEnvVars:
+  - name: MP_MAX_MESSAGES
+    value: "2000"
+  - name: MP_SMTP_REQUIRE_STARTTLS
+    value: "false"
