@@ -61,11 +61,6 @@ config:
           action: upsert
         - pattern: ^k8s\..*
           action: delete
-    filter/k6:
-      error_mode: ignore
-      metrics:
-        metric:
-          - IsMatch(metric.name, "^k6_(http_req_(blocked|connecting|tls_handshaking|sending|waiting|receiving)|iteration_duration|data_(sent|received)|group_duration)$")
     filter/severity:
       error_mode: ignore
       log_conditions:
@@ -110,7 +105,7 @@ config:
         exporters: [otlp_http/victoriatraces]
       metrics:
         receivers: [otlp]
-        processors: [memory_limiter, filter/k6, k8s_attributes, resource/metrics, batch]
+        processors: [memory_limiter, k8s_attributes, resource/metrics, batch]
         exporters: [otlp_http/victoriametrics]
       logs:
         receivers: [otlp]
