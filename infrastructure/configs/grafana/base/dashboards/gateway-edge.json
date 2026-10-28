@@ -4,7 +4,8 @@
   "description": "The internal edge Gateway (kgateway, Envoy): traffic, errors and latency at the listener, every routed backend, OTLP access logs with their traces, and the health of the proxies and controller.",
   "tags": [
     "platform",
-    "gateway"
+    "gateway",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

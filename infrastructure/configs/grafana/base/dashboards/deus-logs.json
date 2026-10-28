@@ -4,7 +4,8 @@
   "description": "Application logs of the deus services and the browser from VictoriaLogs: volume and error trends, message patterns, what failing records have in common, pods and versions, one request across services and the explorer.",
   "tags": [
     "deus",
-    "logs"
+    "logs",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

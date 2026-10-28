@@ -4,7 +4,8 @@
   "description": "Distributed tracing analytics from the deus spans (LogsQL on VictoriaTraces): service map, endpoints, where the time goes inside a request, SQL and outbox deliveries, failures, hot spots and single traces.",
   "tags": [
     "deus",
-    "traces"
+    "traces",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

@@ -186,7 +186,7 @@ LINKS_ON = lambda name, links, width=None: by_name(name, [{"id": "links", "value
 
 
 def dashboard(uid, title, tags, panels, variables, desc, time_from="now-3h", links=None, annotations=()):
-    return {"uid": uid, "title": title, "description": desc, "tags": tags, "timezone": "browser",
+    return {"uid": uid, "title": title, "description": desc, "tags": [*tags, "custom"], "timezone": "browser",
             "schemaVersion": 39, "version": 1, "editable": True, "graphTooltip": 1,
             "time": {"from": time_from, "to": "now"}, "refresh": "1m",
             "templating": {"list": variables}, "links": links or LINKS, "annotations": {"list": list(annotations)},

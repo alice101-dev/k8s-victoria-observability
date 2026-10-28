@@ -4,7 +4,8 @@
   "description": "Availability and latency SLOs of the deus journeys and services: error budgets, burn rates and alerts.",
   "tags": [
     "deus",
-    "slo"
+    "slo",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

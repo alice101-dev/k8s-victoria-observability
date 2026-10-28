@@ -4,7 +4,8 @@
   "description": "One deus service end to end: SLO, RED, latency, dependencies, outbox, database, saturation, logs and traces.",
   "tags": [
     "deus",
-    "red"
+    "red",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

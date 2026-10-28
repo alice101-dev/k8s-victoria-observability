@@ -12103,7 +12103,8 @@
   "schemaVersion": 39,
   "tags": [
     "cloudnativepg",
-    "platform"
+    "platform",
+    "custom"
   ],
   "templating": {
     "list": [

@@ -3,8 +3,10 @@
   "title": "Cluster — Events",
   "description": "Kubernetes events from VictoriaLogs (all namespaces): warnings by reason and namespace, node restarts and spot preemptions, why pods fail (scheduling, probes, OOM, image pulls), restarts and the event pipeline.",
   "tags": [
+    "platform",
     "kubernetes",
-    "events"
+    "events",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

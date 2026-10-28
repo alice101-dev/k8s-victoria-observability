@@ -4,7 +4,8 @@
   "description": "Is the observability stack collecting, storing and alerting? Scrape targets, ingestion of metrics, logs and spans, the OpenTelemetry Collector, dropped data, disk and retention per store, rule evaluation and notifications, DNS, and the stack's own restarts and memory, each linking to the component's dashboard.",
   "tags": [
     "platform",
-    "observability"
+    "observability",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

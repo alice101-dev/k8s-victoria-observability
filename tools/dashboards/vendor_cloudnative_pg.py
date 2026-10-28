@@ -415,7 +415,7 @@ dash = json.loads(raw.replace("${DS_EXPRESSION}", "__expr__"))
 for key in ("__inputs", "__requires", "__elements", "id"):
     dash.pop(key, None)
 dash["uid"] = "cloudnative-pg"
-dash["tags"] = ["cloudnativepg", "platform"]
+dash["tags"] = ["cloudnativepg", "platform", "custom"]
 
 for var in dash["templating"]["list"]:
     if var["name"] == "cluster":

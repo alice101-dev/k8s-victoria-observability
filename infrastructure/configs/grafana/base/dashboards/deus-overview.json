@@ -3,7 +3,8 @@
   "title": "Deus — Overview",
   "description": "The deus accounting app at a glance: traffic, errors, latency, business activity, outbox, services and resources.",
   "tags": [
-    "deus"
+    "deus",
+    "custom"
   ],
   "timezone": "browser",
   "schemaVersion": 39,

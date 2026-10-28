@@ -239,7 +239,8 @@ and the application dashboards (folder Deus: Overview, SLO Overview, Service, Lo
 (`tools/dashboards/vendor_cloudnative_pg.py`). Both write into `infrastructure/configs/grafana/base/dashboards`. The same
 generator writes the deus SLO recording rules and alerts (`infrastructure/configs/victoria-metrics-k8s-stack/base/deus.yaml`)
 from the objectives in `tools/dashboards/generator/deus.py`, so the SLO dashboard describes exactly the rules. Edit the
-generator, never the JSON or that YAML.
+generator, never the JSON or that YAML. These dashboards carry the tag `custom`; every other dashboard in Grafana comes
+with the victoria-metrics-k8s-stack chart (tag `vm-k8s-stack`).
 
 `.github/workflows/ci.yaml`:
 

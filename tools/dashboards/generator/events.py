@@ -202,7 +202,7 @@ EV_NAMESPACE = {"name": "namespace", "label": "Namespace", "type": "query", "dat
 EV_TYPE = {"name": "type", "label": "Type", "type": "custom", "query": "Warning,Normal", "multi": True, "includeAll": True,
            "current": {"selected": True, "text": ["Warning"], "value": ["Warning"]},
            "options": [{"selected": v == "Warning", "text": v, "value": v} for v in ("Warning", "Normal")]}
-events = dashboard("cluster-events", "Cluster — Events", ["kubernetes", "events"], d.panels,
+events = dashboard("cluster-events", "Cluster — Events", ["platform", "kubernetes", "events"], d.panels,
                    [EV_NAMESPACE, EV_TYPE, SEARCH_VAR, ADHOC],
                    "Kubernetes events from VictoriaLogs (all namespaces): warnings by reason and namespace, node restarts "
                    "and spot preemptions, why pods fail (scheduling, probes, OOM, image pulls), restarts and the event "
