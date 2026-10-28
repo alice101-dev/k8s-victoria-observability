@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import copy
+import fnmatch
 import glob
 import json
 import os
@@ -309,12 +310,20 @@ def main():
     names = [a["metadata"]["name"] for a in generated]
     for dup in sorted({n for n in names if names.count(n) > 1}):
         errors.append(f"application name {dup} generated more than once")
-    projects = {d["metadata"]["name"] for d in gitops_docs if d["kind"] == "AppProject"}
+    projects = {d["metadata"]["name"]: d["spec"] for d in gitops_docs if d["kind"] == "AppProject"}
     for app in generated:
         name = app["metadata"]["name"]
         docs.append((f"appset:{name}", app))
-        if app["spec"]["project"] not in projects:
+        project = projects.get(app["spec"]["project"])
+        if project is None:
             errors.append(f"{name}: project {app['spec']['project']} is not defined in appsets/")
+        else:
+            allowed = [repo.rstrip("/").lower() for repo in project.get("sourceRepos", [])]
+            sources = app["spec"].get("sources") or [app["spec"]["source"]]
+            for src in sources:
+                repo = src["repoURL"].rstrip("/").lower()
+                if not any(fnmatch.fnmatchcase(repo, pattern) for pattern in allowed):
+                    errors.append(f"{name}: repository {src['repoURL']} is not in sourceRepos of project {app['spec']['project']}")
         try:
             rendered = render_app(app)
         except Exception as e:
