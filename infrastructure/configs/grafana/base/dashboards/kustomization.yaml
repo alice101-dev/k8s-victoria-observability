@@ -1,0 +1,102 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+configMapGenerator:
+  - name: cloudnative-pg-dashboard
+    files:
+      - cloudnative-pg.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: cluster-events-dashboard
+    files:
+      - cluster-events.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: deus-logs-dashboard
+    files:
+      - deus-logs.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-overview-dashboard
+    files:
+      - deus-overview.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-service-dashboard
+    files:
+      - deus-service.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-slo-dashboard
+    files:
+      - deus-slo.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: deus-traces-dashboard
+    files:
+      - deus-traces.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Deus
+  - name: gateway-edge-dashboard
+    files:
+      - gateway-edge.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: observability-pipeline-dashboard
+    files:
+      - observability-pipeline.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: platform-gitops-secrets-dashboard
+    files:
+      - platform-gitops-secrets.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
+  - name: platform-mcp-dashboard
+    files:
+      - platform-mcp.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
