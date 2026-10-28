@@ -453,7 +453,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum(argocd_app_info{namespace=~\"$namespace\",dest_server=~\"$cluster\",operation!=\"\"})",
+          "expr": "(sum(argocd_app_info{namespace=~\"$namespace\",dest_server=~\"$cluster\",operation!=\"\"})) or vector(0)",
           "format": "time_series",
           "instant": true,
           "intervalFactor": 1,

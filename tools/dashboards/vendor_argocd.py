@@ -12,6 +12,7 @@ SWAPPED_JOBS = {
     "Repo Server Stats": ('job="argocd-server-metrics"', 'job="argocd-repo-server-metrics"'),
     "Server Stats": ('job="argocd-repo-server-metrics"', 'job="argocd-server-metrics"'),
 }
+ZERO_WHEN_EMPTY = {"Operations"}
 GRAPH_KEYS = ("aliasColors", "bars", "dashLength", "dashes", "fill", "fillGradient", "hiddenSeries", "legend", "lines",
               "linewidth", "nullPointMode", "percentage", "pointradius", "points", "renderer", "seriesOverrides",
               "spaceLength", "stack", "steppedLine", "thresholds", "timeFrom", "timeRegions", "timeShift", "tooltip",
@@ -38,6 +39,8 @@ def fix(panel, row):
         panel["datasource"] = VM
     for target in panel.get("targets", []):
         target["datasource"] = VM
+        if panel.get("title") in ZERO_WHEN_EMPTY and "expr" in target:
+            target["expr"] = f"({target['expr']}) or vector(0)"
         if row in SWAPPED_JOBS and "expr" in target:
             wrong, right = SWAPPED_JOBS[row]
             target["expr"] = target["expr"].replace(wrong, right)
