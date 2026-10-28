@@ -1,12 +1,12 @@
 from .common import (CADVISOR, RI, by_name, Dash, dashboard, describe, logs_panel, stat, table, thresholds, ts,
     vl_stat, vm)
-from .deus import ANNOTATIONS, APP, K8S_NS, LINKS_DEUS, LOGS, SERVICES
+from .deus import ANNOTATIONS, APP, K8S_NS, LINKS_DEUS, LOGS, deus_deployments
 
 FILE = "deus-overview.json"
 
 REQ = "http_server_request_duration_seconds"
 ALL = f'{APP}, http_route!~"/openapi.*"'
-DEPLOY = f'{K8S_NS}, deployment=~"{"|".join(SERVICES)}"'
+READY = deus_deployments(f"max by (namespace, deployment) (kube_deployment_status_replicas_available{{{K8S_NS}}})")
 SVC_LINK = [{"title": "Open Deus — Service", "url": "/d/deus-service/deus-service?var-service=${__value.raw}&${__url_time_range}"}]
 
 
@@ -22,11 +22,11 @@ d.add(stat("5xx", f'(sum(rate({REQ}_count{{{ALL}, http_response_status_code=~"5.
            thresholds(("green", None), ("orange", 0.001), ("red", 0.005)), decimals=2), 4, 4)
 d.add(stat("p95 latency", f"histogram_quantile(0.95, sum by (le) (rate({REQ}_bucket{{{ALL}}}[5m])))", "s",
            thresholds(("green", None), ("orange", 0.5), ("red", 1))), 4, 4)
-d.add(stat("Services down", f"count(max by (deployment) (kube_deployment_status_replicas_available{{{DEPLOY}}}) == 0) or vector(0)",
+d.add(stat("Services down", f"count({READY} == 0) or vector(0)",
            "short", thresholds(("green", None), ("red", 1)), decimals=0), 4, 4)
 d.add(stat("Firing alerts", 'count(ALERTS{alertname=~"Deus.*", alertstate="firing"}) or vector(0)', "short",
            thresholds(("green", None), ("orange", 1)), decimals=0), 4, 4)
-d.add(vl_stat("Browser errors", f"{LOGS} service.name:=deus-dashboard telemetry.source:=browser severity_text:=ERROR | stats count() errors",
+d.add(vl_stat("Browser errors", f"{LOGS} telemetry.source:=browser severity_text:=ERROR | stats count() errors",
               "short", thresholds(("green", None), ("orange", 1)),
               "Errors the web app reported from users' browsers in the time range."), 4, 4)
 
@@ -58,7 +58,7 @@ d.add(table(
         f" or sum by (service_name) (rate({REQ}_count{{{ALL}}}[5m])) * 0) / sum by (service_name) (rate({REQ}_count{{{ALL}}}[5m]))",
         ref="B", instant=True, fmt="table"),
      vm(f"histogram_quantile(0.95, sum by (service_name, le) (rate({REQ}_bucket{{{ALL}}}[5m])))", ref="C", instant=True, fmt="table"),
-     vm(f'sum by (service_name) (label_replace(kube_deployment_status_replicas_available{{{DEPLOY}}}, "service_name", "$1", "deployment", "(.+)"))',
+     vm(f'sum by (service_name) (label_replace({READY}, "service_name", "$1", "deployment", "(.+)"))',
         ref="D", instant=True, fmt="table"),
      vm('1 - max by (service_name) (label_replace(slo:sli_error:ratio_rate30d{kind="service", slo="availability"}, "service_name", "$1", "target", "(.+)"))',
         ref="E", instant=True, fmt="table"),

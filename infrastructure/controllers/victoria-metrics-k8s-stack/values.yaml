@@ -314,6 +314,7 @@ kube-state-metrics:
   enabled: true
   metricLabelsAllowlist:
     - nodes=[topology.kubernetes.io/zone,cloud.google.com/gke-nodepool,cloud.google.com/gke-provisioning,cloud.google.com/gke-preemptible,node.kubernetes.io/instance-type]
+    - deployments=[app.kubernetes.io/part-of]
   resources:
     requests: { cpu: 10m, memory: 48Mi }
     limits: { memory: 192Mi }

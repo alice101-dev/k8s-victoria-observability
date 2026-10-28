@@ -1,10 +1,11 @@
 from .common import VM, by_name, Dash, dashboard, stat, table, thresholds, ts, vm
-from .deus import ANNOTATIONS, K8S_NS, LINKS_DEUS, SERVICES, sli_doc
+from .deus import ANNOTATIONS, K8S_NS, LINKS_DEUS, deus_deployments, sli_doc
 
 FILE = "deus-slo.json"
 
 BURN = "/ on (target, slo, kind) (1 - slo:objective:ratio)"
-DEPLOY = f'{K8S_NS}, deployment=~"{"|".join(SERVICES)}"'
+READY = deus_deployments(f"max by (namespace, deployment) (kube_deployment_status_replicas_available{{{K8S_NS}}})")
+SPEC = deus_deployments(f"max by (namespace, deployment) (kube_deployment_spec_replicas{{{K8S_NS}}})")
 SVC_LINK = [{"title": "Open Deus — Service", "url": "/d/deus-service/deus-service?var-service=${__data.fields.target}&${__url_time_range}"}]
 pct = lambda name, dec=2: by_name(name, [{"id": "unit", "value": "percentunit"}, {"id": "decimals", "value": dec}])
 
@@ -62,7 +63,7 @@ d.add(slo_table("Journey SLOs", "journey", "Journey",
                 "fine usually fails in a dependency the service calls."), 24, 8)
 
 d.row("Service health")
-d.add(stat("Services without ready pods", f"count(max by (deployment) (kube_deployment_status_replicas_available{{{DEPLOY}}}) == 0) or vector(0)",
+d.add(stat("Services without ready pods", f"count({READY} == 0) or vector(0)",
            "short", thresholds(("green", None), ("red", 1)), decimals=0,
            desc="A service with no ready pod is down even though its SLO rows stay quiet. Alert: DeusServiceDown."), 4, 6)
 d.add({"type": "bargauge", "title": "Ready pods per service", "datasource": VM,
@@ -72,8 +73,7 @@ d.add({"type": "bargauge", "title": "Ready pods per service", "datasource": VM,
                                     "thresholds": thresholds(("red", None), ("orange", 0.01), ("green", 1))}, "overrides": []},
        "options": {"orientation": "horizontal", "displayMode": "basic", "showUnfilled": True, "valueMode": "color",
                    "namePlacement": "left", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": False}},
-       "targets": [vm(f"max by (deployment) (kube_deployment_status_replicas_available{{{DEPLOY}}})"
-                      f" / max by (deployment) (kube_deployment_spec_replicas{{{DEPLOY}}})", "{{deployment}}", instant=True)]},
+       "targets": [vm(f"{READY} / {SPEC}", "{{deployment}}", instant=True)]},
       8, 6)
 BURN_1H = f"slo:sli_error:ratio_rate1h {BURN}"
 p = d.add(stat("Burning fastest now",

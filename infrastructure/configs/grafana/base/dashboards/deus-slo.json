@@ -606,7 +606,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "count(max by (deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"}) == 0) or vector(0)",
+          "expr": "count((max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\"})) * on (namespace, deployment) group_left () max by (namespace, deployment) (kube_deployment_labels{namespace=~\"(.+-)?deus\", label_app_kubernetes_io_part_of=\"deus\"}) == 0) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -674,7 +674,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "max by (deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"}) / max by (deployment) (kube_deployment_spec_replicas{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"})",
+          "expr": "(max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\"})) * on (namespace, deployment) group_left () max by (namespace, deployment) (kube_deployment_labels{namespace=~\"(.+-)?deus\", label_app_kubernetes_io_part_of=\"deus\"}) / (max by (namespace, deployment) (kube_deployment_spec_replicas{namespace=~\"(.+-)?deus\"})) * on (namespace, deployment) group_left () max by (namespace, deployment) (kube_deployment_labels{namespace=~\"(.+-)?deus\", label_app_kubernetes_io_part_of=\"deus\"})",
           "legendFormat": "{{deployment}}",
           "refId": "A",
           "range": false,

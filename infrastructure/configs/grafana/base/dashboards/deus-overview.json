@@ -364,7 +364,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "count(max by (deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"}) == 0) or vector(0)",
+          "expr": "count((max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\"})) * on (namespace, deployment) group_left () max by (namespace, deployment) (kube_deployment_labels{namespace=~\"(.+-)?deus\", label_app_kubernetes_io_part_of=\"deus\"}) == 0) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -488,7 +488,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "service.namespace:=deus service.name:=deus-dashboard telemetry.source:=browser severity_text:=ERROR | stats count() errors",
+          "expr": "service.namespace:=deus telemetry.source:=browser severity_text:=ERROR | stats count() errors",
           "queryType": "statsRange",
           "editorMode": "code",
           "refId": "A"
@@ -1185,7 +1185,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (service_name) (label_replace(kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"}, \"service_name\", \"$1\", \"deployment\", \"(.+)\"))",
+          "expr": "sum by (service_name) (label_replace((max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\"})) * on (namespace, deployment) group_left () max by (namespace, deployment) (kube_deployment_labels{namespace=~\"(.+-)?deus\", label_app_kubernetes_io_part_of=\"deus\"}), \"service_name\", \"$1\", \"deployment\", \"(.+)\"))",
           "legendFormat": "",
           "refId": "D",
           "range": false,

@@ -4,10 +4,9 @@ import re
 
 from .common import LINKS, restart_annotations
 
-SERVICES = ["accounts", "banking", "contacts", "identity", "ledger", "notification", "organization", "payments",
-            "products", "purchases", "reporting", "sales", "tax", "deus-dashboard"]
 APP = 'service_namespace="deus"'
 K8S_NS = 'namespace=~"(.+-)?deus"'
+DEUS_DEPLOYMENTS = f'max by (namespace, deployment) (kube_deployment_labels{{{K8S_NS}, label_app_kubernetes_io_part_of="deus"}})'
 LOGS = "service.namespace:=deus"
 SPANS = '"resource_attr:service.namespace":=deus'
 RUNBOOK = "https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/deus.md"
@@ -43,34 +42,52 @@ SHORT_WINDOWS = ["5m", "30m", "1h", "2h", "6h"]
 LONG_WINDOWS = ["1d", "3d"]
 
 
+def deus_deployments(expr):
+    return f"({expr}) * on (namespace, deployment) group_left () {DEUS_DEPLOYMENTS}"
+
+
 def targets():
-    out = [{"target": s, "kind": "service", "sel": f'{SLI_BASE}, service_name="{s}"',
-            "threshold": LATENCY_OVERRIDES.get(s, LATENCY_THRESHOLD)} for s in SERVICES]
+    overridden = "|".join(LATENCY_OVERRIDES)
+    out = [{"target": None, "kind": "service", "sel": f'{SLI_BASE}, service_name!~"{overridden}"',
+            "threshold": LATENCY_THRESHOLD}]
+    out += [{"target": s, "kind": "service", "sel": f'{SLI_BASE}, service_name="{s}"', "threshold": threshold}
+            for s, threshold in LATENCY_OVERRIDES.items()]
     out += [{"target": name, "kind": "journey", "sel": f"{SLI_BASE}, {sel}", "threshold": threshold, "about": about}
             for name, about, sel, threshold in JOURNEYS]
     return out
 
 
 def labels(t, slo):
-    return {"target": t["target"], "kind": t["kind"], "slo": slo}
+    return {"kind": t["kind"], "slo": slo} | ({"target": t["target"]} if t["target"] else {})
+
+
+def total(t, series, window):
+    rate = f"rate({series}[{window}])"
+    if t["target"]:
+        return f"sum({rate})"
+    return f'sum by (target) (label_replace({rate}, "target", "$1", "service_name", "(.+)"))'
 
 
 def requests(t, window, extra=""):
-    return f'sum(rate({REQUESTS}_count{{{t["sel"]}{extra}}}[{window}]))'
+    return total(t, f'{REQUESTS}_count{{{t["sel"]}{extra}}}', window)
+
+
+def constant(t, value):
+    return f'0 * {requests(t, "5m")} + {value}' if not t["target"] else f"vector({value})"
 
 
 def error_ratio(t, slo, window):
-    total = requests(t, window)
+    valid = requests(t, window)
     if slo == "availability":
-        return f'({requests(t, window, FIVE_XX)} or {total} * 0) / {total}'
-    good = f'sum(rate({REQUESTS}_bucket{{{t["sel"]}, le="{t["threshold"]}"}}[{window}]))'
-    return f"clamp_min(1 - {good} / {total}, 0)"
+        return f'({requests(t, window, FIVE_XX)} or {valid} * 0) / {valid}'
+    good = total(t, f'{REQUESTS}_bucket{{{t["sel"]}, le="{t["threshold"]}"}}', window)
+    return f"clamp_min(1 - {good} / {valid}, 0)"
 
 
 def bad_rate(t, slo):
     if slo == "availability":
         return f'{requests(t, "5m", FIVE_XX)} or {requests(t, "5m")} * 0'
-    good = f'sum(rate({REQUESTS}_bucket{{{t["sel"]}, le="{t["threshold"]}"}}[5m]))'
+    good = total(t, f'{REQUESTS}_bucket{{{t["sel"]}, le="{t["threshold"]}"}}', "5m")
     return f'clamp_min({requests(t, "5m")} - {good}, 0)'
 
 
@@ -97,8 +114,8 @@ def rule_groups():
     for t in ts:
         for slo, objective in (("availability", AVAILABILITY), ("latency", LATENCY)):
             lbl = labels(t, slo)
-            sli.append(record("slo:objective:ratio", f"vector({objective})", lbl))
-            sli.append(record("slo:sli_threshold:seconds", f'vector({0 if slo == "availability" else t["threshold"]})', lbl))
+            sli.append(record("slo:objective:ratio", constant(t, objective), lbl))
+            sli.append(record("slo:sli_threshold:seconds", constant(t, 0 if slo == "availability" else t["threshold"]), lbl))
             for w in SHORT_WINDOWS:
                 sli.append(record(f"slo:sli_error:ratio_rate{w}", error_ratio(t, slo, w), lbl))
             for w in LONG_WINDOWS:
@@ -112,7 +129,6 @@ def rule_groups():
          "expr": "1 - slo:sli_error:ratio_rate30d / on (target, slo, kind) (1 - slo:objective:ratio)"},
         {"record": "slo:sli_window:seconds", "expr": "count_over_time(slo:sli_requests:rate5m[30d]) * 30"},
     ]
-    deployments = "|".join(s for s in SERVICES)
     alerts = [
         alert("DeusSLOBurnRateCritical",
               f'({burn("1h", 14.4)} and {burn("5m", 14.4)}) or ({burn("6h", 6)} and {burn("30m", 6)})',
@@ -124,7 +140,7 @@ def rule_groups():
               "warning", "{{ $labels.target }} ({{ $labels.kind }}): {{ $labels.slo }} SLO error budget is spent faster than planned",
               "{{ $value | humanizePercentage }} of requests miss the {{ $labels.slo }} SLI over the long window."),
         alert("DeusServiceDown",
-              f'max by (namespace, deployment) (kube_deployment_status_replicas_available{{{K8S_NS}, deployment=~"{deployments}"}}) == 0',
+              deus_deployments(f"max by (namespace, deployment) (kube_deployment_status_replicas_available{{{K8S_NS}}})") + " == 0",
               "critical", "{{ $labels.deployment }} has no available replica",
               "Every request to {{ $labels.deployment }} fails, and its own SLI stops moving because no request reaches it. "
               "Check the pod events, the migration Job and the startup logs.", "2m"),
