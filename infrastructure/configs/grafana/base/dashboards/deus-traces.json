@@ -667,14 +667,14 @@
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
       },
-      "description": "Every service and PostgreSQL: requests per second in the circle, p95 and the failed share below the name, successful (green) and failed (red) spans in the ring. Hover an arrow for its calls per second, p95 and failed share.",
+      "description": "The edge Gateway, every service and PostgreSQL: requests per second in the circle, p95 and the failed share below the name, successful (green) and failed (red) spans in the ring. Hover an arrow for its calls per second, p95 and failed share. Client errors (4xx) do not count as failed.",
       "targets": [
         {
           "datasource": {
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus (kind:=2 or kind:=4 or (kind:=3 \"span_attr:db.system.name\":=postgresql)) | copy \"resource_attr:service.name\" as id | format if (kind:=3 \"span_attr:db.system.name\":=postgresql) \"postgresql\" as id | copy id as title | format if (id:=postgresql) \"deus-db (PostgreSQL)\" as title | stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") failed | math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct | format \"p95 <p95_ms> ms · <failed_pct>% failed\" as subtitle | stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed | math (detail__requests-detail__failed)/detail__requests as arc__success, detail__failed/detail__requests as arc__errors",
+          "expr": "(\"resource_attr:service.namespace\":=deus or \"resource_attr:service.name\":=edge-gateway) (kind:=2 or kind:=4 or (kind:=3 \"span_attr:db.system.name\":=postgresql)) | copy \"resource_attr:service.name\" as id | format if (kind:=3 \"span_attr:db.system.name\":=postgresql) \"postgresql\" as id | copy id as title | format if (id:=postgresql) \"deus-db (PostgreSQL)\" as title | format if (id:=edge-gateway) \"Gateway edge (kgateway)\" as title | stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:http.status_code\":~\"^4\") failed | math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct | format \"p95 <p95_ms> ms · <failed_pct>% failed\" as subtitle | stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed | math (detail__requests-detail__failed)/detail__requests as arc__success, detail__failed/detail__requests as arc__errors",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -684,7 +684,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus kind:=3 | copy \"resource_attr:service.name\" as source, \"span_attr:server.address\" as target | format if (kind:=3 \"span_attr:db.system.name\":=postgresql) \"postgresql\" as target | filter target:* | format \"<source>→<target>\" as id | stats by (id, source, target) rate() mainstat, quantile(0.95, duration) p95, count() detail__calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") detail__failed | math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct | delete p95",
+          "expr": "(\"resource_attr:service.namespace\":=deus or \"resource_attr:service.name\":=edge-gateway) kind:=3 | copy \"resource_attr:service.name\" as source, \"span_attr:server.address\" as target | extract_regexp if (\"resource_attr:service.name\":=edge-gateway) \"^kube_[^_]+_(?P<target>.+)_[0-9]+$\" from \"span_attr:upstream_cluster\" | format if (kind:=3 \"span_attr:db.system.name\":=postgresql) \"postgresql\" as target | filter target:* | format \"<source>→<target>\" as id | stats by (id, source, target) rate() mainstat, quantile(0.95, duration) p95, count() detail__calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:http.status_code\":~\"^4\") detail__failed | math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct | delete p95",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "B"

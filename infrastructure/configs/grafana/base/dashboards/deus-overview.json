@@ -1196,7 +1196,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "1 - max by (service_name) (label_replace(slo:sli_error:ratio_rate30d{{kind=\"service\", slo=\"availability\"}}, \"service_name\", \"$1\", \"target\", \"(.+)\"))",
+          "expr": "1 - max by (service_name) (label_replace(slo:sli_error:ratio_rate30d{kind=\"service\", slo=\"availability\"}, \"service_name\", \"$1\", \"target\", \"(.+)\"))",
           "legendFormat": "",
           "refId": "E",
           "range": false,

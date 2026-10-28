@@ -55,28 +55,34 @@ d.add(lq_stat("Outbox deliveries", f"{SPANS} kind:=4 | stats count() deliveries"
               "Events delivered (or attempted) by the outbox relays: journals, allocations and emails.", decimals=0), 4, 4)
 
 d.row("Service map")
+GATEWAY = '"resource_attr:service.name":=edge-gateway'
+MAP_SPANS = f"({APP_SPANS} or {GATEWAY})"
+MAP_FAILED = f'{FAILED} -"span_attr:http.status_code":~"^4"'
 TO_DB = '| format if (kind:=3 "span_attr:db.system.name":=postgresql) "postgresql" as {f} '
-MAP_NODES = (f"{APP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_SQL})) "
+MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_SQL})) "
              '| copy "resource_attr:service.name" as id ' + TO_DB.format(f="id")
              + '| copy id as title | format if (id:=postgresql) "deus-db (PostgreSQL)" as title '
-             + f"| stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, count() if ({FAILED}) failed "
+             + '| format if (id:=edge-gateway) "Gateway edge (kgateway)" as title '
+             + f"| stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, "
+               f"count() if ({MAP_FAILED}) failed "
                "| math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct "
                '| format "p95 <p95_ms> ms · <failed_pct>% failed" as subtitle '
                "| stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed "
                "| math (detail__requests-detail__failed)/detail__requests as arc__success, "
                "detail__failed/detail__requests as arc__errors")
-MAP_EDGES = (f"{APP_SPANS} kind:=3 "
+MAP_EDGES = (f"{MAP_SPANS} kind:=3 "
              '| copy "resource_attr:service.name" as source, "span_attr:server.address" as target '
+             + f'| extract_regexp if ({GATEWAY}) "^kube_[^_]+_(?P<target>.+)_[0-9]+$" from "span_attr:upstream_cluster" '
              + TO_DB.format(f="target")
              + '| filter target:* | format "<source>→<target>" as id '
              + f"| stats by (id, source, target) rate() mainstat, quantile(0.95, duration) p95, count() detail__calls, "
-               f"count() if ({FAILED}) detail__failed "
+               f"count() if ({MAP_FAILED}) detail__failed "
                "| math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct "
                "| delete p95")
 d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
-       "description": "Every service and PostgreSQL: requests per second in the circle, p95 and the failed share below "
-                      "the name, successful (green) and failed (red) spans in the ring. Hover an arrow for its calls per "
-                      "second, p95 and failed share.",
+       "description": "The edge Gateway, every service and PostgreSQL: requests per second in the circle, p95 and the "
+                      "failed share below the name, successful (green) and failed (red) spans in the ring. Hover an arrow "
+                      "for its calls per second, p95 and failed share. Client errors (4xx) do not count as failed.",
        "targets": [vl(MAP_NODES, "stats", "A", ds=VTL), vl(MAP_EDGES, "stats", "B", ds=VTL)],
        "transformations": [
            {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},

@@ -60,7 +60,7 @@ d.add(table(
      vm(f"histogram_quantile(0.95, sum by (service_name, le) (rate({REQ}_bucket{{{ALL}}}[5m])))", ref="C", instant=True, fmt="table"),
      vm(f'sum by (service_name) (label_replace(kube_deployment_status_replicas_available{{{DEPLOY}}}, "service_name", "$1", "deployment", "(.+)"))',
         ref="D", instant=True, fmt="table"),
-     vm('1 - max by (service_name) (label_replace(slo:sli_error:ratio_rate30d{{kind="service", slo="availability"}}, "service_name", "$1", "target", "(.+)"))',
+     vm('1 - max by (service_name) (label_replace(slo:sli_error:ratio_rate30d{kind="service", slo="availability"}, "service_name", "$1", "target", "(.+)"))',
         ref="E", instant=True, fmt="table"),
      vm(f'count by (service_name, service_version) (process_memory_usage_bytes{{{APP}}})', ref="F", instant=True, fmt="table")],
     [{"id": "merge", "options": {}},
