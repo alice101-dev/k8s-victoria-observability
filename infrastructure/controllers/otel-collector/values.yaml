@@ -51,7 +51,7 @@ config:
     resource/browser:
       attributes:
         - key: service.name
-          value: web
+          value: dashboard
           action: upsert
         - key: service.namespace
           value: deus
@@ -75,6 +75,14 @@ config:
         - \b4[0-9]{12}(?:[0-9]{3})?\b
         - \b5[1-5][0-9]{14}\b
       summary: info
+    transform/error-type:
+      error_mode: ignore
+      metric_statements:
+        - context: datapoint
+          conditions:
+            - IsString(datapoint.attributes["error.type"]) and Len(datapoint.attributes["error.type"]) > 64
+          statements:
+            - set(datapoint.attributes["error.type"], "_OTHER")
     transform/redact-body:
       error_mode: ignore
       log_statements:
@@ -105,7 +113,7 @@ config:
         exporters: [otlp_http/victoriatraces]
       metrics:
         receivers: [otlp]
-        processors: [memory_limiter, k8s_attributes, resource/metrics, batch]
+        processors: [memory_limiter, k8s_attributes, resource/metrics, transform/error-type, batch]
         exporters: [otlp_http/victoriametrics]
       logs:
         receivers: [otlp]

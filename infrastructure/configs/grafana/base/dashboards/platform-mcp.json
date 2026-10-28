@@ -1,0 +1,1199 @@
+{
+  "uid": "platform-mcp",
+  "title": "Platform — MCP servers",
+  "description": "The MCP servers that give AI clients access to metrics, logs, traces, Grafana and PostgreSQL: which tools are called, failures, durations, sessions, backend calls and resources. Servers are discovered from the MCP metrics they report.",
+  "tags": [
+    "platform",
+    "mcp",
+    "custom"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "graphTooltip": 1,
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "refresh": "1m",
+  "templating": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Platform dashboards",
+      "type": "dashboards",
+      "tags": [
+        "platform"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "Explore traces",
+      "type": "link",
+      "url": "/explore?left={\"datasource\":\"VictoriaTraces\"}",
+      "targetBlank": true
+    },
+    {
+      "title": "Explore logs",
+      "type": "link",
+      "url": "/explore?left={\"datasource\":\"VictoriaLogs\"}",
+      "targetBlank": true
+    }
+  ],
+  "annotations": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Overview",
+      "collapsed": false,
+      "panels": [],
+      "id": 1,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Servers reporting",
+      "description": "MCP servers that reported MCP metrics in the last 5 minutes, scraped or sent over OTLP.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "count(count by (server) (label_replace(label_replace(last_over_time({__name__=~\"mcp_.+\"}[5m]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"))) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 2,
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Tool calls",
+      "description": "Tools the AI clients called on every MCP server in the time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(sum by (server, tool) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))) or vector(0)",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 3,
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Failed tool calls",
+      "description": "Tool calls that returned an error: a bad query, a timeout or an unreachable backend.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "(sum(sum by (server, tool) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\", is_error=\"true\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\", error_type!=\"\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(toolbox_tool_execution_duration_seconds_count{error_type!=\"\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))) or vector(0))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 4,
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Failure ratio",
+      "description": "Failed tool calls against all tool calls.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.05
+              },
+              {
+                "color": "red",
+                "value": 0.2
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "(sum(sum by (server, tool) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\", is_error=\"true\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\", error_type!=\"\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(toolbox_tool_execution_duration_seconds_count{error_type!=\"\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))) or vector(0)) / sum(sum by (server, tool) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "p95 tool duration, slowest server",
+      "description": "The highest 95th percentile tool duration among the servers that report the OpenTelemetry MCP metric mcp.server.operation.duration, over the time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 5
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "max(histogram_quantile(0.95, sum by (server, le) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_bucket{mcp_method_name=\"tools/call\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 6,
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Sessions started",
+      "description": "MCP sessions the clients opened (initialize) in the time range.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "(sum(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"initialize\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\")) or vector(0)) + (sum(label_replace(label_replace(increase({__name__=~\"mcp_.+_initialize_total\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\")) or vector(0))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true
+        }
+      ],
+      "id": 7,
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "row",
+      "title": "Tool calls",
+      "collapsed": false,
+      "panels": [],
+      "id": 8,
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool calls per server",
+      "description": "Tool calls per interval on each MCP server.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))",
+          "legendFormat": "{{server}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 9,
+      "gridPos": {
+        "x": 0,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Failed tool calls per server",
+      "description": "Tool calls that returned an error, per interval.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\", is_error=\"true\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\", error_type!=\"\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")) or sum by (server) (label_replace(label_replace(label_replace(increase(toolbox_tool_execution_duration_seconds_count{error_type!=\"\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))",
+          "legendFormat": "{{server}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 10,
+      "gridPos": {
+        "x": 12,
+        "y": 6,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "table",
+      "title": "Tools",
+      "description": "Every tool called in the time range: calls, failures and the 95th percentile duration where the server reports it. Shows which questions the AI clients ask the platform.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Calls"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "decimals",
+                "value": 2
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Calls",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "server": 0,
+              "tool": 1,
+              "Value #A": 2,
+              "Value #B": 3,
+              "Value #C": 4
+            },
+            "renameByName": {
+              "server": "Server",
+              "tool": "Tool",
+              "Value #A": "Calls",
+              "Value #B": "Failed",
+              "Value #C": "p95"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server, tool) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))",
+          "legendFormat": "",
+          "refId": "A",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server, tool) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_call_tool_total\", is_error=\"true\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"tools/call\", error_type!=\"\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")) or sum by (server, tool) (label_replace(label_replace(label_replace(increase(toolbox_tool_execution_duration_seconds_count{error_type!=\"\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\"))",
+          "legendFormat": "",
+          "refId": "B",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.95, sum by (server, tool, le) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_bucket{mcp_method_name=\"tools/call\"}[$__range]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")))",
+          "legendFormat": "",
+          "refId": "C",
+          "range": false,
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "id": 11,
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 10
+      }
+    },
+    {
+      "type": "row",
+      "title": "Latency and backends",
+      "collapsed": false,
+      "panels": [],
+      "id": 12,
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Tool duration per server",
+      "description": "Median and 95th percentile tool duration on the servers that report the OpenTelemetry MCP metric. The VictoriaMetrics, VictoriaLogs and VictoriaTraces servers only count calls.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.5, sum by (server, le) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_bucket{mcp_method_name=\"tools/call\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")))",
+          "legendFormat": "p50 {{server}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.95, sum by (server, le) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_bucket{mcp_method_name=\"tools/call\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"tool\", \"$1\", \"gen_ai_tool_name\", \"(.+)\")))",
+          "legendFormat": "p95 {{server}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 13,
+      "gridPos": {
+        "x": 0,
+        "y": 25,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Backend calls from MCP servers",
+      "description": "HTTP calls an MCP server makes to the system it wraps (for example Grafana), by status. Only servers with an instrumented HTTP client report this.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server, server_address, http_response_status_code) (label_replace(label_replace((rate(http_client_request_duration_seconds_count[$__rate_interval])) and on (job) count by (job) (last_over_time({__name__=~\"mcp_.+\", job!=\"\"}[1d])), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"))",
+          "legendFormat": "{{server}} → {{server_address}} {{http_response_status_code}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 14,
+      "gridPos": {
+        "x": 12,
+        "y": 25,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Sessions and protocol",
+      "collapsed": false,
+      "panels": [],
+      "id": 15,
+      "gridPos": {
+        "x": 0,
+        "y": 33,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Sessions by client",
+      "description": "MCP sessions opened per server, and per client where the server records the client name.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server, client_name) (label_replace(label_replace(increase({__name__=~\"mcp_.+_initialize_total\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"))",
+          "legendFormat": "{{server}} {{client_name}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server) (label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count{mcp_method_name=\"initialize\"}[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"))",
+          "legendFormat": "{{server}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 16,
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Requests by MCP method",
+      "description": "Protocol requests per method: initialize, tools/list, resources/list, prompts/list and tool calls.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 60,
+            "showPoints": "never",
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          },
+          "decimals": 0,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server, method) (label_replace(label_replace(label_replace(increase({__name__=~\"mcp_.+_total\", __name__!~\"mcp_client_.+\"}[$__interval]) keep_metric_names, \"method\", \"$1\", \"__name__\", \"mcp_[a-z]+_(.+)_total\"), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"))",
+          "legendFormat": "{{server}} {{method}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server, method) (label_replace(label_replace(label_replace(increase(mcp_server_operation_duration_seconds_count[$__interval]), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\"), \"method\", \"$1\", \"mcp_method_name\", \"(.+)\"))",
+          "legendFormat": "{{server}} {{method}}",
+          "refId": "B",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 17,
+      "gridPos": {
+        "x": 12,
+        "y": 34,
+        "w": 12,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Resources",
+      "collapsed": false,
+      "panels": [],
+      "id": 18,
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Memory per server",
+      "description": "Working set of the MCP server pods.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server) (container_memory_working_set_bytes{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", container!=\"\", container!=\"POD\"} * on (namespace, pod) group_left (server) max by (namespace, pod, server) (label_replace(label_replace((up) and on (job) count by (job) (last_over_time({__name__=~\"mcp_.+\", job!=\"\"}[1d])), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\") or label_replace(label_replace(label_replace(label_replace(max by (k8s_namespace_name, k8s_pod_name, k8s_deployment_name) (last_over_time(mcp_server_operation_duration_seconds_count[1d])), \"namespace\", \"$1\", \"k8s_namespace_name\", \"(.+)\"), \"pod\", \"$1\", \"k8s_pod_name\", \"(.+)\"), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\")))",
+          "legendFormat": "{{server}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 19,
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 12,
+        "h": 7
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "CPU per server",
+      "description": "CPU cores used by the MCP server pods.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (server) (rate(container_cpu_usage_seconds_total{job=\"kubelet\", metrics_path=\"/metrics/cadvisor\", container!=\"\", container!=\"POD\"}[$__rate_interval]) * on (namespace, pod) group_left (server) max by (namespace, pod, server) (label_replace(label_replace((up) and on (job) count by (job) (last_over_time({__name__=~\"mcp_.+\", job!=\"\"}[1d])), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\") or label_replace(label_replace(label_replace(label_replace(max by (k8s_namespace_name, k8s_pod_name, k8s_deployment_name) (last_over_time(mcp_server_operation_duration_seconds_count[1d])), \"namespace\", \"$1\", \"k8s_namespace_name\", \"(.+)\"), \"pod\", \"$1\", \"k8s_pod_name\", \"(.+)\"), \"server\", \"$1\", \"job\", \"(?:.*/)?(.+)\"), \"server\", \"$1\", \"k8s_deployment_name\", \"(.+)\")))",
+          "legendFormat": "{{server}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 20,
+      "gridPos": {
+        "x": 12,
+        "y": 43,
+        "w": 12,
+        "h": 7
+      }
+    }
+  ]
+}
