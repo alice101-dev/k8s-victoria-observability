@@ -22,6 +22,7 @@ spec:
               directories:
                 - path: services/*/deploy
                 - path: web/deploy
+                - path: traffic/deploy
   template:
     metadata:
       name: "deus-{{ index .path.segments (sub (len .path.segments) 2) }}"
@@ -34,7 +35,7 @@ spec:
       source:
         repoURL: https://github.com/alice101-dev/microservice-deus.git
         targetRevision: '{{ index .metadata.annotations "platform/apps-revision" }}'
-        path: charts/service
+        path: 'charts/{{ if eq (index .path.segments 0) "traffic" }}traffic{{ else }}service{{ end }}'
         helm:
           releaseName: "{{ index .path.segments (sub (len .path.segments) 2) }}"
           ignoreMissingValueFiles: true
