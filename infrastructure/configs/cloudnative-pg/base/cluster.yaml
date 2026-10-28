@@ -78,9 +78,57 @@ spec:
         comment: identity application role, data access only
         login: true
         inherit: true
-        connectionLimit: 20
+        connectionLimit: 15
         passwordSecret:
           name: deus-db-identity-app
+      - name: organization_migrator
+        ensure: present
+        comment: organization schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-organization-migrator
+      - name: organization_app
+        ensure: present
+        comment: organization application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-organization-app
+      - name: accounts_migrator
+        ensure: present
+        comment: accounts schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-accounts-migrator
+      - name: accounts_app
+        ensure: present
+        comment: accounts application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-accounts-app
+      - name: ledger_migrator
+        ensure: present
+        comment: ledger schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-ledger-migrator
+      - name: ledger_app
+        ensure: present
+        comment: ledger application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-ledger-app
 
   enablePDB: true
 
