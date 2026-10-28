@@ -257,6 +257,22 @@ spec:
         connectionLimit: 15
         passwordSecret:
           name: deus-db-banking-app
+      - name: notification_migrator
+        ensure: present
+        comment: notification schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-notification-migrator
+      - name: notification_app
+        ensure: present
+        comment: notification application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-notification-app
 
   enablePDB: true
 

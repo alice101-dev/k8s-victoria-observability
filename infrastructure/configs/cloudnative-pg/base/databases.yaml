@@ -1029,3 +1029,89 @@ spec:
   owner: banking_migrator
   ensure: present
   databaseReclaimPolicy: retain
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-notification-migrator
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-notification-migrator
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-notification-migrator
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: notification_migrator
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-notification-migrator
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-notification-app
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-notification-app
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-notification-app
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: notification_app
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-notification-app
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: deus-db-notification
+spec:
+  cluster:
+    name: deus-db
+  name: notification
+  owner: notification_migrator
+  ensure: present
+  databaseReclaimPolicy: retain
