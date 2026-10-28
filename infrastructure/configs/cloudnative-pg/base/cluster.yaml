@@ -129,6 +129,54 @@ spec:
         connectionLimit: 15
         passwordSecret:
           name: deus-db-ledger-app
+      - name: contacts_migrator
+        ensure: present
+        comment: contacts schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-contacts-migrator
+      - name: contacts_app
+        ensure: present
+        comment: contacts application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-contacts-app
+      - name: products_migrator
+        ensure: present
+        comment: products schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-products-migrator
+      - name: products_app
+        ensure: present
+        comment: products application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-products-app
+      - name: sales_migrator
+        ensure: present
+        comment: sales schema owner, used by the migration Job
+        login: true
+        inherit: true
+        connectionLimit: 3
+        passwordSecret:
+          name: deus-db-sales-migrator
+      - name: sales_app
+        ensure: present
+        comment: sales application role, data access only
+        login: true
+        inherit: true
+        connectionLimit: 15
+        passwordSecret:
+          name: deus-db-sales-app
 
   enablePDB: true
 

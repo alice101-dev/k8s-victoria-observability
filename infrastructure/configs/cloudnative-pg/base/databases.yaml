@@ -341,3 +341,261 @@ spec:
   owner: ledger_migrator
   ensure: present
   databaseReclaimPolicy: retain
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-contacts-migrator
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-contacts-migrator
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-contacts-migrator
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: contacts_migrator
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-contacts-migrator
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-contacts-app
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-contacts-app
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-contacts-app
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: contacts_app
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-contacts-app
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: deus-db-contacts
+spec:
+  cluster:
+    name: deus-db
+  name: contacts
+  owner: contacts_migrator
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-products-migrator
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-products-migrator
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-products-migrator
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: products_migrator
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-products-migrator
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-products-app
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-products-app
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-products-app
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: products_app
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-products-app
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: deus-db-products
+spec:
+  cluster:
+    name: deus-db
+  name: products
+  owner: products_migrator
+  ensure: present
+  databaseReclaimPolicy: retain
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-sales-migrator
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-sales-migrator
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-sales-migrator
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: sales_migrator
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-sales-migrator
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: deus-db-sales-app
+spec:
+  length: 40
+  digits: 10
+  symbols: 0
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: deus-db-sales-app
+spec:
+  refreshPolicy: CreatedOnce
+  target:
+    name: deus-db-sales-app
+    creationPolicy: Owner
+    immutable: true
+    template:
+      type: kubernetes.io/basic-auth
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      engineVersion: v2
+      data:
+        username: sales_app
+        password: "{{ .password }}"
+  dataFrom:
+    - sourceRef:
+        generatorRef:
+          apiVersion: generators.external-secrets.io/v1alpha1
+          kind: Password
+          name: deus-db-sales-app
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: deus-db-sales
+spec:
+  cluster:
+    name: deus-db
+  name: sales
+  owner: sales_migrator
+  ensure: present
+  databaseReclaimPolicy: retain
