@@ -5,7 +5,7 @@ import re
 from .common import LINKS, restart_annotations
 
 SERVICES = ["accounts", "banking", "contacts", "identity", "ledger", "notification", "organization", "payments",
-            "products", "purchases", "reporting", "sales", "tax", "web"]
+            "products", "purchases", "reporting", "sales", "tax", "deus-dashboard"]
 APP = 'service_namespace="deus"'
 K8S_NS = 'namespace=~"(.+-)?deus"'
 LOGS = "service.namespace:=deus"

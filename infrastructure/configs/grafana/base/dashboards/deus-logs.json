@@ -596,7 +596,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "service.namespace:=deus service.name:=web telemetry.source:=browser severity_text:=ERROR | stats count() errors",
+          "expr": "service.namespace:=deus service.name:=deus-dashboard telemetry.source:=browser severity_text:=ERROR | stats count() errors",
           "queryType": "statsRange",
           "editorMode": "code",
           "refId": "A"

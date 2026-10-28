@@ -1597,123 +1597,123 @@ spec:
         - record: slo:objective:ratio
           expr: "vector(0.995)"
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_threshold:seconds
           expr: "vector(0)"
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_error:ratio_rate5m
           expr: |
-            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[5m])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[5m]))
+            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[5m])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[5m]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_error:ratio_rate30m
           expr: |
-            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[30m])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[30m])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[30m]))
+            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[30m])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[30m])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[30m]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_error:ratio_rate1h
           expr: |
-            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[1h])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[1h])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[1h]))
+            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[1h])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[1h])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[1h]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_error:ratio_rate2h
           expr: |
-            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[2h])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[2h])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[2h]))
+            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[2h])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[2h])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[2h]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_error:ratio_rate6h
           expr: |
-            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[6h])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[6h])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[6h]))
+            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[6h])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[6h])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[6h]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_requests:rate5m
           expr: |
-            sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[5m]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_errors:rate5m
           expr: |
-            sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[5m])) * 0
+            sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[5m])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[5m])) * 0
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:objective:ratio
           expr: "vector(0.99)"
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_threshold:seconds
           expr: "vector(0.5)"
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_error:ratio_rate5m
           expr: |
-            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[5m])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[5m])), 0)
+            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[5m])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[5m])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_error:ratio_rate30m
           expr: |
-            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[30m])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[30m])), 0)
+            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[30m])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[30m])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_error:ratio_rate1h
           expr: |
-            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[1h])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[1h])), 0)
+            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[1h])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[1h])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_error:ratio_rate2h
           expr: |
-            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[2h])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[2h])), 0)
+            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[2h])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[2h])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_error:ratio_rate6h
           expr: |
-            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[6h])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[6h])), 0)
+            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[6h])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[6h])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_requests:rate5m
           expr: |
-            sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[5m]))
+            sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[5m]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_errors:rate5m
           expr: |
-            clamp_min(sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[5m])) - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[5m])), 0)
+            clamp_min(sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[5m])) - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[5m])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:objective:ratio
@@ -2817,30 +2817,30 @@ spec:
             slo: latency
         - record: slo:sli_error:ratio_rate1d
           expr: |
-            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[1d])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[1d])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[1d]))
+            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[1d])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[1d])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[1d]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_error:ratio_rate3d
           expr: |
-            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web", http_response_status_code=~"5.."}[3d])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[3d])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[3d]))
+            (sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", http_response_status_code=~"5.."}[3d])) or sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[3d])) * 0) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[3d]))
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: availability
         - record: slo:sli_error:ratio_rate1d
           expr: |
-            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[1d])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[1d])), 0)
+            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[1d])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[1d])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_error:ratio_rate3d
           expr: |
-            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="web", le="0.5"}[3d])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="web"}[3d])), 0)
+            clamp_min(1 - sum(rate(http_server_request_duration_seconds_bucket{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard", le="0.5"}[3d])) / sum(rate(http_server_request_duration_seconds_count{service_namespace="deus", http_route!~"/openapi.*", service_name="deus-dashboard"}[3d])), 0)
           labels:
-            target: web
+            target: deus-dashboard
             kind: service
             slo: latency
         - record: slo:sli_error:ratio_rate1d
@@ -3048,7 +3048,7 @@ spec:
       rules:
         - alert: DeusServiceDown
           expr: |
-            max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~"(.+-)?deus", deployment=~"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|web"}) == 0
+            max by (namespace, deployment) (kube_deployment_status_replicas_available{namespace=~"(.+-)?deus", deployment=~"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard"}) == 0
           for: 2m
           labels:
             severity: critical

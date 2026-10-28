@@ -26,7 +26,7 @@ d.add(stat("Services down", f"count(max by (deployment) (kube_deployment_status_
            "short", thresholds(("green", None), ("red", 1)), decimals=0), 4, 4)
 d.add(stat("Firing alerts", 'count(ALERTS{alertname=~"Deus.*", alertstate="firing"}) or vector(0)', "short",
            thresholds(("green", None), ("orange", 1)), decimals=0), 4, 4)
-d.add(vl_stat("Browser errors", f"{LOGS} service.name:=web telemetry.source:=browser severity_text:=ERROR | stats count() errors",
+d.add(vl_stat("Browser errors", f"{LOGS} service.name:=deus-dashboard telemetry.source:=browser severity_text:=ERROR | stats count() errors",
               "short", thresholds(("green", None), ("orange", 1)),
               "Errors the web app reported from users' browsers in the time range."), 4, 4)
 

@@ -39,7 +39,7 @@ for p in (
     vl_stat("Services logging errors", f"{LOGS} {ERR} | stats count_uniq(service.name) services", "short",
             thresholds(("green", None), ("red", 1)), "Services with at least one ERROR record. Several at the same time "
             "usually means a shared dependency: the database, a called service, the network.", sparkline=False),
-    vl_stat("Browser errors", f'{APP_LOGS} service.name:=web telemetry.source:=browser {ERR} | stats count() errors', "short",
+    vl_stat("Browser errors", f'{APP_LOGS} service.name:=deus-dashboard telemetry.source:=browser {ERR} | stats count() errors', "short",
             thresholds(("green", None), ("orange", 1)), "Errors the web app reported from users' browsers: unhandled "
             "exceptions, failed loads and failed requests."),
 ):

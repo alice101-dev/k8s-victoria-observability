@@ -606,7 +606,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "count(max by (deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|web\"}) == 0) or vector(0)",
+          "expr": "count(max by (deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"}) == 0) or vector(0)",
           "legendFormat": "",
           "refId": "A",
           "range": false,
@@ -674,7 +674,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "max by (deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|web\"}) / max by (deployment) (kube_deployment_spec_replicas{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|web\"})",
+          "expr": "max by (deployment) (kube_deployment_status_replicas_available{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"}) / max by (deployment) (kube_deployment_spec_replicas{namespace=~\"(.+-)?deus\", deployment=~\"accounts|banking|contacts|identity|ledger|notification|organization|payments|products|purchases|reporting|sales|tax|deus-dashboard\"})",
           "legendFormat": "{{deployment}}",
           "refId": "A",
           "range": false,
