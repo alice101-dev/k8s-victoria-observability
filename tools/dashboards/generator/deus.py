@@ -28,11 +28,14 @@ JOURNEYS = [
 ]
 LINKS_DEUS = [{"title": "Deus dashboards", "type": "dashboards", "tags": ["deus"], "asDropdown": True,
                "includeVars": False, "keepTime": True}] + LINKS
+REPLICASETS = (f'max by (namespace, replicaset, owner_name) '
+               f'(kube_replicaset_owner{{{K8S_NS}, owner_kind="Deployment"}}')
 ANNOTATIONS = [
     {"name": "Rollouts", "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"}, "enable": True,
      "iconColor": "blue", "step": "1m", "useValueForTime": False,
-     "expr": f"changes(max by (deployment) (kube_deployment_metadata_generation{{{K8S_NS}}})[1m]) > 0",
-     "titleFormat": "Rollout {{deployment}}", "textFormat": "Spec changed (image, env or resources)"},
+     "expr": f"({REPLICASETS}) unless {REPLICASETS} offset 1m)",
+     "titleFormat": "Rollout {{owner_name}}",
+     "textFormat": "New ReplicaSet {{replicaset}}: the pod template changed (image, env or resources)"},
     {"name": "Critical alerts", "datasource": {"type": "prometheus", "uid": "VictoriaMetrics"}, "enable": True,
      "iconColor": "red", "step": "1m", "useValueForTime": False,
      "expr": 'max by (alertname, target, slo, deployment) (ALERTS{alertname=~"Deus.*", alertstate="firing", severity="critical"})',

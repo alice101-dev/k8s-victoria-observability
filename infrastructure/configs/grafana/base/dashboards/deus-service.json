@@ -128,9 +128,9 @@
         "iconColor": "blue",
         "step": "1m",
         "useValueForTime": false,
-        "expr": "changes(max by (deployment) (kube_deployment_metadata_generation{namespace=~\"(.+-)?deus\"})[1m]) > 0",
-        "titleFormat": "Rollout {{deployment}}",
-        "textFormat": "Spec changed (image, env or resources)"
+        "expr": "(max by (namespace, replicaset, owner_name) (kube_replicaset_owner{namespace=~\"(.+-)?deus\", owner_kind=\"Deployment\"}) unless max by (namespace, replicaset, owner_name) (kube_replicaset_owner{namespace=~\"(.+-)?deus\", owner_kind=\"Deployment\"} offset 1m)",
+        "titleFormat": "Rollout {{owner_name}}",
+        "textFormat": "New ReplicaSet {{replicaset}}: the pod template changed (image, env or resources)"
       },
       {
         "name": "Critical alerts",
