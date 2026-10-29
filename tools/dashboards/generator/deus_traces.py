@@ -277,7 +277,7 @@ d.add({"type": "traces", "title": "Trace: ${trace_id:text}", "datasource": VT,
        "description": "The slowest or failed request of the time range by default; pick another in the Trace variable "
                       "or click a trace ID in the tables above. Every span with its timing, attributes and links to the "
                       "logs and metrics of its service.",
-       "options": {}, "targets": [{"datasource": VT, "refId": "A", "query": "${trace_id}"}]}, 24, 30)
+       "options": {}, "targets": [{"datasource": VT, "refId": "A", "query": "${trace_id}"}]}, 24, 60)
 
 for p in d.panels:
     if p["type"] == "timeseries" and p["datasource"] is VTL:
