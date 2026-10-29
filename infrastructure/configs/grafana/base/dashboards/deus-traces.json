@@ -3704,7 +3704,7 @@
     },
     {
       "type": "table",
-      "title": "Actions in session ${session:text}",
+      "title": "Actions in session",
       "description": "What the user did, in order, like breadcrumbs: page loads, clicks (named after the button or link) and navigations, with the API calls each caused. Typed values are never recorded. Click a trace to show it below, from the click to the database.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -3922,7 +3922,7 @@
     },
     {
       "type": "logs",
-      "title": "Browser errors in session ${session:text}",
+      "title": "Browser errors in session",
       "description": "Errors the dashboard reported in this session, with the page and the stack trace.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",

@@ -316,7 +316,7 @@ ACTIONS = (f'{APP_SPANS} {IN_SESSION} {USER_ACTION} '
            f"| join by (trace_id) ({APP_SPANS} {IN_SESSION} kind:=3 | stats by (trace_id) count() calls, "
            "count() if (status_code:=2) failed) "
            "| math round(started_ns/1e6) as started_ms | sort by (started_ms) | limit 200")
-d.add(lq_table("Actions in session ${session:text}", ACTIONS,
+d.add(lq_table("Actions in session", ACTIONS,
                [("started_ms", "Time"), ("action", "Action"), ("name", "What"), ("route", "Page"), ("took", "Duration"),
                 ("calls", "API calls"), ("failed", "Failed"), ("trace_id", "Trace")],
                "What the user did, in order, like breadcrumbs: page loads, clicks (named after the button or link) and "
@@ -329,7 +329,7 @@ d.add(lq_table("Actions in session ${session:text}", ACTIONS,
                                              {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}]),
                           LINKS_ON("Trace", TRACE_LINK, 270)],
                sort=[{"displayName": "Time", "desc": False}], hide=("started_ns",)), 16, 10)
-d.add(logs_panel("Browser errors in session ${session:text}",
+d.add(logs_panel("Browser errors in session",
                  'telemetry.source:=browser session.id:="${session:raw}" severity_text:in(ERROR,WARN)',
                  "Errors the dashboard reported in this session, with the page and the stack trace."), 8, 10)
 d.add({"type": "traces", "title": "Trace: ${trace_id:text}", "datasource": VT,
