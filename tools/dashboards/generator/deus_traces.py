@@ -117,24 +117,50 @@ d.add(lq_table("Calls to dependencies",
                sort=[{"displayName": "Calls", "desc": True}]), 10, 15)
 
 d.row("Endpoints — $service")
-d.add(lq_table("Endpoints (server spans)",
-               f"{SERVER} {SVC} | stats by (service, name) count() calls, rate() rps, count() if ({IS_5XX}) e5, "
-               f"count() if ({IS_4XX}) e4, quantile(0.5, duration) p50, quantile(0.95, duration) p95, "
-               "quantile(0.99, duration) p99, max(duration) slowest "
-               "| math round(e5*100/calls, 0.01) as pct_5xx, round(e4*100/calls, 0.01) as pct_4xx "
-               "| sort by (p95 desc) | limit 100",
-               [("service", "Service"), ("name", "Endpoint"), ("calls", "Calls"), ("rps", "Req/s"), ("pct_5xx", "5xx %"),
-                ("pct_4xx", "4xx %"), ("p50", "p50"), ("p95", "p95"), ("p99", "p99"), ("slowest", "Max")],
-               "Every endpoint of the selected services, slowest first. 4xx are the caller's mistakes or business "
-               "rules. Click an endpoint to break it down, a service to open its dashboard.",
-               overrides=[LINKS_ON("Endpoint", ENDPOINT_LINK), LINKS_ON("Service", SERVICE_DASH_LINK, 130),
-                          COUNT("Calls"), by_name("Req/s", [{"id": "unit", "value": "reqps"}, {"id": "decimals", "value": 2},
-                                                            {"id": "custom.width", "value": 80}]),
-                          PCT("5xx %", 0.5, 1),
-                          by_name("4xx %", [{"id": "unit", "value": "percent"}, {"id": "decimals", "value": 2},
-                                            {"id": "custom.width", "value": 80}]),
-                          NS_UNIT("p50"), NS_UNIT("p95"), NS_UNIT("p99"), NS_UNIT("Max")],
-               sort=[{"displayName": "p95", "desc": True}], hide=("e5", "e4")), 24, 11)
+ENDPOINT_COLUMNS = [("service", "Service"), ("name", "Endpoint"), ("calls", "Calls"), ("rpm", "Req/min"),
+                    ("pct_5xx", "5xx %"), ("pct_4xx", "4xx %"), ("p50", "p50"), ("p95", "p95"), ("p99", "p99"),
+                    ("slowest", "Max"), ("time_share", "Time share"), ("db_share", "DB share"),
+                    ("slowest_trace", "Slowest trace"), ("last_ms", "Last call")]
+DASH_FOR_ZERO = {"id": "mappings", "value": [{"type": "value", "options": {"0": {"text": "–", "index": 0}}},
+                                             {"type": "special", "options": {"match": "nan", "result": {"text": "–", "index": 1}}}]}
+SHARE = lambda name: by_name(name, [
+    {"id": "unit", "value": "percent"}, {"id": "decimals", "value": 1}, {"id": "min", "value": 0}, {"id": "max", "value": 100},
+    {"id": "custom.width", "value": 140}, DASH_FOR_ZERO,
+    {"id": "custom.cellOptions", "value": {"type": "gauge", "mode": "basic", "valueDisplayMode": "text"}}])
+ERROR_PCT = lambda name, color: by_name(name, [
+    {"id": "unit", "value": "percent"}, {"id": "decimals", "value": 2}, {"id": "custom.width", "value": 75}, DASH_FOR_ZERO,
+    {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+    {"id": "thresholds", "value": thresholds(("text", None), (color, 0.001))}])
+ENDPOINTS = (f"{SERVER} {SVC} | stats by (service, name) count() calls, rate() rps, count() if ({IS_5XX}) e5, "
+             f"count() if ({IS_4XX}) e4, quantile(0.5, duration) p50, quantile(0.95, duration) p95, "
+             "quantile(0.99, duration) p99, max(duration) slowest, sum(duration) total, "
+             "field_max(duration, trace_id) slowest_trace, max(start_time_unix_nano) last_ns "
+             "| total_stats sum(total) all_total "
+             "| math round(e5*100/calls, 0.01) as pct_5xx, round(e4*100/calls, 0.01) as pct_4xx, rps*60 as rpm, "
+             "round(total*100/all_total, 0.1) as time_share, round(last_ns/1e6) as last_ms "
+             "| stats by (service, name, slowest_trace) max(calls) calls, max(rpm) rpm, max(pct_5xx) pct_5xx, "
+             "max(pct_4xx) pct_4xx, max(p50) p50, max(p95) p95, max(p99) p99, max(slowest) slowest, "
+             "max(time_share) time_share, max(last_ms) last_ms "
+             "| sort by (time_share desc) | limit 100")
+ENDPOINT_DB = (f"{SERVER} {SVC} | stats by (trace_id, service, name) sum(duration) srv "
+               f'| join by (trace_id, service) ({APP_SPANS} kind:=3 {IS_SQL} {SVC} | stats by (trace_id, service) sum(duration) db) '
+               "| stats by (service, name) sum(srv) srv, sum(db) db | math round(db*100/srv, 0.1) as db_share")
+endpoints = logsql_table(
+    "Endpoints (server spans)", ENDPOINTS, ENDPOINT_COLUMNS,
+    "Every endpoint of the selected services, the ones using the most server time first. Time share: its part of all "
+    "server time (calls × duration), what to optimise first. DB share: its part spent in PostgreSQL queries of the same "
+    "service. Slowest trace opens that call below; 4xx are the caller's mistakes or business rules.",
+    VTL, overrides=[LINKS_ON("Endpoint", ENDPOINT_LINK), LINKS_ON("Service", SERVICE_DASH_LINK, 110), COUNT("Calls", 70),
+                    by_name("Req/min", [{"id": "unit", "value": "short"}, {"id": "decimals", "value": 1},
+                                        {"id": "custom.width", "value": 75}]),
+                    ERROR_PCT("5xx %", "red"), ERROR_PCT("4xx %", "orange"),
+                    NS_UNIT("p50", 80), NS_UNIT("p95", 80), NS_UNIT("p99", 80), NS_UNIT("Max", 80),
+                    SHARE("Time share"), SHARE("DB share"), LINKS_ON("Slowest trace", TRACE_LINK, 270),
+                    by_name("Last call", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 110}])],
+    sort=[{"displayName": "Time share", "desc": True}],
+    hide=("srv", "db"))
+endpoints["targets"].append(vl(ENDPOINT_DB, "stats", "B", ds=VTL))
+d.add(endpoints, 24, 11)
 d.add(ts("p95 by endpoint", [vl(f"{SERVER} | stats by (name) quantile(0.95, duration) p95", "statsRange",
                                 legend="{{name}}", ds=VTL)], "ns", ds=VTL), 12, 8)
 d.add(ts("5xx by endpoint", [vl(f"{SERVER} {IS_5XX} | stats by (name) count() failed", "statsRange",

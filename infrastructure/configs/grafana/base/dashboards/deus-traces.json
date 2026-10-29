@@ -946,7 +946,7 @@
     {
       "type": "table",
       "title": "Endpoints (server spans)",
-      "description": "Every endpoint of the selected services, slowest first. 4xx are the caller's mistakes or business rules. Click an endpoint to break it down, a service to open its dashboard.",
+      "description": "Every endpoint of the selected services, the ones using the most server time first. Time share: its part of all server time (calls × duration), what to optimise first. DB share: its part spent in PostgreSQL queries of the same service. Slowest trace opens that call below; 4xx are the caller's mistakes or business rules.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -995,7 +995,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 130
+                "value": 110
               }
             ]
           },
@@ -1015,27 +1015,27 @@
               },
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 70
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Req/s"
+              "options": "Req/min"
             },
             "properties": [
               {
                 "id": "unit",
-                "value": "reqps"
+                "value": "short"
               },
               {
                 "id": "decimals",
-                "value": 2
+                "value": 1
               },
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 75
               }
             ]
           },
@@ -1055,7 +1055,31 @@
               },
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 75
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "–",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "nan",
+                      "result": {
+                        "text": "–",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
               },
               {
                 "id": "custom.cellOptions",
@@ -1069,16 +1093,12 @@
                   "mode": "absolute",
                   "steps": [
                     {
-                      "color": "green",
+                      "color": "text",
                       "value": null
                     },
                     {
-                      "color": "orange",
-                      "value": 0.5
-                    },
-                    {
                       "color": "red",
-                      "value": 1
+                      "value": 0.001
                     }
                   ]
                 }
@@ -1101,7 +1121,53 @@
               },
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 75
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "–",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "nan",
+                      "result": {
+                        "text": "–",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": 0.001
+                    }
+                  ]
+                }
               }
             ]
           },
@@ -1121,7 +1187,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 80
               }
             ]
           },
@@ -1141,7 +1207,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 80
               }
             ]
           },
@@ -1161,7 +1227,7 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 80
               }
             ]
           },
@@ -1181,7 +1247,164 @@
               },
               {
                 "id": "custom.width",
-                "value": 90
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time share"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "–",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "nan",
+                      "result": {
+                        "text": "–",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "DB share"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "max",
+                "value": 100
+              },
+              {
+                "id": "custom.width",
+                "value": 140
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "0": {
+                        "text": "–",
+                        "index": 0
+                      }
+                    }
+                  },
+                  {
+                    "type": "special",
+                    "options": {
+                      "match": "nan",
+                      "result": {
+                        "text": "–",
+                        "index": 1
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Slowest trace"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show this trace below",
+                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last call"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeFromNow"
+              },
+              {
+                "id": "custom.width",
+                "value": 110
               }
             ]
           }
@@ -1195,7 +1418,7 @@
         },
         "sortBy": [
           {
-            "displayName": "p95",
+            "displayName": "Time share",
             "desc": true
           }
         ]
@@ -1217,32 +1440,40 @@
           "options": {
             "excludeByName": {
               "Time": true,
-              "e5": true,
-              "e4": true
+              "srv": true,
+              "db": true
             },
             "indexByName": {
               "service": 0,
               "name": 1,
               "calls": 2,
-              "rps": 3,
+              "rpm": 3,
               "pct_5xx": 4,
               "pct_4xx": 5,
               "p50": 6,
               "p95": 7,
               "p99": 8,
-              "slowest": 9
+              "slowest": 9,
+              "time_share": 10,
+              "db_share": 11,
+              "slowest_trace": 12,
+              "last_ms": 13
             },
             "renameByName": {
               "service": "Service",
               "name": "Endpoint",
               "calls": "Calls",
-              "rps": "Req/s",
+              "rpm": "Req/min",
               "pct_5xx": "5xx %",
               "pct_4xx": "4xx %",
               "p50": "p50",
               "p95": "p95",
               "p99": "p99",
-              "slowest": "Max"
+              "slowest": "Max",
+              "time_share": "Time share",
+              "db_share": "DB share",
+              "slowest_trace": "Slowest trace",
+              "last_ms": "Last call"
             }
           }
         }
@@ -1253,10 +1484,20 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 | copy \"resource_attr:service.name\" as service | stats by (service, name) count() calls, rate() rps, count() if (\"span_attr:http.response.status_code\":~\"^5\") e5, count() if (\"span_attr:http.response.status_code\":~\"^4\") e4, quantile(0.5, duration) p50, quantile(0.95, duration) p95, quantile(0.99, duration) p99, max(duration) slowest | math round(e5*100/calls, 0.01) as pct_5xx, round(e4*100/calls, 0.01) as pct_4xx | sort by (p95 desc) | limit 100",
+          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 | copy \"resource_attr:service.name\" as service | stats by (service, name) count() calls, rate() rps, count() if (\"span_attr:http.response.status_code\":~\"^5\") e5, count() if (\"span_attr:http.response.status_code\":~\"^4\") e4, quantile(0.5, duration) p50, quantile(0.95, duration) p95, quantile(0.99, duration) p99, max(duration) slowest, sum(duration) total, field_max(duration, trace_id) slowest_trace, max(start_time_unix_nano) last_ns | total_stats sum(total) all_total | math round(e5*100/calls, 0.01) as pct_5xx, round(e4*100/calls, 0.01) as pct_4xx, rps*60 as rpm, round(total*100/all_total, 0.1) as time_share, round(last_ns/1e6) as last_ms | stats by (service, name, slowest_trace) max(calls) calls, max(rpm) rpm, max(pct_5xx) pct_5xx, max(pct_4xx) pct_4xx, max(p50) p50, max(p95) p95, max(p99) p99, max(slowest) slowest, max(time_share) time_share, max(last_ms) last_ms | sort by (time_share desc) | limit 100",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 | copy \"resource_attr:service.name\" as service | stats by (trace_id, service, name) sum(duration) srv | join by (trace_id, service) (\"resource_attr:service.namespace\":=deus kind:=3 \"span_attr:db.system.name\":=postgresql | copy \"resource_attr:service.name\" as service | stats by (trace_id, service) sum(duration) db) | stats by (service, name) sum(srv) srv, sum(db) db | math round(db*100/srv, 0.1) as db_share",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "B"
         }
       ],
       "id": 12,
