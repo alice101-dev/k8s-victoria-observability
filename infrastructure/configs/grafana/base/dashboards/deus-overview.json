@@ -1447,13 +1447,365 @@
     },
     {
       "type": "row",
-      "title": "Resources",
+      "title": "Frontend",
       "collapsed": false,
       "panels": [],
       "id": 22,
       "gridPos": {
         "x": 0,
         "y": 39,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "stat",
+      "title": "LCP p75",
+      "description": "Largest Contentful Paint: when the main content of a page is visible. 75th percentile of the dashboard's real browser sessions in the time range; green is Google's 'good' threshold, red its 'poor' one.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 2500
+              },
+              {
+                "color": "red",
+                "value": 4000
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "telemetry.source:=browser _msg:=\"web vital\" web_vital.name:=LCP | stats quantile(0.75, web_vital.value) p75",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 23,
+      "gridPos": {
+        "x": 0,
+        "y": 40,
+        "w": 4,
+        "h": 5
+      }
+    },
+    {
+      "type": "stat",
+      "title": "INP p75",
+      "description": "Interaction to Next Paint: how long the page takes to react to a click or key. 75th percentile of the dashboard's real browser sessions in the time range; green is Google's 'good' threshold, red its 'poor' one.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 200
+              },
+              {
+                "color": "red",
+                "value": 500
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "telemetry.source:=browser _msg:=\"web vital\" web_vital.name:=INP | stats quantile(0.75, web_vital.value) p75",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 24,
+      "gridPos": {
+        "x": 4,
+        "y": 40,
+        "w": 4,
+        "h": 5
+      }
+    },
+    {
+      "type": "stat",
+      "title": "CLS p75",
+      "description": "Cumulative Layout Shift: how much the layout jumps while it loads. 75th percentile of the dashboard's real browser sessions in the time range; green is Google's 'good' threshold, red its 'poor' one.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 0.1
+              },
+              {
+                "color": "red",
+                "value": 0.25
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "telemetry.source:=browser _msg:=\"web vital\" web_vital.name:=CLS | stats quantile(0.75, web_vital.value) p75",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 25,
+      "gridPos": {
+        "x": 8,
+        "y": 40,
+        "w": 4,
+        "h": 5
+      }
+    },
+    {
+      "type": "table",
+      "title": "Web Vitals by page",
+      "description": "p75 per route of the dashboard, slowest first. Pages are route templates such as /sales/[id].",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "LCP p75"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "INP p75"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ms"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "CLS p75"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 3
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Page loads"
+            },
+            "properties": [
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "LCP p75",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "page": 0,
+              "lcp": 1,
+              "inp": 2,
+              "cls": 3,
+              "loads": 4
+            },
+            "renameByName": {
+              "page": "Page",
+              "lcp": "LCP p75",
+              "inp": "INP p75",
+              "cls": "CLS p75",
+              "loads": "Page loads"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "telemetry.source:=browser _msg:=\"web vital\" app.route:* | copy app.route as page | stats by (page) quantile(0.75, web_vital.value) if (web_vital.name:=LCP) lcp, quantile(0.75, web_vital.value) if (web_vital.name:=INP) inp, quantile(0.75, web_vital.value) if (web_vital.name:=CLS) cls, count() if (web_vital.name:=LCP) loads | sort by (lcp desc)",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 26,
+      "gridPos": {
+        "x": 12,
+        "y": 40,
+        "w": 12,
+        "h": 5
+      }
+    },
+    {
+      "type": "row",
+      "title": "Resources",
+      "collapsed": false,
+      "panels": [],
+      "id": 27,
+      "gridPos": {
+        "x": 0,
+        "y": 45,
         "w": 24,
         "h": 1
       }
@@ -1510,10 +1862,10 @@
           "instant": false
         }
       ],
-      "id": 23,
+      "id": 28,
       "gridPos": {
         "x": 0,
-        "y": 40,
+        "y": 46,
         "w": 12,
         "h": 8
       }
@@ -1569,10 +1921,10 @@
           "instant": false
         }
       ],
-      "id": 24,
+      "id": 29,
       "gridPos": {
         "x": 12,
-        "y": 40,
+        "y": 46,
         "w": 12,
         "h": 8
       }

@@ -1,5 +1,5 @@
-from .common import (CADVISOR, RI, by_name, Dash, dashboard, describe, logs_panel, stat, table, thresholds, ts,
-    vl_stat, vm)
+from .common import (CADVISOR, RI, VL, by_name, Dash, dashboard, describe, logs_panel, logsql_table, stat, table,
+    thresholds, ts, vl_stat, vm)
 from .deus import ANNOTATIONS, APP, K8S_NS, LINKS_DEUS, LOGS, deus_deployments
 
 FILE = "deus-overview.json"
@@ -96,6 +96,32 @@ d.row("Errors")
 d.add(logs_panel("Latest ERROR and WARN records", f'{LOGS} severity_text:in(ERROR, WARN) '
                  '| format if (exception.message:*) "<_msg> — <exception.message>" as _msg | format "[<service.name>] <_msg>" as _msg',
                  "Newest WARN and ERROR records of every service and the browser; trace_id opens the request's trace."), 24, 9)
+
+d.row("Frontend")
+VITALS = 'telemetry.source:=browser _msg:="web vital"'
+for name, title, unit, good, poor, desc in (
+    ("LCP", "LCP p75", "ms", 2500, 4000, "Largest Contentful Paint: when the main content of a page is visible."),
+    ("INP", "INP p75", "ms", 200, 500, "Interaction to Next Paint: how long the page takes to react to a click or key."),
+    ("CLS", "CLS p75", "none", 0.1, 0.25, "Cumulative Layout Shift: how much the layout jumps while it loads."),
+):
+    d.add(vl_stat(title, f"{VITALS} web_vital.name:={name} | stats quantile(0.75, web_vital.value) p75", unit,
+                  thresholds(("green", None), ("orange", good), ("red", poor)),
+                  f"{desc} 75th percentile of the dashboard's real browser sessions in the time range; green is "
+                  "Google's 'good' threshold, red its 'poor' one.", sparkline=False, decimals=2 if name == "CLS" else 0,
+                  no_value="–"), 4, 5)
+d.add(logsql_table("Web Vitals by page",
+                   f"{VITALS} app.route:* | copy app.route as page | stats by (page) "
+                   "quantile(0.75, web_vital.value) if (web_vital.name:=LCP) lcp, "
+                   "quantile(0.75, web_vital.value) if (web_vital.name:=INP) inp, "
+                   "quantile(0.75, web_vital.value) if (web_vital.name:=CLS) cls, "
+                   "count() if (web_vital.name:=LCP) loads | sort by (lcp desc)",
+                   [("page", "Page"), ("lcp", "LCP p75"), ("inp", "INP p75"), ("cls", "CLS p75"), ("loads", "Page loads")],
+                   "p75 per route of the dashboard, slowest first. Pages are route templates such as /sales/[id].", VL,
+                   overrides=[by_name("LCP p75", [{"id": "unit", "value": "ms"}, {"id": "decimals", "value": 0}]),
+                              by_name("INP p75", [{"id": "unit", "value": "ms"}, {"id": "decimals", "value": 0}]),
+                              by_name("CLS p75", [{"id": "decimals", "value": 3}]),
+                              by_name("Page loads", [{"id": "decimals", "value": 0}])],
+                   sort=[{"displayName": "LCP p75", "desc": True}]), 12, 5)
 
 d.row("Resources")
 d.add(ts("CPU per pod", [vm(f'sum by (pod) (rate(container_cpu_usage_seconds_total{{{CADVISOR}, {K8S_NS}, container!=""}}{RI}))',

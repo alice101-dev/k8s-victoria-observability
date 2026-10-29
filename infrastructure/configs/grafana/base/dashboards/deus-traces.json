@@ -157,6 +157,30 @@
         ]
       },
       {
+        "name": "session",
+        "label": "Browser session (latest first)",
+        "type": "query",
+        "datasource": {
+          "type": "victoriametrics-logs-datasource",
+          "uid": "VictoriaTracesLogsQL"
+        },
+        "query": {
+          "type": "fieldValue",
+          "field": "option",
+          "query": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":* | copy \"resource_attr:session.id\" as session | stats by (session) max(_time) last, count() if (\"span_attr:ui.action\":*) actions | sort by (last desc) | limit 30 | format \"<last> · <actions> actions · <session>\" as option",
+          "limit": 100,
+          "refId": "session"
+        },
+        "definition": "option: latest browser sessions",
+        "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
+        "sort": 0,
+        "refresh": 2,
+        "multi": false,
+        "includeAll": false,
+        "allowCustomValue": true,
+        "current": {}
+      },
+      {
         "name": "trace_id",
         "label": "Trace (slowest first)",
         "type": "query",
@@ -675,7 +699,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "(\"resource_attr:service.namespace\":=deus or \"resource_attr:service.namespace\":=kgateway-system) (kind:=2 or kind:=4 or (kind:=3 \"span_attr:db.system.name\":*) or (kind:=3 parent_span_id:\"\" -\"span_attr:db.system.name\":*)) | copy \"resource_attr:service.name\" as id | copy \"span_attr:db.system.name\" as db_system, \"span_attr:server.address\" as db_host | format if (kind:=3 db_system:*) \"<db_system>\" as id | copy id as title | format if (kind:=3 db_system:*) \"<db_host> (<db_system>)\" as title | stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:http.status_code\":~\"^4\") failed | math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct | format \"p95 <p95_ms> ms · <failed_pct>% failed\" as subtitle | stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed | math (detail__requests-detail__failed)/detail__requests as arc__success, detail__failed/detail__requests as arc__errors",
+          "expr": "(\"resource_attr:service.namespace\":=deus or \"resource_attr:service.namespace\":=kgateway-system) (kind:=2 or kind:=4 or (kind:=3 \"span_attr:db.system.name\":*) or (parent_span_id:\"\" -kind:=2 -\"span_attr:db.system.name\":*)) | copy \"resource_attr:service.name\" as id | copy \"span_attr:db.system.name\" as db_system, \"span_attr:server.address\" as db_host | format if (kind:=3 db_system:*) \"<db_system>\" as id | copy id as title | format if (kind:=3 db_system:*) \"<db_host> (<db_system>)\" as title | stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:http.status_code\":~\"^4\") failed | math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct | format \"p95 <p95_ms> ms · <failed_pct>% failed\" as subtitle | stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed | math (detail__requests-detail__failed)/detail__requests as arc__success, detail__failed/detail__requests as arc__errors",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -1382,7 +1406,7 @@
                 "value": [
                   {
                     "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
                   }
                 ]
               },
@@ -3180,7 +3204,7 @@
                 "value": [
                   {
                     "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
                   }
                 ]
               },
@@ -3352,7 +3376,7 @@
                 "value": [
                   {
                     "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
                   }
                 ]
               },
@@ -3481,8 +3505,207 @@
     },
     {
       "type": "table",
-      "title": "Requests from clients",
-      "description": "Newest calls that started a trace in a client, such as the dashboard in the browser, with everything they caused behind the gateway. Click a trace ID to show the whole trace below.",
+      "title": "User sessions",
+      "description": "Browser sessions of the dashboard, the most recent first. A session is one browser tab; the user is the user.id after login. Click a session to list its actions below.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Last activity"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              },
+              {
+                "id": "custom.width",
+                "value": 165
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Session"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show this session's actions",
+                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-session=${__value.raw}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Actions"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 75
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Errors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Length"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "s"
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Last activity",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "last_ms": 0,
+              "session": 1,
+              "user_id": 2,
+              "last_route": 3,
+              "actions": 4,
+              "errors": 5,
+              "length_s": 6
+            },
+            "renameByName": {
+              "last_ms": "Last activity",
+              "session": "Session",
+              "user_id": "User",
+              "last_route": "Last page",
+              "actions": "Actions",
+              "errors": "Errors",
+              "length_s": "Length"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":* | copy \"resource_attr:session.id\" as session, \"span_attr:user.id\" as user, \"span_attr:app.route\" as route | stats by (session) min(start_time_unix_nano) first_ns, max(start_time_unix_nano) last_ns, count() if (\"span_attr:ui.action\":*) actions, count() if (status_code:=2) errors, field_max(start_time_unix_nano, route) if (route:*) last_route, max(user) user_id | math round(last_ns/1e6) as last_ms, round((last_ns-first_ns)/1e9) as length_s | stats by (session, user_id, last_route) max(last_ms) last_ms, max(length_s) length_s, max(actions) actions, max(errors) errors | sort by (last_ms desc) | limit 50",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 35,
+      "gridPos": {
+        "x": 0,
+        "y": 127,
+        "w": 24,
+        "h": 8
+      }
+    },
+    {
+      "type": "table",
+      "title": "Actions in session ${session:text}",
+      "description": "What the user did, in order, like breadcrumbs: page loads, clicks (named after the button or link) and navigations, with the API calls each caused. Typed values are never recorded. Click a trace to show it below, from the click to the database.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -3516,45 +3739,12 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Trace ID"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
-                  }
-                ]
-              },
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Client"
+              "options": "Action"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 110
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Status"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 60
+                "value": 95
               }
             ]
           },
@@ -3574,7 +3764,82 @@
               },
               {
                 "id": "custom.width",
-                "value": 85
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "API calls"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Failed"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 65
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show this trace below",
+                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
               }
             ]
           }
@@ -3589,7 +3854,7 @@
         "sortBy": [
           {
             "displayName": "Time",
-            "desc": true
+            "desc": false
           }
         ]
       },
@@ -3610,23 +3875,27 @@
           "options": {
             "excludeByName": {
               "Time": true,
-              "started": true
+              "started_ns": true
             },
             "indexByName": {
               "started_ms": 0,
-              "trace_id": 1,
-              "client": 2,
-              "request": 3,
-              "code": 4,
-              "took": 5
+              "action": 1,
+              "name": 2,
+              "route": 3,
+              "took": 4,
+              "calls": 5,
+              "failed": 6,
+              "trace_id": 7
             },
             "renameByName": {
               "started_ms": "Time",
-              "trace_id": "Trace ID",
-              "client": "Client",
-              "request": "Request",
-              "code": "Status",
-              "took": "Duration"
+              "action": "Action",
+              "name": "What",
+              "route": "Page",
+              "took": "Duration",
+              "calls": "API calls",
+              "failed": "Failed",
+              "trace_id": "Trace"
             }
           }
         }
@@ -3637,18 +3906,55 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus kind:=3 parent_span_id:\"\" -\"span_attr:db.system.name\":* | copy \"resource_attr:service.name\" as client, \"span_attr:http.request.method\" as method, \"span_attr:http.response.status_code\" as code | extract_regexp \"^https?://[^/]+(?P<path>/[^?#]*)\" from \"span_attr:url.full\" | format \"<method> <path>\" as request | stats by (trace_id, client, request, code) max(duration) took, max(start_time_unix_nano) started | math round(started/1e6) as started_ms | sort by (started_ms desc) | limit 50",
+          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" \"span_attr:ui.action\":* | copy \"span_attr:ui.action\" as action, \"span_attr:app.route\" as route | stats by (trace_id, action, name, route) max(start_time_unix_nano) started_ns, max(duration) took | join by (trace_id) (\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" kind:=3 | stats by (trace_id) count() calls, count() if (status_code:=2) failed) | math round(started_ns/1e6) as started_ms | sort by (started_ms) | limit 200",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
         }
       ],
-      "id": 35,
+      "id": 36,
       "gridPos": {
         "x": 0,
-        "y": 127,
-        "w": 24,
-        "h": 8
+        "y": 135,
+        "w": 16,
+        "h": 10
+      }
+    },
+    {
+      "type": "logs",
+      "title": "Browser errors in session ${session:text}",
+      "description": "Errors the dashboard reported in this session, with the page and the stack trace.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "options": {
+        "showTime": true,
+        "wrapLogMessage": true,
+        "enableLogDetails": true,
+        "sortOrder": "Descending",
+        "dedupStrategy": "none",
+        "prettifyLogMessage": false
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "telemetry.source:=browser session.id:=\"${session:raw}\" severity_text:in(ERROR,WARN)",
+          "queryType": "instant",
+          "editorMode": "code",
+          "refId": "A",
+          "maxLines": 500
+        }
+      ],
+      "id": 37,
+      "gridPos": {
+        "x": 16,
+        "y": 135,
+        "w": 8,
+        "h": 10
       }
     },
     {
@@ -3670,10 +3976,10 @@
           "query": "${trace_id}"
         }
       ],
-      "id": 36,
+      "id": 38,
       "gridPos": {
         "x": 0,
-        "y": 135,
+        "y": 145,
         "w": 24,
         "h": 60
       }
