@@ -64,7 +64,6 @@ ENTRY = 'kind:=3 parent_span_id:"" -"span_attr:db.system.name":*'
 MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_SQL}) or ({ENTRY})) "
              '| copy "resource_attr:service.name" as id ' + TO_DB.format(f="id")
              + '| copy id as title | format if (id:=postgresql) "deus-db (PostgreSQL)" as title '
-             + f'| format if ({GATEWAY}) "<id> (kgateway)" as title '
              + f"| stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, "
                f"count() if ({MAP_FAILED}) failed "
                "| math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct "
@@ -87,7 +86,7 @@ MAP_EDGES = (f"{MAP_SPANS} kind:=2 parent_span_id:* "
              "| math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct "
              "| delete p95")
 d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
-       "description": "Clients that start traces (the dashboard in the browser), the edge Gateway, every service and "
+       "description": "Clients that start traces (the dashboard in the browser), the Gateway kgateway-public, every service and "
                       "PostgreSQL: requests per second in the circle, p95 and the failed share below the name, "
                       "successful (green) and failed (red) spans in the ring. An arrow joins a calling span to the "
                       "span it caused in another service; hover it for calls per second, p95 as the caller sees it and "

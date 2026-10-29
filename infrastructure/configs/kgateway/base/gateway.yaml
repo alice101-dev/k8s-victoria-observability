@@ -1,7 +1,7 @@
 apiVersion: gateway.kgateway.dev/v1alpha1
 kind: GatewayParameters
 metadata:
-  name: edge
+  name: kgateway-public
   namespace: kgateway-system
 spec:
   kube:
@@ -19,7 +19,7 @@ spec:
           whenUnsatisfiable: ScheduleAnyway
           labelSelector:
             matchLabels:
-              gateway.networking.k8s.io/gateway-name: edge
+              gateway.networking.k8s.io/gateway-name: kgateway-public
     envoyContainer:
       resources:
         requests: { cpu: 50m, memory: 64Mi }
@@ -28,7 +28,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
-  name: edge
+  name: kgateway-public
   namespace: kgateway-system
 spec:
   gatewayClassName: kgateway
@@ -36,7 +36,7 @@ spec:
     parametersRef:
       group: gateway.kgateway.dev
       kind: GatewayParameters
-      name: edge
+      name: kgateway-public
   listeners:
     - name: http
       protocol: HTTP
@@ -46,4 +46,4 @@ spec:
           from: Selector
           selector:
             matchLabels:
-              platform/gateway: edge
+              platform/gateway: kgateway-public

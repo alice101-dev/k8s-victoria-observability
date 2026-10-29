@@ -15,7 +15,7 @@ controller:
     limits: { memory: 512Mi }
 discoveryNamespaceSelectors:
   - matchLabels:
-      platform/gateway: edge
+      platform/gateway: kgateway-public
   - matchExpressions:
       - key: kubernetes.io/metadata.name
         operator: In

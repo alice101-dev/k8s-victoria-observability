@@ -1,35 +1,35 @@
-# Gateway runbook (kgateway, Gateway `edge`)
+# Gateway runbook (kgateway, Gateway `kgateway-public`)
 
 The alerts of the `kgateway` VMRule (`infrastructure/configs/kgateway/base/monitoring.yaml`) link to the sections below.
 
 | What | Where |
 |---|---|
-| Gateway and proxy settings | `infrastructure/configs/kgateway/base/gateway.yaml` (Gateway `edge`, GatewayParameters `edge`) |
-| Telemetry | `infrastructure/configs/kgateway/base/telemetry.yaml` (ListenerPolicy `edge-telemetry`) |
+| Gateway and proxy settings | `infrastructure/configs/kgateway/base/gateway.yaml` (Gateway `kgateway-public`, GatewayParameters `kgateway-public`) |
+| Telemetry | `infrastructure/configs/kgateway/base/telemetry.yaml` (ListenerPolicy `kgateway-public-telemetry`) |
 | Controller | `infrastructure/controllers/kgateway`, Deployment `kgateway` in `kgateway-system` |
-| Proxies | Deployment `edge` in `kgateway-system`, Service `edge` (ClusterIP, port 80) |
-| Dashboard | Grafana → Platform → Gateway — Edge (`/d/gateway-edge`) |
-| Access logs | LogsQL `{service.name="edge-gateway"}` (OTLP, one record per request, with `trace_id`) |
-| Traces | VictoriaTraces, service `edge-gateway`: one `ingress` span per request and one span per upstream call |
+| Proxies | Deployment `kgateway-public` in `kgateway-system`, Service `kgateway-public` (ClusterIP, port 80) |
+| Dashboard | Grafana → Platform → Gateway — kgateway-public (`/d/gateway-kgateway-public`) |
+| Access logs | LogsQL `{service.name="kgateway-public"}` (OTLP, one record per request, with `trace_id`) |
+| Traces | VictoriaTraces, service `kgateway-public`: one `ingress` span per request and one span per upstream call |
 | Metrics | `envoy_*{job="kgateway-system/kgateway-proxy"}`; listener `envoy_http_conn_manager_prefix="http"`; upstream `envoy_cluster_name="kube_<namespace>_<service>_<port>"` |
 
-Routes are accepted from namespaces labelled `platform/gateway: edge` only. The controller only discovers those
+Routes are accepted from namespaces labelled `platform/gateway: kgateway-public` only. The controller only discovers those
 namespaces, `kgateway-system` and `monitoring` (`discoveryNamespaceSelectors` in `infrastructure/controllers/kgateway/values.yaml`), so a
 backend in another namespace has no Envoy cluster.
 
 ```text
 # LogsQL: requests per status and route in the last hour
-_time:1h {service.name="edge-gateway"} | stats by (http.response.status_code, envoy.route_name) count() requests
+_time:1h {service.name="kgateway-public"} | stats by (http.response.status_code, envoy.route_name) count() requests
 
 # LogsQL: failed requests with the Envoy response flags (UH no healthy upstream, UF connection failure, UT timeout, NR no route)
-_time:1h {service.name="edge-gateway"} http.response.status_code:~"^5" | fields _time, _msg, envoy.response_flags, envoy.upstream_cluster, trace_id
+_time:1h {service.name="kgateway-public"} http.response.status_code:~"^5" | fields _time, _msg, envoy.response_flags, envoy.upstream_cluster, trace_id
 ```
 
 ## GatewayProxyDown
 
-**Meaning.** No `edge` proxy replica has been scraped as up for 2 minutes. Every request through the gateway fails.
+**Meaning.** No `kgateway-public` proxy replica has been scraped as up for 2 minutes. Every request through the gateway fails.
 
-**Diagnose.** `kubectl -n kgateway-system get pods -l gateway.networking.k8s.io/gateway-name=edge`, their events and
+**Diagnose.** `kubectl -n kgateway-system get pods -l gateway.networking.k8s.io/gateway-name=kgateway-public`, their events and
 logs. The proxies get their configuration from the controller over xDS (port 9977): check `KgatewayControllerDown`.
 After a node loss both replicas may be pending (`KubePodsUnschedulable`).
 
@@ -67,7 +67,7 @@ Invalid resources are replaced by a direct 500 response (validation level `stand
 **Meaning.** More than 5% of the requests at the gateway listener answered 5xx for 10 minutes.
 
 **Diagnose.** Status and response flags in the access logs (recipes above): `UH` no healthy endpoint, `UF` connection
-failure, `UT` upstream timeout come from the gateway; plain 5xx without flags come from the backend. Gateway — Edge
+failure, `UT` upstream timeout come from the gateway; plain 5xx without flags come from the backend. Gateway — kgateway-public
 dashboard: Upstreams row. Open a failing request's `trace_id` to follow it into the service.
 
 **Fix.** Depends on the backend: `GatewayUpstreamErrors` names it.

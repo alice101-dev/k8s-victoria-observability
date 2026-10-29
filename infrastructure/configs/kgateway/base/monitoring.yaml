@@ -39,8 +39,8 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: No replica of the edge gateway proxy is up
-            description: Every request through the edge Gateway fails. Check the edge Deployment in kgateway-system and the kgateway controller.
+            summary: No replica of the kgateway-public proxy is up
+            description: Every request through the Gateway kgateway-public fails. Check the kgateway-public Deployment in kgateway-system and the kgateway controller.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#gatewayproxydown
         - alert: GatewayProxyReplicasMissing
           expr: (count(up{job="kgateway-system/kgateway-proxy"} == 1) or vector(0)) < 2
@@ -48,7 +48,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "Only {{ $value }} of 2 edge gateway proxy replicas are up"
+            summary: "Only {{ $value }} of 2 kgateway-public proxy replicas are up"
             description: The gateway still serves traffic but has no redundancy; one more failure or a Spot preemption takes it down.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#gatewayproxyreplicasmissing
         - alert: KgatewayControllerDown
@@ -75,7 +75,7 @@ spec:
           labels:
             severity: warning
           annotations:
-            summary: "{{ $value | humanizePercentage }} of requests through the edge gateway answer 5xx"
+            summary: "{{ $value | humanizePercentage }} of requests through the Gateway kgateway-public answer 5xx"
             description: Responses with status 5xx at the gateway listener, from the backends or from the gateway itself (no healthy upstream, timeouts). GatewayUpstreamErrors names the backend.
             runbook_url: https://github.com/alice101-dev/k8s-victoria-observability/blob/main/docs/runbooks/gateway.md#gatewayhigherrorrate
         - alert: GatewayUpstreamErrors

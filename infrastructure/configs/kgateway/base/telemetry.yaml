@@ -1,13 +1,13 @@
 apiVersion: gateway.kgateway.dev/v1alpha1
 kind: ListenerPolicy
 metadata:
-  name: edge-telemetry
+  name: kgateway-public-telemetry
   namespace: kgateway-system
 spec:
   targetRefs:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: edge
+      name: kgateway-public
   default:
     httpSettings:
       tracing:
@@ -15,7 +15,7 @@ spec:
         spawnUpstreamSpan: true
         provider:
           openTelemetry:
-            serviceName: edge-gateway
+            serviceName: kgateway-public
             grpcService:
               backendRef:
                 group: ""
@@ -27,7 +27,7 @@ spec:
       accessLog:
         - openTelemetry:
             grpcService:
-              logName: edge-access
+              logName: kgateway-public-access
               backendRef:
                 group: ""
                 kind: Service
@@ -40,7 +40,7 @@ spec:
               values:
                 - key: service.name
                   value:
-                    stringValue: edge-gateway
+                    stringValue: kgateway-public
             attributes:
               values:
                 - key: http.request.method

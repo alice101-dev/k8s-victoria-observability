@@ -5,7 +5,7 @@ Every data-tier and platform alert links to its runbook section through the `run
 - [deus.md](deus.md): the deus services (SLO burn rates, a service down, outbox events dead or waiting, database
   pool exhausted, error log spikes)
 - [postgres.md](postgres.md): CloudNativePG cluster `deus-db` (availability, replication, locks, disk, backups)
-- [gateway.md](gateway.md): the edge Gateway (kgateway): proxies, controller, error rate per listener and backend
+- [gateway.md](gateway.md): the Gateway kgateway-public (kgateway): proxies, controller, error rate per listener and backend
 - [kubernetes.md](kubernetes.md): Kubernetes events, node restarts (spot preemptions), scheduling, OOM kills
 - [platform.md](platform.md): Argo CD (sync failures, drift, health, Git), External Secrets (sync, stores),
   cert-manager (certificate readiness, renewal and expiry, issuers)

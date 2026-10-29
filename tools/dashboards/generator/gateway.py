@@ -1,8 +1,8 @@
 from .common import (CADVISOR, COUNT, RI, VL, by_name, Dash, dashboard, logs_panel, restart_annotations, stat,
                      table, thresholds, ts, vl, vm)
 
-FILE = "gateway-edge.json"
-UID = "gateway-edge"
+FILE = "gateway-kgateway-public.json"
+UID = "gateway-kgateway-public"
 
 d = Dash()
 NS = 'namespace="kgateway-system"'
@@ -10,7 +10,7 @@ PROXY = 'job="kgateway-system/kgateway-proxy"'
 LISTENER = f'{PROXY}, envoy_http_conn_manager_prefix="http"'
 UPSTREAM = f'{PROXY}, envoy_cluster_name=~"kube_.*", envoy_cluster_name!~"kube_(monitoring|kgateway-system)_.*"'
 OTEL = f'{PROXY}, envoy_cluster_name=~"kube_monitoring_otel-collector_4317"'
-ACCESS = '{service.name="edge-gateway"}'
+ACCESS = '{service.name="kgateway-public"}'
 REQ = f"sum(rate(envoy_http_downstream_rq_xx{{{LISTENER}}}{RI}))"
 ERR5 = f'sum(rate(envoy_http_downstream_rq_xx{{{LISTENER}, envoy_response_code_class="5"}}{RI}))'
 
@@ -43,7 +43,7 @@ for p in (
          "95th percentile of the time from the first byte received to the last byte sent, gateway included.",
          decimals=0),
     stat("Proxies up", f'count(up{{{PROXY}}} == 1) or vector(0)', "short",
-         thresholds(("red", None), ("orange", 1), ("green", 2)), "Envoy replicas of the edge Gateway that are scraped as up.",
+         thresholds(("red", None), ("orange", 1), ("green", 2)), "Envoy replicas of the Gateway kgateway-public that are scraped as up.",
          decimals=0),
     stat("Controller up", 'max(up{job="kgateway"}) or vector(0)', "short", thresholds(("red", None), ("green", 1)),
          "The kgateway controller that turns Gateway API resources into Envoy configuration.", decimals=0),
@@ -137,14 +137,14 @@ d.add(ts("Controller translations and syncs",
          "short", min_=0, desc="How often the controller rebuilds the Envoy configuration and pushes it to the proxies; "
                                "anything but success fires KgatewayTranslationErrors."), 8, 7)
 
-gateway = dashboard(UID, "Gateway — Edge", ["platform", "gateway"], d.panels, [],
-                    "The internal edge Gateway (kgateway, Envoy): traffic, errors and latency at the listener, every "
+gateway = dashboard(UID, "Gateway — kgateway-public", ["platform", "gateway"], d.panels, [],
+                    "The internal Gateway kgateway-public (kgateway, Envoy): traffic, errors and latency at the listener, every "
                     "routed backend, OTLP access logs with their traces, and the health of the proxies and controller.")
 gateway["links"] = [
     {"title": "Platform dashboards", "type": "dashboards", "tags": ["platform"], "asDropdown": True,
      "includeVars": False, "keepTime": True},
     {"title": "Explore gateway traces", "type": "link",
-     "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"search\",\"service\":\"edge-gateway\"}]}",
+     "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"search\",\"service\":\"kgateway-public\"}]}",
      "targetBlank": True},
 ]
 gateway["annotations"] = {"list": restart_annotations(NS)}

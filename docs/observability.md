@@ -34,8 +34,8 @@ flowchart LR
     rx["OTLP gRPC :4317 / HTTP :4318"] --> proc["memory_limiter → k8s_attributes → filter / redaction → batch"]
   end
   svc -- "metrics, logs, traces (OTLP)" --> rx
-  edge["Gateway edge (Envoy)"] -- "spans, access logs (OTLP gRPC)" --> rx
-  edge --> svc
+  gw["Gateway kgateway-public (Envoy)"] -- "spans, access logs (OTLP gRPC)" --> rx
+  gw --> svc
   proc -- "/opentelemetry/v1/metrics" --> vm[("VMSingle")]
   proc -- "/insert/opentelemetry/v1/logs" --> vl[("VLSingle")]
   proc -- "/insert/opentelemetry/v1/traces" --> vt[("VTSingle")]
@@ -81,19 +81,19 @@ docker run --rm -v /tmp/relay.yaml:/relay.yaml:ro -e MY_POD_IP=127.0.0.1 \
 
 ### Gateway telemetry
 
-The ListenerPolicy `edge-telemetry` (`infrastructure/configs/kgateway/base/telemetry.yaml`) configures the Envoy proxies of the
-Gateway `edge`:
+The ListenerPolicy `kgateway-public-telemetry` (`infrastructure/configs/kgateway/base/telemetry.yaml`) configures the Envoy proxies of the
+Gateway `kgateway-public`:
 
-- **Traces**: an `ingress` server span per request (service `edge-gateway`) and, with `spawnUpstreamSpan`, a client span
+- **Traces**: an `ingress` server span per request (service `kgateway-public`) and, with `spawnUpstreamSpan`, a client span
   per upstream call; the W3C `traceparent` header is forwarded, so the services' spans join the same trace.
-- **Access logs**: one OpenTelemetry log record per request (`logName: edge-access`) with the method, path, status,
+- **Access logs**: one OpenTelemetry log record per request (`logName: kgateway-public-access`) with the method, path, status,
   Envoy response flags, route, upstream cluster and host, duration, client address, user agent and request ID as
   attributes. Envoy sets the record's `trace_id` and `span_id`, so logs and traces correlate.
 - **Metrics**: Envoy statistics on `:9091/metrics` (rewritten to `/stats/prometheus?usedonly`), scraped by the
   VMPodScrape `kgateway-proxy`; controller metrics by the VMServiceScrape `kgateway`.
 
 The proxies reach the collector in `monitoring` through a ReferenceGrant there. The controller only discovers the
-namespaces labelled `platform/gateway: edge`, `kgateway-system` and `monitoring`, which keeps Envoy's configuration and
+namespaces labelled `platform/gateway: kgateway-public`, `kgateway-system` and `monitoring`, which keeps Envoy's configuration and
 its metric series small. Rates in the gateway alerts and dashboard divide by the sum of `*_rq_xx` over every status
 class rather than `*_rq_total`: a status class that appears for the first time is counted from zero, and dividing two
 counters of the same family keeps the ratio between 0 and 1.

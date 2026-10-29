@@ -1,7 +1,7 @@
 {
-  "uid": "gateway-edge",
-  "title": "Gateway — Edge",
-  "description": "The internal edge Gateway (kgateway, Envoy): traffic, errors and latency at the listener, every routed backend, OTLP access logs with their traces, and the health of the proxies and controller.",
+  "uid": "gateway-kgateway-public",
+  "title": "Gateway — kgateway-public",
+  "description": "The internal Gateway kgateway-public (kgateway, Envoy): traffic, errors and latency at the listener, every routed backend, OTLP access logs with their traces, and the health of the proxies and controller.",
   "tags": [
     "platform",
     "gateway",
@@ -34,7 +34,7 @@
     {
       "title": "Explore gateway traces",
       "type": "link",
-      "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"search\",\"service\":\"edge-gateway\"}]}",
+      "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"queryType\":\"search\",\"service\":\"kgateway-public\"}]}",
       "targetBlank": true
     }
   ],
@@ -277,7 +277,7 @@
     {
       "type": "stat",
       "title": "Proxies up",
-      "description": "Envoy replicas of the edge Gateway that are scraped as up.",
+      "description": "Envoy replicas of the Gateway kgateway-public that are scraped as up.",
       "datasource": {
         "type": "prometheus",
         "uid": "VictoriaMetrics"
@@ -1290,7 +1290,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{service.name=\"edge-gateway\"} | stats by (envoy.route_name, http.response.status_code) count() requests | sort by (requests desc) | limit 30",
+          "expr": "{service.name=\"kgateway-public\"} | stats by (envoy.route_name, http.response.status_code) count() requests | sort by (requests desc) | limit 30",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
@@ -1326,7 +1326,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "{service.name=\"edge-gateway\"} http.response.status_code:~\"^5\"",
+          "expr": "{service.name=\"kgateway-public\"} http.response.status_code:~\"^5\"",
           "queryType": "instant",
           "editorMode": "code",
           "refId": "A",
