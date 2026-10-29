@@ -141,10 +141,13 @@ spec:
               - key: redis.conf
                 path: redis.conf
   volumeClaimTemplates:
-    - metadata:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
         name: data
       spec:
         accessModes: ["ReadWriteOnce"]
+        volumeMode: Filesystem
         resources:
           requests:
             storage: 1Gi
