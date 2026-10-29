@@ -3239,6 +3239,178 @@
       }
     },
     {
+      "type": "table",
+      "title": "Requests from clients",
+      "description": "Newest calls that started a trace in a client, such as the dashboard in the browser, with everything they caused behind the gateway. Click a trace ID to show the whole trace below.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              },
+              {
+                "id": "custom.width",
+                "value": 165
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Show this trace below",
+                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 250
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Client"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 60
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 85
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Time",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "started": true
+            },
+            "indexByName": {
+              "started_ms": 0,
+              "trace_id": 1,
+              "client": 2,
+              "request": 3,
+              "code": 4,
+              "took": 5
+            },
+            "renameByName": {
+              "started_ms": "Time",
+              "trace_id": "Trace ID",
+              "client": "Client",
+              "request": "Request",
+              "code": "Status",
+              "took": "Duration"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=deus kind:=3 parent_span_id:\"\" -\"span_attr:db.system.name\":* | copy \"resource_attr:service.name\" as client, \"span_attr:http.request.method\" as method, \"span_attr:http.response.status_code\" as code | extract_regexp \"^https?://[^/]+(?P<path>/[^?#]*)\" from \"span_attr:url.full\" | format \"<method> <path>\" as request | stats by (trace_id, client, request, code) max(duration) took, max(start_time_unix_nano) started | math round(started/1e6) as started_ms | sort by (started_ms desc) | limit 50",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 35,
+      "gridPos": {
+        "x": 0,
+        "y": 127,
+        "w": 24,
+        "h": 8
+      }
+    },
+    {
       "type": "traces",
       "title": "Trace: ${trace_id:text}",
       "datasource": {
@@ -3257,10 +3429,10 @@
           "query": "${trace_id}"
         }
       ],
-      "id": 35,
+      "id": 36,
       "gridPos": {
         "x": 0,
-        "y": 127,
+        "y": 135,
         "w": 24,
         "h": 30
       }

@@ -258,6 +258,21 @@ d.add(lq_table("Slowest requests (over ${min_duration:text})", f"{SERVER} durati
 d.add(lq_table("Failed requests (5xx)", f"{SERVER} {IS_5XX} {REQUESTS} | sort by (started_ms desc) | limit 50",
                REQUEST_COLUMNS, "Server spans answered with a 5xx, newest first. Click a trace ID to show the trace below.",
                overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Time", "desc": True}], hide=("started",)), 12, 10)
+CLIENT_REQUESTS = (f'{APP_SPANS} {ENTRY} | copy "resource_attr:service.name" as client, '
+                   '"span_attr:http.request.method" as method, "span_attr:http.response.status_code" as code '
+                   '| extract_regexp "^https?://[^/]+(?P<path>/[^?#]*)" from "span_attr:url.full" '
+                   '| format "<method> <path>" as request '
+                   "| stats by (trace_id, client, request, code) max(duration) took, max(start_time_unix_nano) started "
+                   "| math round(started/1e6) as started_ms | sort by (started_ms desc) | limit 50")
+d.add(lq_table("Requests from clients", CLIENT_REQUESTS,
+               [("started_ms", "Time"), ("trace_id", "Trace ID"), ("client", "Client"), ("request", "Request"),
+                ("code", "Status"), ("took", "Duration")],
+               "Newest calls that started a trace in a client, such as the dashboard in the browser, with everything "
+               "they caused behind the gateway. Click a trace ID to show the whole trace below.",
+               overrides=[by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
+                          LINKS_ON("Trace ID", TRACE_LINK, 250), by_name("Client", [{"id": "custom.width", "value": 110}]),
+                          by_name("Status", [{"id": "custom.width", "value": 60}]), NS_UNIT("Duration", 85)],
+               sort=[{"displayName": "Time", "desc": True}], hide=("started",)), 24, 8)
 d.add({"type": "traces", "title": "Trace: ${trace_id:text}", "datasource": VT,
        "description": "The slowest or failed request of the time range by default; pick another in the Trace variable "
                       "or click a trace ID in the tables above. Every span with its timing, attributes and links to the "
