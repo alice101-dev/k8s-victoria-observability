@@ -1623,7 +1623,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "sum by (db_operation_name) (rate(db_client_operation_duration_seconds_count{service_namespace=\"deus\", service_name=\"$service\"}[$__rate_interval]))",
+          "expr": "sum by (db_operation_name) (rate(db_client_operation_duration_seconds_count{service_namespace=\"deus\", service_name=\"$service\", db_system_name=\"postgresql\"}[$__rate_interval]))",
           "legendFormat": "{{db_operation_name}}",
           "refId": "A",
           "range": true,
@@ -1685,7 +1685,7 @@
             "type": "prometheus",
             "uid": "VictoriaMetrics"
           },
-          "expr": "histogram_quantile(0.95, sum by (db_operation_name, le) (rate(db_client_operation_duration_seconds_bucket{service_namespace=\"deus\", service_name=\"$service\"}[$__rate_interval])))",
+          "expr": "histogram_quantile(0.95, sum by (db_operation_name, le) (rate(db_client_operation_duration_seconds_bucket{service_namespace=\"deus\", service_name=\"$service\", db_system_name=\"postgresql\"}[$__rate_interval])))",
           "legendFormat": "{{db_operation_name}}",
           "refId": "A",
           "range": true,
@@ -1708,13 +1708,197 @@
     },
     {
       "type": "row",
-      "title": "Saturation",
+      "title": "Cache — $service",
       "collapsed": false,
       "panels": [],
       "id": 29,
       "gridPos": {
         "x": 0,
         "y": 58,
+        "w": 24,
+        "h": 1
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache hit ratio",
+      "description": "Reads answered by Redis. Empty for services that do not use the cache; low after a deploy or an invalidation, then rising.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          },
+          "decimals": 1,
+          "min": 0,
+          "max": 1
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum(rate(cache_lookups_total{service_namespace=\"deus\", service_name=\"$service\", cache_result=\"hit\"}[$__rate_interval])) / sum(rate(cache_lookups_total{service_namespace=\"deus\", service_name=\"$service\"}[$__rate_interval]))",
+          "legendFormat": "hit ratio",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 30,
+      "gridPos": {
+        "x": 0,
+        "y": 59,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache lookups by result",
+      "description": "hit: served from Redis; miss: read from PostgreSQL and stored; error: Redis unreachable or slower than the timeout, read from PostgreSQL.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "sum by (cache_result) (rate(cache_lookups_total{service_namespace=\"deus\", service_name=\"$service\"}[$__rate_interval]))",
+          "legendFormat": "{{cache_result}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 31,
+      "gridPos": {
+        "x": 8,
+        "y": 59,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "p95 duration by Redis command",
+      "description": "Client-side duration of the Redis commands the service sends: GET and SET for the cache, GETDEL and EVAL for sessions and rate limits.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "VictoriaMetrics"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never",
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "VictoriaMetrics"
+          },
+          "expr": "histogram_quantile(0.95, sum by (db_operation_name, le) (rate(db_client_operation_duration_seconds_bucket{service_namespace=\"deus\", service_name=\"$service\", db_system_name=\"redis\"}[$__rate_interval])))",
+          "legendFormat": "{{db_operation_name}}",
+          "refId": "A",
+          "range": true,
+          "instant": false
+        }
+      ],
+      "id": 32,
+      "gridPos": {
+        "x": 16,
+        "y": 59,
+        "w": 8,
+        "h": 8
+      }
+    },
+    {
+      "type": "row",
+      "title": "Saturation",
+      "collapsed": false,
+      "panels": [],
+      "id": 33,
+      "gridPos": {
+        "x": 0,
+        "y": 67,
         "w": 24,
         "h": 1
       }
@@ -1779,10 +1963,10 @@
           "instant": false
         }
       ],
-      "id": 30,
+      "id": 34,
       "gridPos": {
         "x": 0,
-        "y": 59,
+        "y": 68,
         "w": 6,
         "h": 8
       }
@@ -1846,10 +2030,10 @@
           "instant": false
         }
       ],
-      "id": 31,
+      "id": 35,
       "gridPos": {
         "x": 6,
-        "y": 59,
+        "y": 68,
         "w": 6,
         "h": 8
       }
@@ -1902,10 +2086,10 @@
           "instant": false
         }
       ],
-      "id": 32,
+      "id": 36,
       "gridPos": {
         "x": 12,
-        "y": 59,
+        "y": 68,
         "w": 6,
         "h": 8
       }
@@ -1961,10 +2145,10 @@
           "instant": false
         }
       ],
-      "id": 33,
+      "id": 37,
       "gridPos": {
         "x": 18,
-        "y": 59,
+        "y": 68,
         "w": 6,
         "h": 8
       }
@@ -1974,10 +2158,10 @@
       "title": "Logs — $service",
       "collapsed": false,
       "panels": [],
-      "id": 34,
+      "id": 38,
       "gridPos": {
         "x": 0,
-        "y": 67,
+        "y": 76,
         "w": 24,
         "h": 1
       }
@@ -2093,10 +2277,10 @@
           "legendFormat": "{{severity_text}}"
         }
       ],
-      "id": 35,
+      "id": 39,
       "gridPos": {
         "x": 0,
-        "y": 68,
+        "y": 77,
         "w": 12,
         "h": 8
       }
@@ -2197,10 +2381,10 @@
           "refId": "A"
         }
       ],
-      "id": 36,
+      "id": 40,
       "gridPos": {
         "x": 12,
-        "y": 68,
+        "y": 77,
         "w": 12,
         "h": 8
       }
@@ -2234,10 +2418,10 @@
           "maxLines": 500
         }
       ],
-      "id": 37,
+      "id": 41,
       "gridPos": {
         "x": 0,
-        "y": 76,
+        "y": 85,
         "w": 24,
         "h": 10
       }
@@ -2247,10 +2431,10 @@
       "title": "Traces — $service",
       "collapsed": false,
       "panels": [],
-      "id": 38,
+      "id": 42,
       "gridPos": {
         "x": 0,
-        "y": 86,
+        "y": 95,
         "w": 24,
         "h": 1
       }
@@ -2301,10 +2485,10 @@
           "limit": 20
         }
       ],
-      "id": 39,
+      "id": 43,
       "gridPos": {
         "x": 0,
-        "y": 87,
+        "y": 96,
         "w": 12,
         "h": 9
       },
@@ -2361,10 +2545,10 @@
           "limit": 20
         }
       ],
-      "id": 40,
+      "id": 44,
       "gridPos": {
         "x": 12,
-        "y": 87,
+        "y": 96,
         "w": 12,
         "h": 9
       },

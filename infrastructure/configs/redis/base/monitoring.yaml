@@ -1,0 +1,46 @@
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMPodScrape
+metadata:
+  name: redis
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  podMetricsEndpoints:
+    - port: metrics
+---
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMRule
+metadata:
+  name: redis
+spec:
+  groups:
+    - name: redis
+      rules:
+        - alert: RedisDown
+          expr: max by (namespace, pod) (redis_up) == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} is down"
+            description: >-
+              The exporter cannot reach Redis. Sessions and the chart cache fall back to PostgreSQL, so requests still
+              work but are slower, and login rate limits are not enforced.
+        - alert: RedisMemoryHigh
+          expr: max by (namespace, pod) (redis_memory_used_bytes / redis_memory_max_bytes) > 0.9
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} uses {{ $value | humanizePercentage }} of maxmemory"
+            description: >-
+              Keys with a TTL are evicted first (volatile-lru). Frequent evictions mean sessions and cache entries are
+              dropped early; raise maxmemory or shorten TTLs.
+        - alert: RedisRejectedConnections
+          expr: max by (namespace, pod) (increase(redis_rejected_connections_total[5m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Redis {{ $labels.namespace }}/{{ $labels.pod }} rejected connections"
+            description: The maxclients limit was reached; clients cannot connect.

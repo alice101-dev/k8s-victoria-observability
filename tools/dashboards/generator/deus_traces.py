@@ -60,11 +60,13 @@ GATEWAY = '"resource_attr:service.namespace":=kgateway-system'
 IN_CLUSTER = '| replace_regexp ("\\\\.[a-z0-9-]+\\\\.svc(\\\\.cluster\\\\.local)?\\\\.?$", "") at {f} '
 MAP_SPANS = f"({APP_SPANS} or {GATEWAY})"
 MAP_FAILED = f'{FAILED} -"span_attr:http.status_code":~"^4"'
-TO_DB = '| format if (kind:=3 "span_attr:db.system.name":=postgresql) "postgresql" as {f} '
+IS_DB = '"span_attr:db.system.name":*'
+DB_FIELDS = '| copy "span_attr:db.system.name" as db_system, "span_attr:server.address" as db_host '
+TO_DB = DB_FIELDS + '| format if (kind:=3 db_system:*) "<db_system>" as {f} '
 ENTRY = 'kind:=3 parent_span_id:"" -"span_attr:db.system.name":*'
-MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_SQL}) or ({ENTRY})) "
+MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_DB}) or ({ENTRY})) "
              '| copy "resource_attr:service.name" as id ' + TO_DB.format(f="id")
-             + '| copy id as title | format if (id:=postgresql) "deus-db (PostgreSQL)" as title '
+             + '| copy id as title | format if (kind:=3 db_system:*) "<db_host> (<db_system>)" as title '
              + f"| stats by (id, title) rate() rps, quantile(0.95, duration) p95, count() requests, "
                f"count() if ({MAP_FAILED}) failed "
                "| math round(p95/1e6, 0.1) as p95_ms, round(failed*100/requests, 0.01) as failed_pct "
@@ -79,8 +81,8 @@ MAP_EDGES = (f"{MAP_SPANS} kind:=2 parent_span_id:* "
              '| copy "resource_attr:service.name" as target '
              f"| join by (trace_id, parent_span_id) ({CALLERS}) "
              "| filter source:* -source:eq_field(target) "
-             f'| union ({APP_SPANS} kind:=3 {IS_SQL} | copy "resource_attr:service.name" as source, duration as call_duration '
-             '| format "postgresql" as target) '
+             f'| union ({APP_SPANS} kind:=3 {IS_DB} | copy "resource_attr:service.name" as source, '
+             '"span_attr:db.system.name" as target, duration as call_duration) '
              '| format "<source>→<target>" as id '
              f"| stats by (id, source, target) rate() mainstat, quantile(0.95, call_duration) p95, count() detail__calls, "
              f"count() if ({MAP_FAILED}) detail__failed "
@@ -105,8 +107,8 @@ d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
                              "arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
                    "edges": {"mainStatUnit": "reqps"}}}, 16, 15)
 d.add(lq_table("Calls to dependencies",
-               f'{APP_SPANS} kind:=3 {SVC} | copy "span_attr:server.address" as peer ' + IN_CLUSTER.format(f="peer") + 
-               f'| format if ({IS_SQL}) "deus-db (PostgreSQL)" as peer | filter peer:* '
+               f'{APP_SPANS} kind:=3 {SVC} | copy "span_attr:server.address" as peer ' + IN_CLUSTER.format(f="peer")
+               + DB_FIELDS + '| format if (db_system:*) "<db_host> (<db_system>)" as peer | filter peer:* '
                f"| stats by (service, peer) count() calls, count() if ({FAILED}) failed, count() if ({IS_4XX}) e4, "
                "quantile(0.95, duration) p95 | sort by (calls desc) | limit 50",
                [("service", "Caller"), ("peer", "Callee"), ("calls", "Calls"), ("failed", "Failed"), ("e4", "4xx"),

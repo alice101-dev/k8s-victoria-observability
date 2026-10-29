@@ -95,6 +95,8 @@ d.add(ts("Delivery delay p95", [
          "sees the change."), 8, 8)
 
 DB = "db_client_operation_duration_seconds"
+SQL_OPS = f'{SVC}, db_system_name="postgresql"'
+CACHE_OPS = f'{SVC}, db_system_name="redis"'
 d.row("Database — $service")
 for p in (
     d.add(ts("Connection pool", [
@@ -104,14 +106,29 @@ for p in (
         desc="Connections of the service's pools by state (DB_MAX_CONNECTIONS per pod) and requests waiting for a free "
              "connection (right). Waiting requests mean the pool is too small or queries hold connections too long."), 8, 8),
     d.add(ts("Operations by type", [
-        vm(f"sum by (db_operation_name) (rate({DB}_count{{{SVC}}}{RI}))", "{{db_operation_name}}")], "ops", stack=True,
+        vm(f"sum by (db_operation_name) (rate({DB}_count{{{SQL_OPS}}}{RI}))", "{{db_operation_name}}")], "ops", stack=True,
         desc="Statements and transaction commands per second as the service sends them."), 8, 8),
     d.add(ts("p95 duration by operation", [
-        vm(f"histogram_quantile(0.95, sum by (db_operation_name, le) (rate({DB}_bucket{{{SVC}}}{RI})))", "{{db_operation_name}}")],
+        vm(f"histogram_quantile(0.95, sum by (db_operation_name, le) (rate({DB}_bucket{{{SQL_OPS}}}{RI})))", "{{db_operation_name}}")],
         "s", desc="Client-side duration: network, lock waits and execution together. The slow statements themselves are "
                   "in Deus — Traces (SQL statements)."), 8, 8),
 ):
     p["links"] = DB_LINK
+
+d.row("Cache — $service")
+d.add(ts("Cache hit ratio", [
+    vm(f'sum(rate(cache_lookups_total{{{SVC}, cache_result="hit"}}{RI})) / sum(rate(cache_lookups_total{{{SVC}}}{RI}))', "hit ratio")],
+    "percentunit", min_=0, max_=1, decimals=1,
+    desc="Reads answered by Redis. Empty for services that do not use the cache; low after a deploy or an "
+         "invalidation, then rising."), 8, 8)
+d.add(ts("Cache lookups by result", [
+    vm(f"sum by (cache_result) (rate(cache_lookups_total{{{SVC}}}{RI}))", "{{cache_result}}")], "ops", stack=True,
+    desc="hit: served from Redis; miss: read from PostgreSQL and stored; error: Redis unreachable or slower than the "
+         "timeout, read from PostgreSQL."), 8, 8)
+d.add(ts("p95 duration by Redis command", [
+    vm(f"histogram_quantile(0.95, sum by (db_operation_name, le) (rate({DB}_bucket{{{CACHE_OPS}}}{RI})))", "{{db_operation_name}}")],
+    "s", desc="Client-side duration of the Redis commands the service sends: GET and SET for the cache, GETDEL and EVAL "
+              "for sessions and rate limits."), 8, 8)
 
 d.row("Saturation")
 d.add(ts("CPU per pod", [

@@ -118,3 +118,12 @@ configMapGenerator:
         grafana_dashboard: "1"
       annotations:
         grafana_folder: Platform
+  - name: platform-redis-dashboard
+    files:
+      - platform-redis.json
+    options:
+      disableNameSuffixHash: true
+      labels:
+        grafana_dashboard: "1"
+      annotations:
+        grafana_folder: Platform
