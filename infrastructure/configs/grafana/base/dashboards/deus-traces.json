@@ -471,6 +471,63 @@
     },
     {
       "type": "stat",
+      "title": "p99 latency",
+      "description": "99th percentile duration of the server spans: the slow tail behind p95. The Slowest requests table below lists those traces.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ns",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "–"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 | stats quantile(0.99, duration) p99",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 5,
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      }
+    },
+    {
+      "type": "stat",
       "title": "Requests slower than 1s",
       "description": "Server spans that took more than one second: what users notice as slow. The Endpoints table and Where the time goes show which endpoint and why.",
       "datasource": {
@@ -522,9 +579,9 @@
           "refId": "A"
         }
       ],
-      "id": 5,
+      "id": 6,
       "gridPos": {
-        "x": 12,
+        "x": 16,
         "y": 1,
         "w": 4,
         "h": 4
@@ -578,63 +635,6 @@
             "uid": "VictoriaTracesLogsQL"
           },
           "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" | stats count() failed",
-          "queryType": "stats",
-          "editorMode": "code",
-          "refId": "A"
-        }
-      ],
-      "id": 6,
-      "gridPos": {
-        "x": 16,
-        "y": 1,
-        "w": 4,
-        "h": 4
-      }
-    },
-    {
-      "type": "stat",
-      "title": "p99 latency",
-      "description": "99th percentile duration of the server spans: the slow tail behind p95. The Slowest requests table below lists those traces.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "VictoriaTracesLogsQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "ns",
-          "decimals": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "noValue": "–"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "VictoriaTracesLogsQL"
-          },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 | stats quantile(0.99, duration) p99",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"

@@ -44,6 +44,9 @@ d.add(lq_stat("5xx", f"{SERVER} | stats count() calls, count() if ({IS_5XX}) fai
               decimals=2), 4, 4)
 d.add(lq_stat("p95 latency", f"{SERVER} | stats quantile(0.95, duration) p95", "ns", thresholds(("blue", None)),
               "95th percentile duration of the server spans."), 4, 4)
+d.add(lq_stat("p99 latency", f"{SERVER} | stats quantile(0.99, duration) p99", "ns", thresholds(("blue", None)),
+              "99th percentile duration of the server spans: the slow tail behind p95. The Slowest requests table "
+              "below lists those traces."), 4, 4)
 d.add(lq_stat("Requests slower than 1s", f"{SERVER} duration:>1000000000 | stats count() slow", "short",
               thresholds(("green", None), ("orange", 1)),
               "Server spans that took more than one second: what users notice as slow. The Endpoints table and "
@@ -51,9 +54,6 @@ d.add(lq_stat("Requests slower than 1s", f"{SERVER} duration:>1000000000 | stats
 d.add(lq_stat("Failed operations", f"{SPANS} {FAILED} | stats count() failed", "short", thresholds(("green", None), ("red", 1)),
               "Spans with an error status, 4xx answers seen by a client excluded: 5xx, database errors, failed "
               "outbox deliveries.", decimals=0), 4, 4)
-d.add(lq_stat("p99 latency", f"{SERVER} | stats quantile(0.99, duration) p99", "ns", thresholds(("blue", None)),
-              "99th percentile duration of the server spans: the slow tail behind p95. The Slowest requests table "
-              "below lists those traces."), 4, 4)
 
 d.row("Service map")
 GATEWAY = '"resource_attr:service.namespace":=kgateway-system'
