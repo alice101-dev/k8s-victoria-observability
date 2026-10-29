@@ -103,7 +103,7 @@ d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
                "detail__p95_ms": "p95 (ms)", "detail__failed_pct": "Failed (%)"}}}],
        "options": {"nodes": {"mainStatUnit": "reqps",
                              "arcs": [{"field": "arc__success", "color": "green"}, {"field": "arc__errors", "color": "red"}]},
-                   "edges": {"mainStatUnit": "reqps"}}}, 14, 15)
+                   "edges": {"mainStatUnit": "reqps"}}}, 16, 15)
 d.add(lq_table("Calls to dependencies",
                f'{APP_SPANS} kind:=3 {SVC} | copy "span_attr:server.address" as peer ' + IN_CLUSTER.format(f="peer") + 
                f'| format if ({IS_SQL}) "deus-db (PostgreSQL)" as peer | filter peer:* '
@@ -113,8 +113,8 @@ d.add(lq_table("Calls to dependencies",
                 ("p95", "p95")],
                "Client spans by caller and callee: other services' /internal endpoints and PostgreSQL. p95 includes the "
                "network and the callee's work.",
-               overrides=[COUNT("Calls"), COUNT("Failed"), COUNT("4xx"), NS_UNIT("p95")],
-               sort=[{"displayName": "Calls", "desc": True}]), 10, 15)
+               overrides=[COUNT("Calls", 60), COUNT("Failed", 55), COUNT("4xx", 45), NS_UNIT("p95", 70)],
+               sort=[{"displayName": "Calls", "desc": True}]), 8, 15)
 
 d.row("Endpoints — $service")
 ENDPOINT_COLUMNS = [("service", "Service"), ("name", "Endpoint"), ("calls", "Calls"), ("rpm", "Req/min"),
