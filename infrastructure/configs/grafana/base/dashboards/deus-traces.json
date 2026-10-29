@@ -593,16 +593,16 @@
     },
     {
       "type": "stat",
-      "title": "Outbox deliveries",
-      "description": "Events delivered (or attempted) by the outbox relays: journals, allocations and emails.",
+      "title": "p99 latency",
+      "description": "99th percentile duration of the server spans: the slow tail behind p95. The Slowest requests table below lists those traces.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "decimals": 0,
+          "unit": "ns",
+          "decimals": 1,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -634,7 +634,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=4 | stats count() deliveries",
+          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 | stats quantile(0.99, duration) p99",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"

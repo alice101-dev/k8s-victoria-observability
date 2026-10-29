@@ -51,8 +51,9 @@ d.add(lq_stat("Requests slower than 1s", f"{SERVER} duration:>1000000000 | stats
 d.add(lq_stat("Failed operations", f"{SPANS} {FAILED} | stats count() failed", "short", thresholds(("green", None), ("red", 1)),
               "Spans with an error status, 4xx answers seen by a client excluded: 5xx, database errors, failed "
               "outbox deliveries.", decimals=0), 4, 4)
-d.add(lq_stat("Outbox deliveries", f"{SPANS} kind:=4 | stats count() deliveries", "short", thresholds(("blue", None)),
-              "Events delivered (or attempted) by the outbox relays: journals, allocations and emails.", decimals=0), 4, 4)
+d.add(lq_stat("p99 latency", f"{SERVER} | stats quantile(0.99, duration) p99", "ns", thresholds(("blue", None)),
+              "99th percentile duration of the server spans: the slow tail behind p95. The Slowest requests table "
+              "below lists those traces."), 4, 4)
 
 d.row("Service map")
 GATEWAY = '"resource_attr:service.namespace":=kgateway-system'
