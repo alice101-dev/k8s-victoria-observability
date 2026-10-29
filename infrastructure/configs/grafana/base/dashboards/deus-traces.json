@@ -3906,7 +3906,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" \"span_attr:ui.action\":* | copy \"span_attr:ui.action\" as action, \"span_attr:app.route\" as route | stats by (trace_id, action, name, route) max(start_time_unix_nano) started_ns, max(duration) took | join by (trace_id) (\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" kind:=3 | stats by (trace_id) count() calls, count() if (status_code:=2) failed) | math round(started_ns/1e6) as started_ms | sort by (started_ms) | limit 200",
+          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" \"span_attr:ui.action\":* | copy \"span_attr:ui.action\" as action, \"span_attr:app.route\" as route | join by (trace_id) (\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" kind:=3 | stats by (trace_id) count() calls, count() if (status_code:=2) failed) | stats by (trace_id, action, name, route) max(start_time_unix_nano) started_ns, max(duration) took, max(calls) calls, max(failed) failed | math round(started_ns/1e6) as started_ms | sort by (started_ms) | limit 200",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"

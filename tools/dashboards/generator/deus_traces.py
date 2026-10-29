@@ -312,9 +312,10 @@ d.add(lq_table("User sessions", USER_SESSIONS,
                sort=[{"displayName": "Last activity", "desc": True}]), 24, 8)
 ACTIONS = (f'{APP_SPANS} {IN_SESSION} {USER_ACTION} '
            '| copy "span_attr:ui.action" as action, "span_attr:app.route" as route '
-           "| stats by (trace_id, action, name, route) max(start_time_unix_nano) started_ns, max(duration) took "
            f"| join by (trace_id) ({APP_SPANS} {IN_SESSION} kind:=3 | stats by (trace_id) count() calls, "
            "count() if (status_code:=2) failed) "
+           "| stats by (trace_id, action, name, route) max(start_time_unix_nano) started_ns, max(duration) took, "
+           "max(calls) calls, max(failed) failed "
            "| math round(started_ns/1e6) as started_ms | sort by (started_ms) | limit 200")
 d.add(lq_table("Actions in session", ACTIONS,
                [("started_ms", "Time"), ("action", "Action"), ("name", "What"), ("route", "Page"), ("took", "Duration"),
