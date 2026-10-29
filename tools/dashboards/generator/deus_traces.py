@@ -60,7 +60,8 @@ IN_CLUSTER = '| replace_regexp ("\\\\.[a-z0-9-]+\\\\.svc(\\\\.cluster\\\\.local)
 MAP_SPANS = f"({APP_SPANS} or {GATEWAY})"
 MAP_FAILED = f'{FAILED} -"span_attr:http.status_code":~"^4"'
 TO_DB = '| format if (kind:=3 "span_attr:db.system.name":=postgresql) "postgresql" as {f} '
-MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_SQL})) "
+ENTRY = 'kind:=3 parent_span_id:"" -"span_attr:db.system.name":*'
+MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_SQL}) or ({ENTRY})) "
              '| copy "resource_attr:service.name" as id ' + TO_DB.format(f="id")
              + '| copy id as title | format if (id:=postgresql) "deus-db (PostgreSQL)" as title '
              + f'| format if ({GATEWAY}) "<id> (kgateway)" as title '
@@ -71,20 +72,26 @@ MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_SQL})) "
                "| stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed "
                "| math (detail__requests-detail__failed)/detail__requests as arc__success, "
                "detail__failed/detail__requests as arc__errors")
-MAP_EDGES = (f"{MAP_SPANS} kind:=3 "
-             '| copy "resource_attr:service.name" as source, "span_attr:server.address" as target '
-             + f'| extract_regexp if ({GATEWAY}) "^kube_[^_]+_(?P<target>.+)_[0-9]+$" from "span_attr:upstream_cluster" '
-             + IN_CLUSTER.format(f="target")
-             + TO_DB.format(f="target")
-             + '| filter target:* | format "<source>→<target>" as id '
-             + f"| stats by (id, source, target) rate() mainstat, quantile(0.95, duration) p95, count() detail__calls, "
-               f"count() if ({MAP_FAILED}) detail__failed "
-               "| math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct "
-               "| delete p95")
+CALLERS = (f'{MAP_SPANS} kind:=3 -"span_attr:db.system.name":* '
+           '| copy span_id as parent_span_id, "resource_attr:service.name" as source, duration as call_duration '
+           "| fields trace_id, parent_span_id, source, call_duration")
+MAP_EDGES = (f"{MAP_SPANS} kind:=2 parent_span_id:* "
+             '| copy "resource_attr:service.name" as target '
+             f"| join by (trace_id, parent_span_id) ({CALLERS}) "
+             "| filter source:* -source:eq_field(target) "
+             f'| union ({APP_SPANS} kind:=3 {IS_SQL} | copy "resource_attr:service.name" as source, duration as call_duration '
+             '| format "postgresql" as target) '
+             '| format "<source>→<target>" as id '
+             f"| stats by (id, source, target) rate() mainstat, quantile(0.95, call_duration) p95, count() detail__calls, "
+             f"count() if ({MAP_FAILED}) detail__failed "
+             "| math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct "
+             "| delete p95")
 d.add({"type": "nodeGraph", "title": "Service map", "datasource": VTL,
-       "description": "The edge Gateway, every service and PostgreSQL: requests per second in the circle, p95 and the "
-                      "failed share below the name, successful (green) and failed (red) spans in the ring. Hover an arrow "
-                      "for its calls per second, p95 and failed share. Client errors (4xx) do not count as failed.",
+       "description": "Clients that start traces (the dashboard in the browser), the edge Gateway, every service and "
+                      "PostgreSQL: requests per second in the circle, p95 and the failed share below the name, "
+                      "successful (green) and failed (red) spans in the ring. An arrow joins a calling span to the "
+                      "span it caused in another service; hover it for calls per second, p95 as the caller sees it and "
+                      "the failed share. Client errors (4xx) do not count as failed.",
        "targets": [vl(MAP_NODES, "stats", "A", ds=VTL), vl(MAP_EDGES, "stats", "B", ds=VTL)],
        "transformations": [
            {"id": "labelsToFields", "options": {"mode": "columns", "valueLabel": "__name__"}},
