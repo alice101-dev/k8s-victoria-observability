@@ -29,6 +29,15 @@ data:
         url: http://vlsingle-vmks.monitoring.svc.cluster.local.:9428
         jsonData:
           maxLines: 1000
+          otelPreset:
+            enabled: true
+            tracesDatasourceUid: VictoriaTraces
+            detection:
+              traceIdField: trace_id
+              severity:
+                field: severity_number
+                valueCase: number
+                source: manual
           derivedFields:
             - name: trace_id
               matcherType: label

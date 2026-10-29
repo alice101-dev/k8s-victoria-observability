@@ -71,7 +71,7 @@ config:
       blocked_key_patterns:
         - (?i).*(password|passwd|secret|token|api[_.-]?key|authorization|cookie|credential|private[_.-]?key).*
       blocked_values:
-        - (?i)bearer\s+[a-z0-9._~+/=-]+
+        - (?i)bearer\s+[a-z0-9._~+/=-]{20,}
         - \b4[0-9]{12}(?:[0-9]{3})?\b
         - \b5[1-5][0-9]{14}\b
       summary: info
@@ -90,7 +90,7 @@ config:
           conditions:
             - IsString(log.body)
           statements:
-            - replace_pattern(log.body, "(?i)(bearer\\s+)[a-z0-9._~+/=-]+", "$$1****")
+            - replace_pattern(log.body, "(?i)(bearer\\s+)[a-z0-9._~+/=-]{20,}", "$$1****")
             - replace_pattern(log.body, "(?i)((password|passwd|secret|token|api[_-]?key)\"?\\s*[:=]\\s*\"?)[^\"\\s,}]+", "$$1****")
   exporters:
     debug: null
