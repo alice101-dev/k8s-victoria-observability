@@ -156,7 +156,7 @@ endpoints = logsql_table(
                     ERROR_PCT("5xx %", "red"), ERROR_PCT("4xx %", "orange"),
                     NS_UNIT("p50", 80), NS_UNIT("p95", 80), NS_UNIT("p99", 80), NS_UNIT("Max", 80),
                     SHARE("Time share"), SHARE("DB share"), LINKS_ON("Slowest trace", TRACE_LINK, 270),
-                    by_name("Last call", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 110}])],
+                    by_name("Last call", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 150}])],
     sort=[{"displayName": "Time share", "desc": True}],
     hide=("srv", "db"))
 endpoints["targets"].append(vl(ENDPOINT_DB, "stats", "B", ds=VTL))
