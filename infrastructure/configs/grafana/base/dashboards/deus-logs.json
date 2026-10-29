@@ -813,7 +813,7 @@
         "uid": "VictoriaLogs"
       },
       "maxDataPoints": 60,
-      "description": "ERROR records per service and interval: when each service started and stopped failing, and which failed first. Rollouts and critical alerts are marked on the graphs above.",
+      "description": "ERROR records per service and interval, only for the services that logged errors in the time range (its migration job included): when each started and stopped failing, and which failed first. Hover a cell for the count. Rollouts and critical alerts are marked on the graphs above.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -846,7 +846,7 @@
         "overrides": []
       },
       "options": {
-        "showValue": "auto",
+        "showValue": "never",
         "rowHeight": 0.85,
         "colWidth": 0.95,
         "legend": {
@@ -863,31 +863,164 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaLogs"
           },
-          "expr": "service.namespace:=deus service.name:in($service) _msg:~`(?i)\\Q${search:raw}\\E` | stats by (service.name) count() if (severity_text:=ERROR) errors",
+          "expr": "service.namespace:=deus service.name:in($service) _msg:~`(?i)\\Q${search:raw}\\E` severity_text:=ERROR | copy service.name as service | replace_regexp (\"-migrations$\", \"\") at service | stats by (service) count() errors",
           "queryType": "statsRange",
           "editorMode": "code",
           "refId": "A",
-          "legendFormat": "{{service.name}}"
+          "legendFormat": "{{service}}"
         }
       ],
       "id": 11,
       "gridPos": {
         "x": 0,
         "y": 14,
-        "w": 24,
-        "h": 7
+        "w": 16,
+        "h": 8
       },
       "interval": "1m"
+    },
+    {
+      "type": "table",
+      "title": "Errors by service",
+      "description": "ERROR records per service in the time range, its migration job included, most first. Click a service for Deus — Service.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaLogs"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            }
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Errors"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "custom.width",
+                "value": 180
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "gauge",
+                  "mode": "basic",
+                  "valueDisplayMode": "text"
+                }
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open Deus — Service",
+                    "url": "/d/deus-service/deus-service?var-service=${__value.raw}&${__url_time_range}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Errors",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "service": 0,
+              "errors": 1
+            },
+            "renameByName": {
+              "service": "Service",
+              "errors": "Errors"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaLogs"
+          },
+          "expr": "service.namespace:=deus service.name:in($service) _msg:~`(?i)\\Q${search:raw}\\E` severity_text:=ERROR | copy service.name as service | replace_regexp (\"-migrations$\", \"\") at service | stats by (service) count() errors | sort by (errors desc)",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
+      "id": 12,
+      "gridPos": {
+        "x": 16,
+        "y": 14,
+        "w": 8,
+        "h": 8
+      }
     },
     {
       "type": "row",
       "title": "Patterns — $level records",
       "collapsed": false,
       "panels": [],
-      "id": 12,
+      "id": 13,
       "gridPos": {
         "x": 0,
-        "y": 21,
+        "y": 22,
         "w": 24,
         "h": 1
       }
@@ -1204,10 +1337,10 @@
           "refId": "A"
         }
       ],
-      "id": 13,
+      "id": 14,
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 23,
         "w": 24,
         "h": 10
       }
@@ -1262,10 +1395,10 @@
           "legendFormat": "{{service}}: {{_msg}}"
         }
       ],
-      "id": 14,
+      "id": 15,
       "gridPos": {
         "x": 0,
-        "y": 32,
+        "y": 33,
         "w": 12,
         "h": 10
       },
@@ -1419,10 +1552,10 @@
           "refId": "A"
         }
       ],
-      "id": 15,
+      "id": 16,
       "gridPos": {
         "x": 12,
-        "y": 32,
+        "y": 33,
         "w": 12,
         "h": 10
       }
@@ -1432,10 +1565,10 @@
       "title": "Where — pods, nodes and versions",
       "collapsed": false,
       "panels": [],
-      "id": 16,
+      "id": 17,
       "gridPos": {
         "x": 0,
-        "y": 42,
+        "y": 43,
         "w": 24,
         "h": 1
       }
@@ -1651,10 +1784,10 @@
           "refId": "A"
         }
       ],
-      "id": 17,
+      "id": 18,
       "gridPos": {
         "x": 0,
-        "y": 43,
+        "y": 44,
         "w": 24,
         "h": 8
       }
@@ -1709,10 +1842,10 @@
           "legendFormat": "{{service.version}} {{severity_text}}"
         }
       ],
-      "id": 18,
+      "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 51,
+        "y": 52,
         "w": 24,
         "h": 7
       },
@@ -1723,10 +1856,10 @@
       "title": "Request — ${request:text}",
       "collapsed": false,
       "panels": [],
-      "id": 19,
+      "id": 20,
       "gridPos": {
         "x": 0,
-        "y": 58,
+        "y": 59,
         "w": 24,
         "h": 1
       }
@@ -1760,10 +1893,10 @@
           "maxLines": 500
         }
       ],
-      "id": 20,
+      "id": 21,
       "gridPos": {
         "x": 0,
-        "y": 59,
+        "y": 60,
         "w": 24,
         "h": 9
       },
@@ -1779,10 +1912,10 @@
       "title": "Log explorer",
       "collapsed": false,
       "panels": [],
-      "id": 21,
+      "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 68,
+        "y": 69,
         "w": 24,
         "h": 1
       }
@@ -1816,10 +1949,10 @@
           "maxLines": 500
         }
       ],
-      "id": 22,
+      "id": 23,
       "gridPos": {
         "x": 0,
-        "y": 69,
+        "y": 70,
         "w": 24,
         "h": 18
       }
@@ -1829,10 +1962,10 @@
       "title": "Log pipeline — is every record arriving?",
       "collapsed": false,
       "panels": [],
-      "id": 23,
+      "id": 24,
       "gridPos": {
         "x": 0,
-        "y": 87,
+        "y": 88,
         "w": 24,
         "h": 1
       }
@@ -1949,10 +2082,10 @@
           "refId": "A"
         }
       ],
-      "id": 24,
+      "id": 25,
       "gridPos": {
         "x": 0,
-        "y": 88,
+        "y": 89,
         "w": 12,
         "h": 8
       },
@@ -2013,10 +2146,10 @@
           "legendFormat": "{{service.name}}"
         }
       ],
-      "id": 25,
+      "id": 26,
       "gridPos": {
         "x": 12,
-        "y": 88,
+        "y": 89,
         "w": 12,
         "h": 8
       },

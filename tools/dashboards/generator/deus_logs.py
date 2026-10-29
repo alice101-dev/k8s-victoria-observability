@@ -53,11 +53,22 @@ d.add(ts("Error ratio by service", [vl(f"{LOGS} | stats by (service.name) count(
                                        "statsRange", legend="{{service.name}}")],
          "percent", ds=VL, min_=0, soft_max=1, desc="Share of ERROR records per service. A service with more traffic does "
          "not look worse here; compare with the Errors per service timeline below."), 12, 8)
-d.add(status_history("Errors per service",
-                     vl(f"{LOGS} | stats by (service.name) count() if ({ERR}) errors", "statsRange", legend="{{service.name}}"),
-                     "ERROR records per service and interval: when each service started and stopped failing, and which "
-                     "failed first. Rollouts and critical alerts are marked on the graphs above.",
-                     thresholds(("green", None), ("orange", 1), ("red", 10))), 24, 7)
+ERRORS_BY_SERVICE = (f'{LOGS} {ERR} | copy service.name as service | replace_regexp ("-migrations$", "") at service '
+                     "| stats by (service) count() errors")
+timeline = status_history("Errors per service", vl(ERRORS_BY_SERVICE, "statsRange", legend="{{service}}"),
+                          "ERROR records per service and interval, only for the services that logged errors in the "
+                          "time range (its migration job included): when each started and stopped failing, and which "
+                          "failed first. Hover a cell for the count. Rollouts and critical alerts are marked on the "
+                          "graphs above.",
+                          thresholds(("green", None), ("orange", 1), ("red", 10)))
+timeline["options"]["showValue"] = "never"
+d.add(timeline, 16, 8)
+d.add(logsql_table("Errors by service", f"{ERRORS_BY_SERVICE} | sort by (errors desc)",
+                   [("service", "Service"), ("errors", "Errors")],
+                   "ERROR records per service in the time range, its migration job included, most first. Click a "
+                   "service for Deus — Service.",
+                   VL, overrides=[GAUGE("Errors", width=180), LINKS_ON("Service", SERVICE_DASH)],
+                   sort=[{"displayName": "Errors", "desc": True}]), 8, 8)
 
 d.row("Patterns — $level records")
 NUMS = (r'| replace_regexp ("\\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\b", "<ID>") at err '
