@@ -36,7 +36,7 @@ locals {
     repoServer = {
       replicas  = 1
       metrics   = { enabled = true }
-      resources = { requests = { cpu = "25m", memory = "128Mi" }, limits = { memory = "512Mi" } }
+      resources = { requests = { cpu = "100m", memory = "128Mi" }, limits = { memory = "512Mi" } }
     }
     server = {
       replicas  = 1
