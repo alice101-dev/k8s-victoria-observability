@@ -271,7 +271,7 @@ d.add(ts("Payment outcomes", [vl(
     desc="Receipts and vendor payments: 201 recorded, 400 invalid input, 422 an allocation larger than the amount due."), 12, 8)
 
 d.row("Traces")
-TRACES = (f'{APP_SPANS} | copy "resource_attr:service.name" as svc '
+TRACES = (f'{APP_SPANS} trace_id:${{trace_id:raw}}* | copy "resource_attr:service.name" as svc '
           "| stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, "
           f"field_min(start_time_unix_nano, svc) {IS_ROOT} service, field_min(start_time_unix_nano, name) {IS_ROOT} root, "
           f"count() spans, count_uniq(svc) services, count() if ({FAILED}) errors, "
@@ -288,8 +288,8 @@ d.add(lq_table("Traces", TRACES,
                "browser (pageload or navigation, with its API requests below), or the first API request when the "
                "caller is not traced (k6). Click the root or the trace ID "
                "to open the trace in Explore: the waterfall from the browser through the gateway to the services and "
-               "the database, with links to each span's logs and metrics. Filter with Service, Trace duration over "
-               "and Traces, or with the column filters.",
+               "the database, with links to each span's logs and metrics. Paste a trace ID in Trace ID to find one trace "
+               "in the whole time range; otherwise filter with Service, Trace duration over and Traces.",
                overrides=[by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
                           LINKS_ON("Root", explore_trace("${__data.fields.Trace}")),
                           by_name("Service", [{"id": "custom.width", "value": 120}]),
@@ -336,7 +336,8 @@ DASHBOARD = dashboard(
                "POST /api/sales/invoices/:id/issue"),
         custom("attribute", "Hot spots by", ATTRIBUTES, "route"),
         custom("min_duration", "Trace duration over", DURATIONS, "any"),
-        custom("failed", "Traces", [("all", "0"), ("with errors", "1")], "all")],
+        custom("failed", "Traces", [("all", "0"), ("with errors", "1")], "all"),
+        {"name": "trace_id", "label": "Trace ID", "type": "textbox", "query": "", "current": {"text": "", "value": ""}}],
     "Distributed tracing analytics from the deus spans (LogsQL on VictoriaTraces): service map, endpoints, where the "
     "time goes inside a request, SQL and outbox deliveries, failures, hot spots and single traces.",
     "now-1h", links=LINKS_DEUS, annotations=ANNOTATIONS)

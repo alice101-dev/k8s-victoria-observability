@@ -183,6 +183,16 @@
             "value": "1"
           }
         ]
+      },
+      {
+        "name": "trace_id",
+        "label": "Trace ID",
+        "type": "textbox",
+        "query": "",
+        "current": {
+          "text": "",
+          "value": ""
+        }
       }
     ]
   },
@@ -3143,7 +3153,7 @@
     {
       "type": "table",
       "title": "Traces",
-      "description": "One row per trace, newest first, like a trace search: the root is the page the user opened in the browser (pageload or navigation, with its API requests below), or the first API request when the caller is not traced (k6). Click the root or the trace ID to open the trace in Explore: the waterfall from the browser through the gateway to the services and the database, with links to each span's logs and metrics. Filter with Service, Trace duration over and Traces, or with the column filters.",
+      "description": "One row per trace, newest first, like a trace search: the root is the page the user opened in the browser (pageload or navigation, with its API requests below), or the first API request when the caller is not traced (k6). Click the root or the trace ID to open the trace in Explore: the waterfall from the browser through the gateway to the services and the database, with links to each span's logs and metrics. Paste a trace ID in Trace ID to find one trace in the whole time range; otherwise filter with Service, Trace duration over and Traces.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -3383,7 +3393,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus | copy \"resource_attr:service.name\" as svc | stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, field_min(start_time_unix_nano, svc) if (parent_span_id:=\"\" or kind:=2) service, field_min(start_time_unix_nano, name) if (parent_span_id:=\"\" or kind:=2) root, count() spans, count_uniq(svc) services, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") errors, count() if (\"resource_attr:service.name\":in($service)) touched | math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took | filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} | stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, max(spans) spans, max(services) services, max(errors) errors | sort by (started_ms desc) | limit 200",
+          "expr": "\"resource_attr:service.namespace\":=deus trace_id:${trace_id:raw}* | copy \"resource_attr:service.name\" as svc | stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, field_min(start_time_unix_nano, svc) if (parent_span_id:=\"\" or kind:=2) service, field_min(start_time_unix_nano, name) if (parent_span_id:=\"\" or kind:=2) root, count() spans, count_uniq(svc) services, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") errors, count() if (\"resource_attr:service.name\":in($service)) touched | math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took | filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} | stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, max(spans) spans, max(services) services, max(errors) errors | sort by (started_ms desc) | limit 200",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
