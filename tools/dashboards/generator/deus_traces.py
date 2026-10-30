@@ -172,14 +172,15 @@ d.row("Traces")
 
 
 def traces(min_duration, order):
-    return (f'{APP_SPANS} trace_id:${{trace_id:raw}}* | copy "resource_attr:service.name" as svc '
+    return (f'{APP_SPANS} trace_id:${{trace_id:raw}}* | copy "resource_attr:service.name" as svc, "span_attr:app.route" as page '
             "| stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, "
             f"field_min(start_time_unix_nano, svc) {IS_ROOT} service, field_min(start_time_unix_nano, name) {IS_ROOT} root, "
+            f"field_min(start_time_unix_nano, page) {IS_ROOT} page, "
             f"count() spans, count_uniq(svc) services, count() if ({FAILED}) errors, "
             'count() if ("resource_attr:service.name":in($service)) touched '
             "| math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took "
             f"| filter touched:>0 took:>={min_duration} errors:>=${{failed:raw}} "
-            "| stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, "
+            "| stats by (trace_id, service, root, page) max(started_ms) started_ms, max(took) took, "
             "max(spans) spans, max(services) services, max(errors) errors "
             f"| sort by ({order} desc) | limit 200")
 
@@ -187,12 +188,13 @@ def traces(min_duration, order):
 def traces_table(title, expr, desc, sort_by):
     panel = lq_table(title, expr,
                      [("trace_id", "Trace ID"), ("started_ms", "Start time"), ("service", "Service"), ("root", "Name"),
-                      ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"), ("took", "Duration")],
+                      ("page", "Page"), ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"), ("took", "Duration")],
                      desc,
                      overrides=[LINKS_ON("Trace ID", explore_trace("${__value.raw}"), 270),
                                 by_name("Start time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
                                 LINKS_ON("Name", explore_trace('${__data.fields["Trace ID"]}')),
                                 by_name("Service", [{"id": "custom.width", "value": 120}]),
+                                by_name("Page", [{"id": "custom.width", "value": 170}]),
                                 NS_UNIT("Duration", 90), COUNT("Spans", 70), COUNT("Services", 80),
                                 by_name("Errors", [{"id": "custom.width", "value": 70}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                                                    {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}])],
@@ -204,7 +206,8 @@ def traces_table(title, expr, desc, sort_by):
 d.add(traces_table("Traces", traces("${min_duration:raw}", "started_ms"),
                    "One row per trace, newest first, like a trace search: the root is the page the user opened in the "
                    "browser (pageload or navigation, with its API requests below), or the first API request when the "
-                   "caller is not traced (k6). Click the trace ID or the name to open the trace in Explore: the waterfall "
+                   "caller is not traced (k6). Page is the dashboard page the request came from (empty for k6). Click the "
+                   "trace ID or the name to open the trace in Explore: the waterfall "
                    "from the browser through the gateway to the services and the database, with links to each span's logs "
                    "and metrics. Paste a trace ID in Trace ID to find one trace in the whole time range; otherwise filter "
                    "with Service, Trace duration over and Traces.", "Start time"), 24, 16)
