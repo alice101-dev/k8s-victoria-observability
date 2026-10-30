@@ -282,22 +282,22 @@ TRACES = (f'{APP_SPANS} trace_id:${{trace_id:raw}}* | copy "resource_attr:servic
           "max(spans) spans, max(services) services, max(errors) errors "
           "| sort by (started_ms desc) | limit 200")
 d.add(lq_table("Traces", TRACES,
-               [("started_ms", "Time"), ("root", "Root"), ("service", "Service"), ("took", "Duration"), ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"),
-                ("trace_id", "Trace")],
+               [("trace_id", "Trace ID"), ("started_ms", "Start time"), ("service", "Service"), ("root", "Name"),
+                ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"), ("took", "Duration")],
                "One row per trace, newest first, like a trace search: the root is the page the user opened in the "
                "browser (pageload or navigation, with its API requests below), or the first API request when the "
-               "caller is not traced (k6). Click the root or the trace ID "
+               "caller is not traced (k6). Click the trace ID or the name "
                "to open the trace in Explore: the waterfall from the browser through the gateway to the services and "
                "the database, with links to each span's logs and metrics. Paste a trace ID in Trace ID to find one trace "
                "in the whole time range; otherwise filter with Service, Trace duration over and Traces.",
-               overrides=[by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
-                          LINKS_ON("Root", explore_trace("${__data.fields.Trace}")),
+               overrides=[LINKS_ON("Trace ID", explore_trace("${__value.raw}"), 270),
+                          by_name("Start time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
+                          LINKS_ON("Name", explore_trace('${__data.fields["Trace ID"]}')),
                           by_name("Service", [{"id": "custom.width", "value": 120}]),
                           NS_UNIT("Duration", 90), COUNT("Spans", 70), COUNT("Services", 80),
                           by_name("Errors", [{"id": "custom.width", "value": 70}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
-                                             {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}]),
-                          LINKS_ON("Trace", explore_trace("${__value.raw}"), 270)],
-               sort=[{"displayName": "Time", "desc": True}], ), 24, 16)
+                                             {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}])],
+               sort=[{"displayName": "Start time", "desc": True}]), 24, 16)
 d.panels[-1]["fieldConfig"]["defaults"].setdefault("custom", {})["filterable"] = True
 
 for p in d.panels:

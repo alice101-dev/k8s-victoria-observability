@@ -3153,7 +3153,7 @@
     {
       "type": "table",
       "title": "Traces",
-      "description": "One row per trace, newest first, like a trace search: the root is the page the user opened in the browser (pageload or navigation, with its API requests below), or the first API request when the caller is not traced (k6). Click the root or the trace ID to open the trace in Explore: the waterfall from the browser through the gateway to the services and the database, with links to each span's logs and metrics. Paste a trace ID in Trace ID to find one trace in the whole time range; otherwise filter with Service, Trace duration over and Traces.",
+      "description": "One row per trace, newest first, like a trace search: the root is the page the user opened in the browser (pageload or navigation, with its API requests below), or the first API request when the caller is not traced (k6). Click the trace ID or the name to open the trace in Explore: the waterfall from the browser through the gateway to the services and the database, with links to each span's logs and metrics. Paste a trace ID in Trace ID to find one trace in the whole time range; otherwise filter with Service, Trace duration over and Traces.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -3172,7 +3172,29 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Time"
+              "options": "Trace ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open this trace in Explore",
+                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__value.raw}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start time"
             },
             "properties": [
               {
@@ -3188,7 +3210,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Root"
+              "options": "Name"
             },
             "properties": [
               {
@@ -3196,7 +3218,7 @@
                 "value": [
                   {
                     "title": "Open this trace in Explore",
-                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__data.fields.Trace}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__data.fields[\"Trace ID\"]}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
                     "targetBlank": true
                   }
                 ]
@@ -3308,28 +3330,6 @@
                 }
               }
             ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Trace"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "Open this trace in Explore",
-                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__value.raw}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
-                    "targetBlank": true
-                  }
-                ]
-              },
-              {
-                "id": "custom.width",
-                "value": 270
-              }
-            ]
           }
         ]
       },
@@ -3341,7 +3341,7 @@
         },
         "sortBy": [
           {
-            "displayName": "Time",
+            "displayName": "Start time",
             "desc": true
           }
         ]
@@ -3365,24 +3365,24 @@
               "Time": true
             },
             "indexByName": {
-              "started_ms": 0,
-              "root": 1,
+              "trace_id": 0,
+              "started_ms": 1,
               "service": 2,
-              "took": 3,
+              "root": 3,
               "spans": 4,
               "services": 5,
               "errors": 6,
-              "trace_id": 7
+              "took": 7
             },
             "renameByName": {
-              "started_ms": "Time",
-              "root": "Root",
+              "trace_id": "Trace ID",
+              "started_ms": "Start time",
               "service": "Service",
-              "took": "Duration",
+              "root": "Name",
               "spans": "Spans",
               "services": "Services",
               "errors": "Errors",
-              "trace_id": "Trace"
+              "took": "Duration"
             }
           }
         }
