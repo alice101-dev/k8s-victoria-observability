@@ -504,7 +504,7 @@
     },
     {
       "type": "row",
-      "title": "Business activity",
+      "title": "Async deliveries",
       "collapsed": false,
       "panels": [],
       "id": 8,
@@ -517,239 +517,7 @@
     },
     {
       "type": "stat",
-      "title": "Invoices issued / min",
-      "description": "Invoices issued per minute (5-minute average).",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"deus\", service_name=\"sales\", http_route=\"/api/sales/invoices/:id/issue\", http_response_status_code=~\"2..\"}[5m])) * 60",
-          "legendFormat": "",
-          "refId": "A",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "id": 9,
-      "gridPos": {
-        "x": 0,
-        "y": 6,
-        "w": 4,
-        "h": 4
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Payments recorded / min",
-      "description": "Receipts and vendor payments recorded per minute.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"deus\", service_name=\"payments\", http_request_method=\"POST\", http_route=\"/api/payments/\", http_response_status_code=~\"2..\"}[5m])) * 60",
-          "legendFormat": "",
-          "refId": "A",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "id": 10,
-      "gridPos": {
-        "x": 4,
-        "y": 6,
-        "w": 4,
-        "h": 4
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Bills approved / min",
-      "description": "Vendor bills approved per minute.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"deus\", service_name=\"purchases\", http_route=\"/api/purchases/bills/:id/approve\", http_response_status_code=~\"2..\"}[5m])) * 60",
-          "legendFormat": "",
-          "refId": "A",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "id": 11,
-      "gridPos": {
-        "x": 8,
-        "y": 6,
-        "w": 4,
-        "h": 4
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Journals posted / min",
-      "description": "Journals the ledger posted per minute: from invoices, bills, payments, VAT returns and bank lines, plus manual ones.",
-      "datasource": {
-        "type": "prometheus",
-        "uid": "VictoriaMetrics"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "decimals": 1,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "blue",
-                "value": null
-              }
-            ]
-          },
-          "noValue": "0"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "colorMode": "background",
-        "graphMode": "none",
-        "textMode": "value"
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "VictoriaMetrics"
-          },
-          "expr": "sum(rate(http_server_request_duration_seconds_count{service_namespace=\"deus\", service_name=\"ledger\", http_request_method=\"POST\", http_route=~\"/internal/ledger/journals.*|/api/ledger/journals/:id/post\", http_response_status_code=~\"2..\"}[5m])) * 60",
-          "legendFormat": "",
-          "refId": "A",
-          "range": false,
-          "instant": true
-        }
-      ],
-      "id": 12,
-      "gridPos": {
-        "x": 12,
-        "y": 6,
-        "w": 4,
-        "h": 4
-      }
-    },
-    {
-      "type": "stat",
-      "title": "Outbox events waiting",
+      "title": "Async events waiting",
       "description": "Events written but not yet delivered to the receiving service (all services).",
       "datasource": {
         "type": "prometheus",
@@ -805,9 +573,9 @@
           "instant": true
         }
       ],
-      "id": 13,
+      "id": 9,
       "gridPos": {
-        "x": 16,
+        "x": 0,
         "y": 6,
         "w": 4,
         "h": 4
@@ -815,7 +583,7 @@
     },
     {
       "type": "stat",
-      "title": "Outbox events dead",
+      "title": "Async events dead",
       "description": "Events the receiving service rejected or that used every attempt: their documents are missing on the other side until someone acts. Alert: DeusOutboxDeadEvents.",
       "datasource": {
         "type": "prometheus",
@@ -867,9 +635,9 @@
           "instant": true
         }
       ],
-      "id": 14,
+      "id": 10,
       "gridPos": {
-        "x": 20,
+        "x": 4,
         "y": 6,
         "w": 4,
         "h": 4
@@ -880,7 +648,7 @@
       "title": "Services",
       "collapsed": false,
       "panels": [],
-      "id": 15,
+      "id": 11,
       "gridPos": {
         "x": 0,
         "y": 10,
@@ -1217,7 +985,7 @@
           "format": "table"
         }
       ],
-      "id": 16,
+      "id": 12,
       "gridPos": {
         "x": 0,
         "y": 11,
@@ -1273,7 +1041,7 @@
           "instant": false
         }
       ],
-      "id": 17,
+      "id": 13,
       "gridPos": {
         "x": 0,
         "y": 21,
@@ -1331,7 +1099,7 @@
           "instant": false
         }
       ],
-      "id": 18,
+      "id": 14,
       "gridPos": {
         "x": 8,
         "y": 21,
@@ -1387,7 +1155,7 @@
           "instant": false
         }
       ],
-      "id": 19,
+      "id": 15,
       "gridPos": {
         "x": 16,
         "y": 21,
@@ -1400,7 +1168,7 @@
       "title": "Errors",
       "collapsed": false,
       "panels": [],
-      "id": 20,
+      "id": 16,
       "gridPos": {
         "x": 0,
         "y": 29,
@@ -1437,7 +1205,7 @@
           "maxLines": 500
         }
       ],
-      "id": 21,
+      "id": 17,
       "gridPos": {
         "x": 0,
         "y": 30,
@@ -1450,7 +1218,7 @@
       "title": "Frontend",
       "collapsed": false,
       "panels": [],
-      "id": 22,
+      "id": 18,
       "gridPos": {
         "x": 0,
         "y": 39,
@@ -1515,7 +1283,7 @@
           "refId": "A"
         }
       ],
-      "id": 23,
+      "id": 19,
       "gridPos": {
         "x": 0,
         "y": 40,
@@ -1580,7 +1348,7 @@
           "refId": "A"
         }
       ],
-      "id": 24,
+      "id": 20,
       "gridPos": {
         "x": 4,
         "y": 40,
@@ -1645,7 +1413,7 @@
           "refId": "A"
         }
       ],
-      "id": 25,
+      "id": 21,
       "gridPos": {
         "x": 8,
         "y": 40,
@@ -1789,7 +1557,7 @@
           "refId": "A"
         }
       ],
-      "id": 26,
+      "id": 22,
       "gridPos": {
         "x": 12,
         "y": 40,
@@ -1802,7 +1570,7 @@
       "title": "Resources",
       "collapsed": false,
       "panels": [],
-      "id": 27,
+      "id": 23,
       "gridPos": {
         "x": 0,
         "y": 45,
@@ -1862,7 +1630,7 @@
           "instant": false
         }
       ],
-      "id": 28,
+      "id": 24,
       "gridPos": {
         "x": 0,
         "y": 46,
@@ -1921,7 +1689,7 @@
           "instant": false
         }
       ],
-      "id": 29,
+      "id": 25,
       "gridPos": {
         "x": 12,
         "y": 46,

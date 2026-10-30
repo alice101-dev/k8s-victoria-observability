@@ -208,7 +208,7 @@ d.add(lq_table("Operations in $endpoint traces",
                 ("calls", "Calls"), ("failed", "Failed"), ("avg", "Avg"), ("p95", "p95")],
                "Every span of the traces that went through the selected endpoint, across all services, by total time. "
                "Spans nest (a client call contains the server span it calls), so read it top-down rather than adding it "
-               "up. Outbox deliveries run after the response.",
+               "up. Async deliveries run after the response.",
                overrides=[by_name("Share of endpoint time", [
                    {"id": "unit", "value": "percent"}, {"id": "min", "value": 0}, {"id": "max", "value": 100},
                    {"id": "custom.width", "value": 220},
@@ -226,7 +226,7 @@ d.add(ts("Failed operations in $endpoint traces", [vl(
     "short", ds=VTL, stack=True, bars=True, decimals=0, legend_calcs=("sum",),
     desc="The operation that fails first is usually the cause; the spans above it fail because of it."), 12, 9)
 
-d.row("Database and outbox, as the services see them — $service")
+d.row("Database and async deliveries, as the services see them — $service")
 d.add(lq_table("SQL statements",
                f'{SPANS} {IS_SQL} "span_attr:db.query.text":* {SVC} | copy "span_attr:db.query.text" as sql '
                '| replace_regexp ("[ \\t\\n]+", " ") at sql '
@@ -240,17 +240,17 @@ d.add(lq_table("SQL statements",
                overrides=[by_name("Service", [{"id": "custom.width", "value": 130}]), COUNT("Calls"), COUNT("Failed"),
                           NS_UNIT("p50"), NS_UNIT("p95"), NS_UNIT("Max")],
                sort=[{"displayName": "p95", "desc": True}]), 24, 8)
-d.add(lq_table("Outbox deliveries",
+d.add(lq_table("Async deliveries",
                f'{SPANS} kind:=4 {SVC} | copy "span_attr:messaging.destination.name" as topic '
                f"| stats by (service, topic) count() deliveries, count() if ({FAILED}) failed, "
                'max("span_attr:outbox.attempts") attempts, quantile(0.95, duration) p95 | sort by (deliveries desc) | limit 30',
                [("service", "Service"), ("topic", "Destination"), ("deliveries", "Deliveries"), ("failed", "Failed"),
                 ("attempts", "Most attempts"), ("p95", "p95")],
-               "Producer spans of the outbox relays by destination. Each delivery continues the trace of the request "
+               "Producer spans by destination: asynchronous deliveries such as the outbox relays. Each delivery continues the trace of the request "
                "that wrote the event, so a failed delivery opens on the original request.",
                overrides=[COUNT("Deliveries"), COUNT("Failed"), COUNT("Most attempts", 110), NS_UNIT("p95")],
                sort=[{"displayName": "Deliveries", "desc": True}]), 12, 8)
-d.add(ts("Outbox delivery p95 by destination", [
+d.add(ts("Async delivery p95 by destination", [
     vl(f'{SPANS} kind:=4 | copy "span_attr:messaging.destination.name" as topic | stats by (topic) quantile(0.95, duration) p95',
        "statsRange", legend="{{topic}}", ds=VTL)], "ns", ds=VTL,
     desc="Duration of the call to the receiving service per delivery; the delay before the delivery is in Deus — Service."), 12, 8)
@@ -288,17 +288,7 @@ d.add(ts("5xx by ${attribute:text}", [vl(
     f'{SERVER} "${{attribute:raw}}":* {IS_5XX} | copy "${{attribute:raw}}" as value | stats by (value) count() failed',
     "statsRange", legend="{{value}}", ds=VTL)], "short", ds=VTL, stack=True, bars=True, decimals=0,
     legend_calcs=("sum",)), 12, 9)
-d.add(ts("Invoice issue outcomes", [vl(
-    f'{APP_SPANS} "resource_attr:service.name":=sales kind:=2 name:="POST /api/sales/invoices/:id/issue" '
-    f"| copy {CODE} as code | stats by (code) count() requests", "statsRange", legend="{{code}}", ds=VTL)],
-    "short", ds=VTL, stack=True, bars=True, decimals=0, overrides=code_colors(), legend_calcs=("sum",),
-    desc="What users got when issuing an invoice: 200 issued, 409 already issued, 422 rejected by a business rule "
-         "(inactive customer, closed period), 5xx failures."), 12, 8)
-d.add(ts("Payment outcomes", [vl(
-    f'{APP_SPANS} "resource_attr:service.name":=payments kind:=2 name:="POST /api/payments/" '
-    f"| copy {CODE} as code | stats by (code) count() requests", "statsRange", legend="{{code}}", ds=VTL)],
-    "short", ds=VTL, stack=True, bars=True, decimals=0, overrides=code_colors(), legend_calcs=("sum",),
-    desc="Receipts and vendor payments: 201 recorded, 400 invalid input, 422 an allocation larger than the amount due."), 12, 8)
+
 
 for p in d.panels:
     if p["type"] == "timeseries" and p["datasource"] is VTL:
@@ -314,6 +304,13 @@ def lq_var(name, label, field, query, multi, current):
     return v
 
 
+ENDPOINT_PICK = (f'{APP_SPANS} "resource_attr:service.name":in($service) kind:=2 '
+                 "| stats by (name) quantile(0.95, duration) p95 | sort by (p95 desc) | limit 100 "
+                 '| math round(p95/1e6) as ms | format "<ms> ms p95 · <name>" as option')
+ENDPOINT_VAR = {"name": "endpoint", "label": "Endpoint (slowest first)", "type": "query", "datasource": VTL,
+                "query": {"type": "fieldValue", "field": "option", "query": ENDPOINT_PICK, "limit": 100, "refId": "endpoint"},
+                "definition": "option: endpoints by p95", "regex": "/^(?<text>.* · (?<value>.+))$/",
+                "sort": 4, "refresh": 2, "multi": False, "includeAll": False, "allowCustomValue": True, "current": {}}
 custom = lambda name, label, pairs, current: {
     "name": name, "label": label, "type": "custom", "query": ",".join(f"{t} : {v}" for t, v in pairs),
     "current": {"selected": True, "text": current, "value": dict(pairs)[current]},
@@ -332,12 +329,11 @@ describe(d.panels, {
 DASHBOARD = dashboard(
     "deus-traces", "Deus — Traces", ["deus", "traces"], d.panels, [
         lq_var("service", "Service", "resource_attr:service.name", APP_SPANS, True, None),
-        lq_var("endpoint", "Endpoint", "name", f'{APP_SPANS} "resource_attr:service.name":in($service) kind:=2', False,
-               "POST /api/sales/invoices/:id/issue"),
+        ENDPOINT_VAR,
         custom("attribute", "Hot spots by", ATTRIBUTES, "route"),
         custom("min_duration", "Trace duration over", DURATIONS, "any"),
         custom("failed", "Traces", [("all", "0"), ("with errors", "1")], "all"),
         {"name": "trace_id", "label": "Trace ID", "type": "textbox", "query": "", "current": {"text": "", "value": ""}}],
     "Distributed tracing analytics from the deus spans (LogsQL on VictoriaTraces): service map, endpoints, where the "
-    "time goes inside a request, SQL and outbox deliveries, failures, hot spots and single traces.",
+    "time goes inside a request, SQL and async deliveries, failures, hot spots and single traces.",
     "now-1h", links=LINKS_DEUS, annotations=ANNOTATIONS)

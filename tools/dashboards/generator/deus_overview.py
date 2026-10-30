@@ -10,10 +10,6 @@ READY = deus_deployments(f"max by (namespace, deployment) (kube_deployment_statu
 SVC_LINK = [{"title": "Open Deus — Service", "url": "/d/deus-service/deus-service?var-service=${__value.raw}&${__url_time_range}"}]
 
 
-def per_minute(sel):
-    return f'sum(rate({REQ}_count{{{APP}, {sel}, http_response_status_code=~"2.."}}[5m])) * 60'
-
-
 d = Dash()
 d.row("At a glance")
 d.add(stat("Requests / s", f"sum(rate({REQ}_count{{{ALL}}}[5m]))", "reqps", thresholds(("blue", None))), 4, 4)
@@ -30,22 +26,11 @@ d.add(vl_stat("Browser errors", f"{LOGS} telemetry.source:=browser severity_text
               "short", thresholds(("green", None), ("orange", 1)),
               "Errors the web app reported from users' browsers in the time range."), 4, 4)
 
-d.row("Business activity")
-for title, sel, desc in (
-    ("Invoices issued / min", 'service_name="sales", http_route="/api/sales/invoices/:id/issue"',
-     "Invoices issued per minute (5-minute average)."),
-    ("Payments recorded / min", 'service_name="payments", http_request_method="POST", http_route="/api/payments/"',
-     "Receipts and vendor payments recorded per minute."),
-    ("Bills approved / min", 'service_name="purchases", http_route="/api/purchases/bills/:id/approve"',
-     "Vendor bills approved per minute."),
-    ("Journals posted / min", 'service_name="ledger", http_request_method="POST", http_route=~"/internal/ledger/journals.*|/api/ledger/journals/:id/post"',
-     "Journals the ledger posted per minute: from invoices, bills, payments, VAT returns and bank lines, plus manual ones."),
-):
-    d.add(stat(title, per_minute(sel), "short", thresholds(("blue", None)), desc, decimals=1, no_value="0"), 4, 4)
-d.add(stat("Outbox events waiting", f'sum(outbox_backlog{{{APP}, outbox_state="pending"}}) or vector(0)', "short",
+d.row("Async deliveries")
+d.add(stat("Async events waiting", f'sum(outbox_backlog{{{APP}, outbox_state="pending"}}) or vector(0)', "short",
            thresholds(("green", None), ("orange", 20), ("red", 50)), decimals=0,
            desc="Events written but not yet delivered to the receiving service (all services)."), 4, 4)
-d.add(stat("Outbox events dead", f'sum(outbox_backlog{{{APP}, outbox_state="dead"}}) or vector(0)', "short",
+d.add(stat("Async events dead", f'sum(outbox_backlog{{{APP}, outbox_state="dead"}}) or vector(0)', "short",
            thresholds(("green", None), ("red", 1)), decimals=0,
            desc="Events the receiving service rejected or that used every attempt: their documents are missing on the "
                 "other side until someone acts. Alert: DeusOutboxDeadEvents."), 4, 4)

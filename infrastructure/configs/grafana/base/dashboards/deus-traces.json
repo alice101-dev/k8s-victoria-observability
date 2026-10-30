@@ -1,7 +1,7 @@
 {
   "uid": "deus-traces",
   "title": "Deus — Traces",
-  "description": "Distributed tracing analytics from the deus spans (LogsQL on VictoriaTraces): service map, endpoints, where the time goes inside a request, SQL and outbox deliveries, failures, hot spots and single traces.",
+  "description": "Distributed tracing analytics from the deus spans (LogsQL on VictoriaTraces): service map, endpoints, where the time goes inside a request, SQL and async deliveries, failures, hot spots and single traces.",
   "tags": [
     "deus",
     "traces",
@@ -51,7 +51,7 @@
       },
       {
         "name": "endpoint",
-        "label": "Endpoint",
+        "label": "Endpoint (slowest first)",
         "type": "query",
         "datasource": {
           "type": "victoriametrics-logs-datasource",
@@ -59,21 +59,19 @@
         },
         "query": {
           "type": "fieldValue",
-          "field": "name",
-          "query": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2",
-          "limit": 200,
+          "field": "option",
+          "query": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 | stats by (name) quantile(0.95, duration) p95 | sort by (p95 desc) | limit 100 | math round(p95/1e6) as ms | format \"<ms> ms p95 · <name>\" as option",
+          "limit": 100,
           "refId": "endpoint"
         },
-        "definition": "name: \"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2",
+        "definition": "option: endpoints by p95",
+        "regex": "/^(?<text>.* · (?<value>.+))$/",
+        "sort": 4,
         "refresh": 2,
-        "sort": 1,
         "multi": false,
         "includeAll": false,
-        "current": {
-          "selected": true,
-          "text": "POST /api/sales/invoices/:id/issue",
-          "value": "POST /api/sales/invoices/:id/issue"
-        }
+        "allowCustomValue": true,
+        "current": {}
       },
       {
         "name": "attribute",
@@ -1929,7 +1927,7 @@
     {
       "type": "table",
       "title": "Operations in $endpoint traces",
-      "description": "Every span of the traces that went through the selected endpoint, across all services, by total time. Spans nest (a client call contains the server span it calls), so read it top-down rather than adding it up. Outbox deliveries run after the response.",
+      "description": "Every span of the traces that went through the selected endpoint, across all services, by total time. Spans nest (a client call contains the server span it calls), so read it top-down rather than adding it up. Async deliveries run after the response.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -2266,7 +2264,7 @@
     },
     {
       "type": "row",
-      "title": "Database and outbox, as the services see them — $service",
+      "title": "Database and async deliveries, as the services see them — $service",
       "collapsed": false,
       "panels": [],
       "id": 21,
@@ -2483,8 +2481,8 @@
     },
     {
       "type": "table",
-      "title": "Outbox deliveries",
-      "description": "Producer spans of the outbox relays by destination. Each delivery continues the trace of the request that wrote the event, so a failed delivery opens on the original request.",
+      "title": "Async deliveries",
+      "description": "Producer spans by destination: asynchronous deliveries such as the outbox relays. Each delivery continues the trace of the request that wrote the event, so a failed delivery opens on the original request.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -2653,7 +2651,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Outbox delivery p95 by destination",
+      "title": "Async delivery p95 by destination",
       "description": "Duration of the call to the receiving service per delivery; the delay before the delivery is in Deus — Service.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
@@ -3192,218 +3190,6 @@
         "y": 116,
         "w": 12,
         "h": 9
-      },
-      "interval": "1m"
-    },
-    {
-      "type": "timeseries",
-      "title": "Invoice issue outcomes",
-      "description": "What users got when issuing an invoice: 200 issued, 409 already issued, 422 rejected by a business rule (inactive customer, closed period), 5xx failures.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "VictoriaTracesLogsQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 60,
-            "showPoints": "never",
-            "drawStyle": "bars",
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            }
-          },
-          "decimals": 0
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^2..$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^4..$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^5..$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": [
-            "sum"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "VictoriaTracesLogsQL"
-          },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":=sales kind:=2 name:=\"POST /api/sales/invoices/:id/issue\" | copy \"span_attr:http.response.status_code\" as code | stats by (code) count() requests",
-          "queryType": "statsRange",
-          "editorMode": "code",
-          "refId": "A",
-          "legendFormat": "{{code}}"
-        }
-      ],
-      "id": 32,
-      "gridPos": {
-        "x": 0,
-        "y": 125,
-        "w": 12,
-        "h": 8
-      },
-      "interval": "1m"
-    },
-    {
-      "type": "timeseries",
-      "title": "Payment outcomes",
-      "description": "Receipts and vendor payments: 201 recorded, 400 invalid input, 422 an allocation larger than the amount due.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "VictoriaTracesLogsQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "custom": {
-            "lineWidth": 1,
-            "fillOpacity": 60,
-            "showPoints": "never",
-            "drawStyle": "bars",
-            "stacking": {
-              "mode": "normal",
-              "group": "A"
-            }
-          },
-          "decimals": 0
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^2..$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "green"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^4..$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "orange"
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byRegexp",
-              "options": "^5..$"
-            },
-            "properties": [
-              {
-                "id": "color",
-                "value": {
-                  "mode": "fixed",
-                  "fixedColor": "red"
-                }
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "right",
-          "calcs": [
-            "sum"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "VictoriaTracesLogsQL"
-          },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":=payments kind:=2 name:=\"POST /api/payments/\" | copy \"span_attr:http.response.status_code\" as code | stats by (code) count() requests",
-          "queryType": "statsRange",
-          "editorMode": "code",
-          "refId": "A",
-          "legendFormat": "{{code}}"
-        }
-      ],
-      "id": 33,
-      "gridPos": {
-        "x": 12,
-        "y": 125,
-        "w": 12,
-        "h": 8
       },
       "interval": "1m"
     }
