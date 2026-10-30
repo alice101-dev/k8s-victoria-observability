@@ -168,6 +168,36 @@ d.add(ts("5xx by endpoint", [vl(f"{SERVER} {IS_5XX} | stats by (name) count() fa
                                 legend="{{name}}", ds=VTL)], "short", ds=VTL, stack=True, bars=True, decimals=0,
          legend_calcs=("sum",)), 12, 8)
 
+d.row("Traces")
+TRACES = (f'{APP_SPANS} trace_id:${{trace_id:raw}}* | copy "resource_attr:service.name" as svc '
+          "| stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, "
+          f"field_min(start_time_unix_nano, svc) {IS_ROOT} service, field_min(start_time_unix_nano, name) {IS_ROOT} root, "
+          f"count() spans, count_uniq(svc) services, count() if ({FAILED}) errors, "
+          'count() if ("resource_attr:service.name":in($service)) touched '
+          "| math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took "
+          "| filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} "
+          "| stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, "
+          "max(spans) spans, max(services) services, max(errors) errors "
+          "| sort by (started_ms desc) | limit 200")
+d.add(lq_table("Traces", TRACES,
+               [("trace_id", "Trace ID"), ("started_ms", "Start time"), ("service", "Service"), ("root", "Name"),
+                ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"), ("took", "Duration")],
+               "One row per trace, newest first, like a trace search: the root is the page the user opened in the "
+               "browser (pageload or navigation, with its API requests below), or the first API request when the "
+               "caller is not traced (k6). Click the trace ID or the name "
+               "to open the trace in Explore: the waterfall from the browser through the gateway to the services and "
+               "the database, with links to each span's logs and metrics. Paste a trace ID in Trace ID to find one trace "
+               "in the whole time range; otherwise filter with Service, Trace duration over and Traces.",
+               overrides=[LINKS_ON("Trace ID", explore_trace("${__value.raw}"), 270),
+                          by_name("Start time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
+                          LINKS_ON("Name", explore_trace('${__data.fields["Trace ID"]}')),
+                          by_name("Service", [{"id": "custom.width", "value": 120}]),
+                          NS_UNIT("Duration", 90), COUNT("Spans", 70), COUNT("Services", 80),
+                          by_name("Errors", [{"id": "custom.width", "value": 70}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
+                                             {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}])],
+               sort=[{"displayName": "Start time", "desc": True}]), 24, 16)
+d.panels[-1]["fieldConfig"]["defaults"].setdefault("custom", {})["filterable"] = True
+
 d.row("Where the time goes — $endpoint")
 d.add(lq_table("Operations in $endpoint traces",
                f"{APP_SPANS} {IN_ENDPOINT_TRACES} {SVC} {OPERATION} "
@@ -269,36 +299,6 @@ d.add(ts("Payment outcomes", [vl(
     f"| copy {CODE} as code | stats by (code) count() requests", "statsRange", legend="{{code}}", ds=VTL)],
     "short", ds=VTL, stack=True, bars=True, decimals=0, overrides=code_colors(), legend_calcs=("sum",),
     desc="Receipts and vendor payments: 201 recorded, 400 invalid input, 422 an allocation larger than the amount due."), 12, 8)
-
-d.row("Traces")
-TRACES = (f'{APP_SPANS} trace_id:${{trace_id:raw}}* | copy "resource_attr:service.name" as svc '
-          "| stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, "
-          f"field_min(start_time_unix_nano, svc) {IS_ROOT} service, field_min(start_time_unix_nano, name) {IS_ROOT} root, "
-          f"count() spans, count_uniq(svc) services, count() if ({FAILED}) errors, "
-          'count() if ("resource_attr:service.name":in($service)) touched '
-          "| math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took "
-          "| filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} "
-          "| stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, "
-          "max(spans) spans, max(services) services, max(errors) errors "
-          "| sort by (started_ms desc) | limit 200")
-d.add(lq_table("Traces", TRACES,
-               [("trace_id", "Trace ID"), ("started_ms", "Start time"), ("service", "Service"), ("root", "Name"),
-                ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"), ("took", "Duration")],
-               "One row per trace, newest first, like a trace search: the root is the page the user opened in the "
-               "browser (pageload or navigation, with its API requests below), or the first API request when the "
-               "caller is not traced (k6). Click the trace ID or the name "
-               "to open the trace in Explore: the waterfall from the browser through the gateway to the services and "
-               "the database, with links to each span's logs and metrics. Paste a trace ID in Trace ID to find one trace "
-               "in the whole time range; otherwise filter with Service, Trace duration over and Traces.",
-               overrides=[LINKS_ON("Trace ID", explore_trace("${__value.raw}"), 270),
-                          by_name("Start time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
-                          LINKS_ON("Name", explore_trace('${__data.fields["Trace ID"]}')),
-                          by_name("Service", [{"id": "custom.width", "value": 120}]),
-                          NS_UNIT("Duration", 90), COUNT("Spans", 70), COUNT("Services", 80),
-                          by_name("Errors", [{"id": "custom.width", "value": 70}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
-                                             {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}])],
-               sort=[{"displayName": "Start time", "desc": True}]), 24, 16)
-d.panels[-1]["fieldConfig"]["defaults"].setdefault("custom", {})["filterable"] = True
 
 for p in d.panels:
     if p["type"] == "timeseries" and p["datasource"] is VTL:
