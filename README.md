@@ -181,7 +181,7 @@ this one:
 ```bash
 cd ../microservice-deus
 make release
-git commit -am "release <tag>"
+git commit -am "release $(git rev-parse --short=8 HEAD)"
 git push
 ```
 
