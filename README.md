@@ -171,6 +171,9 @@ gcloud container clusters get-credentials staging-observability \
 kubectl -n argocd get applicationsets,applications
 ```
 
+In `staging`, `apply-all` and `teardown` run without a confirmation prompt; pass `AUTO_APPROVE=0` to review each
+plan first. Other environments always ask.
+
 Set `PROJECT_ID` in `.env`. The repository URL is taken from `git remote origin` unless `GITOPS_REPO_URL` is set;
 for a private fork export `TF_VAR_gitops_repo_password=<read-only token>`.
 

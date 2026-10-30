@@ -2,6 +2,7 @@
 
 ENV ?= staging
 WS  ?=
+AUTO_APPROVE ?= $(if $(filter staging,$(ENV)),1,0)
 APPLY_ORDER := services vpc cloud-nat firewall kubernetes-engine artifact-registry cloud-storage secret-manager argocd-bootstrap
 
 ifeq ($(strip $(GITOPS_REPO_URL)),)
