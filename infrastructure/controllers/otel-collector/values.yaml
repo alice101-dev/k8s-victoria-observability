@@ -65,6 +65,10 @@ config:
       error_mode: ignore
       log_conditions:
         - log.severity_number > SEVERITY_NUMBER_UNSPECIFIED and log.severity_number < SEVERITY_NUMBER_INFO
+    filter/elysia-lifecycle:
+      error_mode: ignore
+      trace_conditions:
+        - span.kind == SPAN_KIND_INTERNAL and instrumentation_scope.name == resource.attributes["service.name"] and IsMatch(span.name, "^(Request|Parse|Transform|BeforeHandle|AfterHandle|MapResponse|AfterResponse)$")
     redaction:
       allow_all_keys: true
       redact_all_types: true
@@ -109,7 +113,7 @@ config:
     pipelines:
       traces:
         receivers: [otlp]
-        processors: [memory_limiter, k8s_attributes, redaction, batch]
+        processors: [memory_limiter, k8s_attributes, filter/elysia-lifecycle, redaction, batch]
         exporters: [otlp_http/victoriatraces]
       metrics:
         receivers: [otlp]
