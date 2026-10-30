@@ -19,8 +19,38 @@ k8s-victoria-observability/
 │   └── configs/      # one folder per component: custom resources and monitoring (Kustomize base + <env> overlay)
 ├── tools/          # dashboard generator
 ├── ci/             # render and validation scripts used by CI
-└── docs/           # observability, runbooks
+├── docs/           # observability, runbooks
+└── images/         # README screenshots
 ```
+
+## Screenshots
+
+**SLO overview** — every deus service against its availability and latency objectives over 30 days: error budget
+left, burn rates for the last hour and six hours, and how long the budget lasts at the current rate.
+
+![Deus — SLO Overview](images/slo-overview.png)
+
+**One service** — Deus — Service for `sales`: the SLO at a glance, then traffic, status codes and 5xx ratio by route,
+latency percentiles, p95 per route, requests over the SLO threshold and the latency heatmap.
+
+![Deus — Service for sales](images/service-sales.png)
+
+**Service map from traces** — Deus — Traces: request rate, errors and latency from the spans, the service map
+built from parent and child spans (browser, gateway, services, PostgreSQL and Redis) and the calls each service makes
+to its dependencies.
+
+![Deus — Traces, service map](images/traces-service-map.png)
+
+**Endpoints** — every server endpoint with calls, error ratios, p50 to p99, its share of all request time, the share
+spent in the database and a link to its slowest trace.
+
+![Deus — Traces, endpoints](images/traces-endpoints.png)
+
+**One request end to end** — a balance sheet opened in the dashboard: the browser request, the gateway, reporting
+and the internal calls it makes in parallel to organization, accounts (served from Redis) and ledger, down to each
+SQL statement.
+
+![A trace in Grafana Explore](images/trace-waterfall.png)
 
 ## Delivery
 
