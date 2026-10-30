@@ -73,7 +73,7 @@ MAP_NODES = (f"{MAP_SPANS} (kind:=2 or kind:=4 or (kind:=3 {IS_DB}) or ({ENTRY})
                "| stats by (id, title, subtitle) max(rps) mainstat, max(requests) detail__requests, max(failed) detail__failed "
                "| math (detail__requests-detail__failed)/detail__requests as arc__success, "
                "detail__failed/detail__requests as arc__errors")
-CALLERS = (f'{MAP_SPANS} kind:=3 -"span_attr:db.system.name":* '
+CALLERS = (f'{MAP_SPANS} (kind:=3 or ({GATEWAY} kind:=2)) -"span_attr:db.system.name":* '
            '| copy span_id as parent_span_id, "resource_attr:service.name" as source, duration as call_duration '
            "| fields trace_id, parent_span_id, source, call_duration")
 MAP_EDGES = (f"{MAP_SPANS} kind:=2 parent_span_id:* "
@@ -271,32 +271,27 @@ d.add(ts("Payment outcomes", [vl(
     desc="Receipts and vendor payments: 201 recorded, 400 invalid input, 422 an allocation larger than the amount due."), 12, 8)
 
 d.row("Traces")
-TRACES = (f'{APP_SPANS} | copy "resource_attr:service.name" as svc, "span_attr:user.id" as user, '
-          '"span_attr:app.route" as page '
+TRACES = (f'{APP_SPANS} | copy "resource_attr:service.name" as svc '
           "| stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, "
           f"field_min(start_time_unix_nano, svc) {IS_ROOT} service, field_min(start_time_unix_nano, name) {IS_ROOT} root, "
-          f"count() spans, count_uniq(svc) services, count() if ({FAILED}) errors, max(user) user, "
-          "field_min(start_time_unix_nano, page) if (page:*) page, "
+          f"count() spans, count_uniq(svc) services, count() if ({FAILED}) errors, "
           'count() if ("resource_attr:service.name":in($service)) touched '
           "| math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took "
           "| filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} "
-          "| stats by (trace_id, service, root, page, user) max(started_ms) started_ms, max(took) took, "
+          "| stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, "
           "max(spans) spans, max(services) services, max(errors) errors "
           "| sort by (started_ms desc) | limit 200")
 d.add(lq_table("Traces", TRACES,
-               [("started_ms", "Time"), ("root", "Root"), ("service", "Service"), ("page", "Page"), ("user", "User"),
-                ("took", "Duration"), ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"),
+               [("started_ms", "Time"), ("root", "Root"), ("service", "Service"), ("took", "Duration"), ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"),
                 ("trace_id", "Trace")],
-               "One row per trace, newest first, like a trace search: the root is the user's action in the browser "
-               "(page load, click, navigation) or the first API request of the trace. Click the root or the trace ID "
+               "One row per trace, newest first, like a trace search: the root is the request the dashboard sent from "
+               "the browser, or the first API request when the caller is not traced (k6). Click the root or the trace ID "
                "to open the trace in Explore: the waterfall from the browser through the gateway to the services and "
                "the database, with links to each span's logs and metrics. Filter with Service, Trace duration over "
                "and Traces, or with the column filters.",
                overrides=[by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
                           LINKS_ON("Root", explore_trace("${__data.fields.Trace}")),
                           by_name("Service", [{"id": "custom.width", "value": 120}]),
-                          by_name("Page", [{"id": "custom.width", "value": 150}]),
-                          by_name("User", [{"id": "custom.width", "value": 120}]),
                           NS_UNIT("Duration", 90), COUNT("Spans", 70), COUNT("Services", 80),
                           by_name("Errors", [{"id": "custom.width", "value": 70}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                                              {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}]),

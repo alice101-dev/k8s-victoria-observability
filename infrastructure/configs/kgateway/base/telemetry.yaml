@@ -12,7 +12,6 @@ spec:
     httpSettings:
       tracing:
         randomSampling: 100
-        spawnUpstreamSpan: true
         provider:
           openTelemetry:
             serviceName: kgateway-public

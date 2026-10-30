@@ -689,7 +689,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "(\"resource_attr:service.namespace\":=deus or \"resource_attr:service.namespace\":=kgateway-system) kind:=2 parent_span_id:* | copy \"resource_attr:service.name\" as target | join by (trace_id, parent_span_id) ((\"resource_attr:service.namespace\":=deus or \"resource_attr:service.namespace\":=kgateway-system) kind:=3 -\"span_attr:db.system.name\":* | copy span_id as parent_span_id, \"resource_attr:service.name\" as source, duration as call_duration | fields trace_id, parent_span_id, source, call_duration) | filter source:* -source:eq_field(target) | union (\"resource_attr:service.namespace\":=deus kind:=3 \"span_attr:db.system.name\":* | copy \"resource_attr:service.name\" as source, \"span_attr:db.system.name\" as target, duration as call_duration) | format \"<source>→<target>\" as id | stats by (id, source, target) rate() mainstat, quantile(0.95, call_duration) p95, count() detail__calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:http.status_code\":~\"^4\") detail__failed | math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct | delete p95",
+          "expr": "(\"resource_attr:service.namespace\":=deus or \"resource_attr:service.namespace\":=kgateway-system) kind:=2 parent_span_id:* | copy \"resource_attr:service.name\" as target | join by (trace_id, parent_span_id) ((\"resource_attr:service.namespace\":=deus or \"resource_attr:service.namespace\":=kgateway-system) (kind:=3 or (\"resource_attr:service.namespace\":=kgateway-system kind:=2)) -\"span_attr:db.system.name\":* | copy span_id as parent_span_id, \"resource_attr:service.name\" as source, duration as call_duration | fields trace_id, parent_span_id, source, call_duration) | filter source:* -source:eq_field(target) | union (\"resource_attr:service.namespace\":=deus kind:=3 \"span_attr:db.system.name\":* | copy \"resource_attr:service.name\" as source, \"span_attr:db.system.name\" as target, duration as call_duration) | format \"<source>→<target>\" as id | stats by (id, source, target) rate() mainstat, quantile(0.95, call_duration) p95, count() detail__calls, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\" -\"span_attr:http.status_code\":~\"^4\") detail__failed | math round(p95/1e6, 0.1) as detail__p95_ms, round(detail__failed*100/detail__calls, 0.01) as detail__failed_pct | delete p95",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "B"
@@ -3143,7 +3143,7 @@
     {
       "type": "table",
       "title": "Traces",
-      "description": "One row per trace, newest first, like a trace search: the root is the user's action in the browser (page load, click, navigation) or the first API request of the trace. Click the root or the trace ID to open the trace in Explore: the waterfall from the browser through the gateway to the services and the database, with links to each span's logs and metrics. Filter with Service, Trace duration over and Traces, or with the column filters.",
+      "description": "One row per trace, newest first, like a trace search: the root is the request the dashboard sent from the browser, or the first API request when the caller is not traced (k6). Click the root or the trace ID to open the trace in Explore: the waterfall from the browser through the gateway to the services and the database, with links to each span's logs and metrics. Filter with Service, Trace duration over and Traces, or with the column filters.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -3197,30 +3197,6 @@
             "matcher": {
               "id": "byName",
               "options": "Service"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 120
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Page"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 150
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "User"
             },
             "properties": [
               {
@@ -3382,20 +3358,16 @@
               "started_ms": 0,
               "root": 1,
               "service": 2,
-              "page": 3,
-              "user": 4,
-              "took": 5,
-              "spans": 6,
-              "services": 7,
-              "errors": 8,
-              "trace_id": 9
+              "took": 3,
+              "spans": 4,
+              "services": 5,
+              "errors": 6,
+              "trace_id": 7
             },
             "renameByName": {
               "started_ms": "Time",
               "root": "Root",
               "service": "Service",
-              "page": "Page",
-              "user": "User",
               "took": "Duration",
               "spans": "Spans",
               "services": "Services",
@@ -3411,7 +3383,7 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus | copy \"resource_attr:service.name\" as svc, \"span_attr:user.id\" as user, \"span_attr:app.route\" as page | stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, field_min(start_time_unix_nano, svc) if (parent_span_id:=\"\" or kind:=2) service, field_min(start_time_unix_nano, name) if (parent_span_id:=\"\" or kind:=2) root, count() spans, count_uniq(svc) services, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") errors, max(user) user, field_min(start_time_unix_nano, page) if (page:*) page, count() if (\"resource_attr:service.name\":in($service)) touched | math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took | filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} | stats by (trace_id, service, root, page, user) max(started_ms) started_ms, max(took) took, max(spans) spans, max(services) services, max(errors) errors | sort by (started_ms desc) | limit 200",
+          "expr": "\"resource_attr:service.namespace\":=deus | copy \"resource_attr:service.name\" as svc | stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, field_min(start_time_unix_nano, svc) if (parent_span_id:=\"\" or kind:=2) service, field_min(start_time_unix_nano, name) if (parent_span_id:=\"\" or kind:=2) root, count() spans, count_uniq(svc) services, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") errors, count() if (\"resource_attr:service.name\":in($service)) touched | math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took | filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} | stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, max(spans) spans, max(services) services, max(errors) errors | sort by (started_ms desc) | limit 200",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
