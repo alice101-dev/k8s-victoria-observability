@@ -1912,14 +1912,271 @@
       }
     },
     {
-      "type": "row",
-      "title": "Where the time goes — $endpoint",
-      "collapsed": false,
-      "panels": [],
+      "type": "table",
+      "title": "Slow traces (≥ 1s)",
+      "description": "Traces that took one second or more, slowest first, with the same columns and links as Traces. Follows Service, Traces and Trace ID; the one-second threshold is fixed.",
+      "datasource": {
+        "type": "victoriametrics-logs-datasource",
+        "uid": "VictoriaTracesLogsQL"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Trace ID"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open this trace in Explore",
+                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__value.raw}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+                    "targetBlank": true
+                  }
+                ]
+              },
+              {
+                "id": "custom.width",
+                "value": 270
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Start time"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "dateTimeAsLocal"
+              },
+              {
+                "id": "custom.width",
+                "value": 165
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Name"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open this trace in Explore",
+                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__data.fields[\"Trace ID\"]}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+                    "targetBlank": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Service"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Duration"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "ns"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Spans"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Services"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Errors"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "green",
+                      "value": null
+                    },
+                    {
+                      "color": "red",
+                      "value": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false
+        },
+        "sortBy": [
+          {
+            "displayName": "Duration",
+            "desc": true
+          }
+        ]
+      },
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns",
+            "valueLabel": "__name__"
+          }
+        },
+        {
+          "id": "merge",
+          "options": {}
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true
+            },
+            "indexByName": {
+              "trace_id": 0,
+              "started_ms": 1,
+              "service": 2,
+              "root": 3,
+              "spans": 4,
+              "services": 5,
+              "errors": 6,
+              "took": 7
+            },
+            "renameByName": {
+              "trace_id": "Trace ID",
+              "started_ms": "Start time",
+              "service": "Service",
+              "root": "Name",
+              "spans": "Spans",
+              "services": "Services",
+              "errors": "Errors",
+              "took": "Duration"
+            }
+          }
+        }
+      ],
+      "targets": [
+        {
+          "datasource": {
+            "type": "victoriametrics-logs-datasource",
+            "uid": "VictoriaTracesLogsQL"
+          },
+          "expr": "\"resource_attr:service.namespace\":=deus trace_id:${trace_id:raw}* | copy \"resource_attr:service.name\" as svc | stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, field_min(start_time_unix_nano, svc) if (parent_span_id:=\"\" or kind:=2) service, field_min(start_time_unix_nano, name) if (parent_span_id:=\"\" or kind:=2) root, count() spans, count_uniq(svc) services, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") errors, count() if (\"resource_attr:service.name\":in($service)) touched | math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took | filter touched:>0 took:>=1000000000 errors:>=${failed:raw} | stats by (trace_id, service, root) max(started_ms) started_ms, max(took) took, max(spans) spans, max(services) services, max(errors) errors | sort by (took desc) | limit 200",
+          "queryType": "stats",
+          "editorMode": "code",
+          "refId": "A"
+        }
+      ],
       "id": 17,
       "gridPos": {
         "x": 0,
         "y": 58,
+        "w": 24,
+        "h": 10
+      }
+    },
+    {
+      "type": "row",
+      "title": "Where the time goes — $endpoint",
+      "collapsed": false,
+      "panels": [],
+      "id": 18,
+      "gridPos": {
+        "x": 0,
+        "y": 68,
         "w": 24,
         "h": 1
       }
@@ -2134,10 +2391,10 @@
           "refId": "A"
         }
       ],
-      "id": 18,
+      "id": 19,
       "gridPos": {
         "x": 0,
-        "y": 59,
+        "y": 69,
         "w": 24,
         "h": 11
       }
@@ -2193,10 +2450,10 @@
           "legendFormat": "{{service}}: {{operation}}"
         }
       ],
-      "id": 19,
+      "id": 20,
       "gridPos": {
         "x": 0,
-        "y": 70,
+        "y": 80,
         "w": 12,
         "h": 9
       },
@@ -2253,10 +2510,10 @@
           "legendFormat": "{{service}}: {{operation}}"
         }
       ],
-      "id": 20,
+      "id": 21,
       "gridPos": {
         "x": 12,
-        "y": 70,
+        "y": 80,
         "w": 12,
         "h": 9
       },
@@ -2267,10 +2524,10 @@
       "title": "Database and async deliveries, as the services see them — $service",
       "collapsed": false,
       "panels": [],
-      "id": 21,
+      "id": 22,
       "gridPos": {
         "x": 0,
-        "y": 79,
+        "y": 89,
         "w": 24,
         "h": 1
       }
@@ -2471,10 +2728,10 @@
           "refId": "A"
         }
       ],
-      "id": 22,
+      "id": 23,
       "gridPos": {
         "x": 0,
-        "y": 80,
+        "y": 90,
         "w": 24,
         "h": 8
       }
@@ -2641,10 +2898,10 @@
           "refId": "A"
         }
       ],
-      "id": 23,
+      "id": 24,
       "gridPos": {
         "x": 0,
-        "y": 88,
+        "y": 98,
         "w": 12,
         "h": 8
       }
@@ -2700,10 +2957,10 @@
           "legendFormat": "{{topic}}"
         }
       ],
-      "id": 24,
+      "id": 25,
       "gridPos": {
         "x": 12,
-        "y": 88,
+        "y": 98,
         "w": 12,
         "h": 8
       },
@@ -2714,10 +2971,10 @@
       "title": "Errors — $service",
       "collapsed": false,
       "panels": [],
-      "id": 25,
+      "id": 26,
       "gridPos": {
         "x": 0,
-        "y": 96,
+        "y": 106,
         "w": 24,
         "h": 1
       }
@@ -2773,10 +3030,10 @@
           "legendFormat": "{{service}}: {{name}}"
         }
       ],
-      "id": 26,
+      "id": 27,
       "gridPos": {
         "x": 0,
-        "y": 97,
+        "y": 107,
         "w": 12,
         "h": 9
       },
@@ -2880,10 +3137,10 @@
           "refId": "A"
         }
       ],
-      "id": 27,
+      "id": 28,
       "gridPos": {
         "x": 12,
-        "y": 97,
+        "y": 107,
         "w": 12,
         "h": 9
       }
@@ -2917,10 +3174,10 @@
           "maxLines": 200
         }
       ],
-      "id": 28,
+      "id": 29,
       "gridPos": {
         "x": 0,
-        "y": 106,
+        "y": 116,
         "w": 24,
         "h": 9
       }
@@ -2930,10 +3187,10 @@
       "title": "Hot spots — $service by ${attribute:text}",
       "collapsed": false,
       "panels": [],
-      "id": 29,
+      "id": 30,
       "gridPos": {
         "x": 0,
-        "y": 115,
+        "y": 125,
         "w": 24,
         "h": 1
       }
@@ -3125,10 +3382,10 @@
           "refId": "A"
         }
       ],
-      "id": 30,
+      "id": 31,
       "gridPos": {
         "x": 0,
-        "y": 116,
+        "y": 126,
         "w": 12,
         "h": 9
       }
@@ -3184,10 +3441,10 @@
           "legendFormat": "{{value}}"
         }
       ],
-      "id": 31,
+      "id": 32,
       "gridPos": {
         "x": 12,
-        "y": 116,
+        "y": 126,
         "w": 12,
         "h": 9
       },
