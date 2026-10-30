@@ -284,8 +284,9 @@ TRACES = (f'{APP_SPANS} | copy "resource_attr:service.name" as svc '
 d.add(lq_table("Traces", TRACES,
                [("started_ms", "Time"), ("root", "Root"), ("service", "Service"), ("took", "Duration"), ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"),
                 ("trace_id", "Trace")],
-               "One row per trace, newest first, like a trace search: the root is the request the dashboard sent from "
-               "the browser, or the first API request when the caller is not traced (k6). Click the root or the trace ID "
+               "One row per trace, newest first, like a trace search: the root is the page the user opened in the "
+               "browser (pageload or navigation, with its API requests below), or the first API request when the "
+               "caller is not traced (k6). Click the root or the trace ID "
                "to open the trace in Explore: the waterfall from the browser through the gateway to the services and "
                "the database, with links to each span's logs and metrics. Filter with Service, Trace duration over "
                "and Traces, or with the column filters.",
