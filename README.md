@@ -171,9 +171,9 @@ gcloud container clusters get-credentials staging-observability \
 kubectl -n argocd get applicationsets,applications
 ```
 
-`apply-all` creates an empty Artifact Registry, so the application images must be pushed again before the deus
-Applications can sync. Until then their `*-migrate` hook Jobs stay in `ImagePullBackOff`. From the
-[microservice-deus](https://github.com/alice101-dev/microservice-deus) checkout next to this one:
+The application images come from the
+[microservice-deus](https://github.com/alice101-dev/microservice-deus) checkout next to this one. The registry
+survives a teardown, so this is needed on the very first bootstrap and whenever the application code changes:
 
 ```bash
 cd ../microservice-deus
@@ -183,8 +183,9 @@ git push
 ```
 
 `make release` builds and pushes every image tagged with the current commit and writes that tag into the
-`values-staging.yaml` files; once they are pushed, Argo CD retries the hooks with the new tag. If an Application still waits on a hook Job with the old tag, end that operation so the
-next sync uses the new commit:
+`values-staging.yaml` files. Until a pushed tag exists in the registry, the deus `*-migrate` hook Jobs stay in
+`ImagePullBackOff`; once the release is pushed, Argo CD retries them with the new tag. If an Application still waits
+on a hook Job with the old tag, end that operation so the next sync uses the new commit:
 
 ```bash
 kubectl -n argocd patch application <app> --type merge -p '{"status":{"operationState":{"phase":"Terminating"}}}'
@@ -233,7 +234,9 @@ make -C terraform teardown
 
 It deletes the root Application and the ApplicationSets without cascading, then the generated Applications
 layer by layer (apps, configs, then controllers in reverse dependency order), waits until every PVC is gone so no
-persistent disk keeps billing, and destroys the Terraform workspaces. `services` and `secret-manager` are kept.
+persistent disk keeps billing, and destroys the Terraform workspaces. `services`, `secret-manager` and
+`artifact-registry` are kept, so the next `apply-all` deploys the images already pushed; the registry's cleanup
+policy keeps the ten most recent versions of every image.
 
 ## Staging defaults vs. production
 
