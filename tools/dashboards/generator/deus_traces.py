@@ -1,5 +1,5 @@
-from .common import (COUNT, LINKS_ON, PCT, VT, VTL, by_name, code_colors, Dash, dashboard, describe, logs_panel, logsql_table, stat,
-    thresholds, ts, vl)
+from .common import (COUNT, LINKS_ON, PCT, VTL, by_name, code_colors, Dash, dashboard, describe, explore_trace, logs_panel,
+    logsql_table, stat, thresholds, ts, vl)
 from .deus import ANNOTATIONS, LINKS_DEUS, SPANS as APP_SPANS
 
 FILE = "deus-traces.json"
@@ -14,9 +14,7 @@ IS_SQL = '"span_attr:db.system.name":=postgresql'
 IN_ENDPOINT_TRACES = f'trace_id:in({APP_SPANS} kind:=2 name:="${{endpoint:raw}}" | fields trace_id)'
 OPERATION = ('| copy "span_attr:db.query.text" as sql | replace_regexp ("[ \\t\\n]+", " ") at sql '
              '| format "<name>" as operation | format if (sql:*) "SQL <sql>" as operation')
-KEEP_VARS = ("${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}"
-             "&${session:queryparam}&${__url_time_range}")
-TRACE_LINK = [{"title": "Show this trace below", "url": f"/d/deus-traces/deus-traces?{KEEP_VARS}&var-trace_id=${{__value.raw}}"}]
+IS_ROOT = 'if (parent_span_id:="" or kind:=2)'
 ENDPOINT_LINK = [{"title": "Break down this endpoint (Where the time goes)",
                   "url": "/d/deus-traces/deus-traces?var-service=${__data.fields.Service}&var-endpoint=${__value.raw}"
                          "&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}"}]
@@ -158,7 +156,7 @@ endpoints = logsql_table(
                                         {"id": "custom.width", "value": 75}]),
                     ERROR_PCT("5xx %", "red"), ERROR_PCT("4xx %", "orange"),
                     NS_UNIT("p50", 80), NS_UNIT("p95", 80), NS_UNIT("p99", 80), NS_UNIT("Max", 80),
-                    SHARE("Time share"), SHARE("DB share"), LINKS_ON("Slowest trace", TRACE_LINK, 270),
+                    SHARE("Time share"), SHARE("DB share"), LINKS_ON("Slowest trace", explore_trace("${__value.raw}"), 270),
                     by_name("Last call", [{"id": "unit", "value": "dateTimeFromNow"}, {"id": "custom.width", "value": 150}])],
     sort=[{"displayName": "Time share", "desc": True}],
     hide=("srv", "db"))
@@ -272,72 +270,39 @@ d.add(ts("Payment outcomes", [vl(
     "short", ds=VTL, stack=True, bars=True, decimals=0, overrides=code_colors(), legend_calcs=("sum",),
     desc="Receipts and vendor payments: 201 recorded, 400 invalid input, 422 an allocation larger than the amount due."), 12, 8)
 
-d.row("Traces — $service")
-REQUEST_COLUMNS = [("started_ms", "Time"), ("trace_id", "Trace ID"), ("service", "Service"), ("name", "Endpoint"),
-                   ("code", "Status"), ("took", "Duration")]
-REQUEST_OVERRIDES = [by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
-                     LINKS_ON("Trace ID", TRACE_LINK, 250), by_name("Service", [{"id": "custom.width", "value": 110}]),
-                     by_name("Status", [{"id": "custom.width", "value": 60}]), NS_UNIT("Duration", 85)]
-REQUESTS = (f"{SVC} | copy {CODE} as code | stats by (trace_id, service, name, code) max(duration) took, "
-            "max(start_time_unix_nano) started | math round(started/1e6) as started_ms")
-d.add(lq_table("Slowest requests (over ${min_duration:text})", f"{SERVER} duration:>${{min_duration:raw}} {REQUESTS} "
-               "| sort by (took desc) | limit 50", REQUEST_COLUMNS,
-               "Server spans slower than the threshold, slowest first. Click a trace ID to show the trace below.",
-               overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Duration", "desc": True}], hide=("started",)), 12, 10)
-d.add(lq_table("Failed requests (5xx)", f"{SERVER} {IS_5XX} {REQUESTS} | sort by (started_ms desc) | limit 50",
-               REQUEST_COLUMNS, "Server spans answered with a 5xx, newest first. Click a trace ID to show the trace below.",
-               overrides=REQUEST_OVERRIDES, sort=[{"displayName": "Time", "desc": True}], hide=("started",)), 12, 10)
-SESSION = '"resource_attr:session.id"'
-IN_SESSION = f'{SESSION}:="${{session:raw}}"'
-USER_ACTION = '"span_attr:ui.action":*'
-SESSION_LINK = [{"title": "Show this session's actions", "url": f"/d/deus-traces/deus-traces?{KEEP_VARS.replace('${session:queryparam}&', '')}&var-session=${{__value.raw}}"}]
-USER_SESSIONS = (f'{APP_SPANS} {SESSION}:* | copy {SESSION} as session, "span_attr:user.id" as user, '
-                 '"span_attr:app.route" as route '
-                 f"| stats by (session) min(start_time_unix_nano) first_ns, max(start_time_unix_nano) last_ns, "
-                 f"count() if ({USER_ACTION}) actions, count() if (status_code:=2) errors, "
-                 "field_max(start_time_unix_nano, route) if (route:*) last_route, max(user) user_id "
-                 "| math round(last_ns/1e6) as last_ms, round((last_ns-first_ns)/1e9) as length_s "
-                 "| stats by (session, user_id, last_route) max(last_ms) last_ms, max(length_s) length_s, "
-                 "max(actions) actions, max(errors) errors | sort by (last_ms desc) | limit 50")
-d.add(lq_table("User sessions", USER_SESSIONS,
-               [("last_ms", "Last activity"), ("session", "Session"), ("user_id", "User"), ("last_route", "Last page"),
-                ("actions", "Actions"), ("errors", "Errors"), ("length_s", "Length")],
-               "Browser sessions of the dashboard, the most recent first. A session is one browser tab; the user is "
-               "the user.id after login. Click a session to list its actions below.",
-               overrides=[by_name("Last activity", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
-                          LINKS_ON("Session", SESSION_LINK, 270), COUNT("Actions", 75),
+d.row("Traces")
+TRACES = (f'{APP_SPANS} | copy "resource_attr:service.name" as svc, "span_attr:user.id" as user, '
+          '"span_attr:app.route" as page '
+          "| stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, "
+          f"field_min(start_time_unix_nano, svc) {IS_ROOT} service, field_min(start_time_unix_nano, name) {IS_ROOT} root, "
+          f"count() spans, count_uniq(svc) services, count() if ({FAILED}) errors, max(user) user, "
+          "field_min(start_time_unix_nano, page) if (page:*) page, "
+          'count() if ("resource_attr:service.name":in($service)) touched '
+          "| math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took "
+          "| filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} "
+          "| stats by (trace_id, service, root, page, user) max(started_ms) started_ms, max(took) took, "
+          "max(spans) spans, max(services) services, max(errors) errors "
+          "| sort by (started_ms desc) | limit 200")
+d.add(lq_table("Traces", TRACES,
+               [("started_ms", "Time"), ("root", "Root"), ("service", "Service"), ("page", "Page"), ("user", "User"),
+                ("took", "Duration"), ("spans", "Spans"), ("services", "Services"), ("errors", "Errors"),
+                ("trace_id", "Trace")],
+               "One row per trace, newest first, like a trace search: the root is the user's action in the browser "
+               "(page load, click, navigation) or the first API request of the trace. Click the root or the trace ID "
+               "to open the trace in Explore: the waterfall from the browser through the gateway to the services and "
+               "the database, with links to each span's logs and metrics. Filter with Service, Trace duration over "
+               "and Traces, or with the column filters.",
+               overrides=[by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
+                          LINKS_ON("Root", explore_trace("${__data.fields.Trace}")),
+                          by_name("Service", [{"id": "custom.width", "value": 120}]),
+                          by_name("Page", [{"id": "custom.width", "value": 150}]),
+                          by_name("User", [{"id": "custom.width", "value": 120}]),
+                          NS_UNIT("Duration", 90), COUNT("Spans", 70), COUNT("Services", 80),
                           by_name("Errors", [{"id": "custom.width", "value": 70}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
                                              {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}]),
-                          by_name("Length", [{"id": "unit", "value": "s"}, {"id": "custom.width", "value": 80}])],
-               sort=[{"displayName": "Last activity", "desc": True}]), 24, 8)
-ACTIONS = (f'{APP_SPANS} {IN_SESSION} {USER_ACTION} '
-           '| copy "span_attr:ui.action" as action, "span_attr:app.route" as route '
-           f"| join by (trace_id) ({APP_SPANS} {IN_SESSION} kind:=3 | stats by (trace_id) count() calls, "
-           "count() if (status_code:=2) failed) "
-           "| stats by (trace_id, action, name, route) max(start_time_unix_nano) started_ns, max(duration) took, "
-           "max(calls) calls, max(failed) failed "
-           "| math round(started_ns/1e6) as started_ms | sort by (started_ms) | limit 200")
-d.add(lq_table("Actions in session", ACTIONS,
-               [("started_ms", "Time"), ("action", "Action"), ("name", "What"), ("route", "Page"), ("took", "Duration"),
-                ("calls", "API calls"), ("failed", "Failed"), ("trace_id", "Trace")],
-               "What the user did, in order, like breadcrumbs: page loads, clicks (named after the button or link) and "
-               "navigations, with the API calls each caused. Typed values are never recorded. Click a trace to show it "
-               "below, from the click to the database.",
-               overrides=[by_name("Time", [{"id": "unit", "value": "dateTimeAsLocal"}, {"id": "custom.width", "value": 165}]),
-                          by_name("Action", [{"id": "custom.width", "value": 95}]), NS_UNIT("Duration", 90),
-                          COUNT("API calls", 80),
-                          by_name("Failed", [{"id": "custom.width", "value": 65}, {"id": "custom.cellOptions", "value": {"type": "color-text"}},
-                                             {"id": "thresholds", "value": thresholds(("green", None), ("red", 1))}]),
-                          LINKS_ON("Trace", TRACE_LINK, 270)],
-               sort=[{"displayName": "Time", "desc": False}], hide=("started_ns",)), 16, 10)
-d.add(logs_panel("Browser errors in session",
-                 'telemetry.source:=browser session.id:="${session:raw}" severity_text:in(ERROR,WARN)',
-                 "Errors the dashboard reported in this session, with the page and the stack trace."), 8, 10)
-d.add({"type": "traces", "title": "Trace: ${trace_id:text}", "datasource": VT,
-       "description": "The slowest or failed request of the time range by default; pick another in the Trace variable "
-                      "or click a trace ID in the tables above. Every span with its timing, attributes and links to the "
-                      "logs and metrics of its service.",
-       "options": {}, "targets": [{"datasource": VT, "refId": "A", "query": "${trace_id}"}]}, 24, 60)
+                          LINKS_ON("Trace", explore_trace("${__value.raw}"), 270)],
+               sort=[{"displayName": "Time", "desc": True}], ), 24, 16)
+d.panels[-1]["fieldConfig"]["defaults"].setdefault("custom", {})["filterable"] = True
 
 for p in d.panels:
     if p["type"] == "timeseries" and p["datasource"] is VTL:
@@ -353,19 +318,6 @@ def lq_var(name, label, field, query, multi, current):
     return v
 
 
-TRACE_PICK = (f"{SERVER} (duration:>${{min_duration:raw}} or {IS_5XX}) | stats by (trace_id) max(duration) d, max({CODE}) code "
-              '| sort by (d desc) | limit 30 | math round(d/1e6) as ms | format "<ms> ms · HTTP <code> · <trace_id>" as option')
-SESSION_PICK = (f'{APP_SPANS} {SESSION}:* | copy {SESSION} as session | stats by (session) max(_time) last, '
-                f'count() if ({USER_ACTION}) actions | sort by (last desc) | limit 30 '
-                '| format "<last> · <actions> actions · <session>" as option')
-SESSION_VAR = {"name": "session", "label": "Browser session (latest first)", "type": "query", "datasource": VTL,
-               "query": {"type": "fieldValue", "field": "option", "query": SESSION_PICK, "limit": 100, "refId": "session"},
-               "definition": "option: latest browser sessions", "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
-               "sort": 0, "refresh": 2, "multi": False, "includeAll": False, "allowCustomValue": True, "current": {}}
-TRACE_VAR = {"name": "trace_id", "label": "Trace (slowest first)", "type": "query", "datasource": VTL,
-             "query": {"type": "fieldValue", "field": "option", "query": TRACE_PICK, "limit": 100, "refId": "trace_id"},
-             "definition": "option: slowest or failed requests", "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
-             "sort": 4, "refresh": 2, "multi": False, "includeAll": False, "allowCustomValue": True, "current": {}}
 custom = lambda name, label, pairs, current: {
     "name": name, "label": label, "type": "custom", "query": ",".join(f"{t} : {v}" for t, v in pairs),
     "current": {"selected": True, "text": current, "value": dict(pairs)[current]},
@@ -373,7 +325,8 @@ custom = lambda name, label, pairs, current: {
 ATTRIBUTES = [("route", "span_attr:http.route"), ("HTTP status", "span_attr:http.response.status_code"),
               ("pod", "resource_attr:k8s.pod.name"), ("node", "resource_attr:k8s.node.name"),
               ("version", "resource_attr:service.version"), ("caller", "span_attr:user_agent.original")]
-DURATIONS = [(t, str(int(ms * 1e6))) for t, ms in (("100ms", 100), ("250ms", 250), ("500ms", 500), ("1s", 1000), ("2s", 2000))]
+DURATIONS = [(t, str(int(ms * 1e6))) for t, ms in (("any", 0), ("100ms", 100), ("250ms", 250), ("500ms", 500), ("1s", 1000),
+                                                    ("2s", 2000))]
 describe(d.panels, {
     "p95 by endpoint": "95th percentile duration of each endpoint's server spans.",
     "5xx by endpoint": "Server spans answered with a 5xx per interval, by endpoint.",
@@ -386,8 +339,8 @@ DASHBOARD = dashboard(
         lq_var("endpoint", "Endpoint", "name", f'{APP_SPANS} "resource_attr:service.name":in($service) kind:=2', False,
                "POST /api/sales/invoices/:id/issue"),
         custom("attribute", "Hot spots by", ATTRIBUTES, "route"),
-        custom("min_duration", "Slow request threshold", DURATIONS, "500ms"),
-        SESSION_VAR, TRACE_VAR],
+        custom("min_duration", "Trace duration over", DURATIONS, "any"),
+        custom("failed", "Traces", [("all", "0"), ("with errors", "1")], "all")],
     "Distributed tracing analytics from the deus spans (LogsQL on VictoriaTraces): service map, endpoints, where the "
     "time goes inside a request, SQL and outbox deliveries, failures, hot spots and single traces.",
     "now-1h", links=LINKS_DEUS, annotations=ANNOTATIONS)

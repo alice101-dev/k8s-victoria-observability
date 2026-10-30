@@ -1902,8 +1902,9 @@
       },
       "links": [
         {
-          "title": "Open the trace in Deus — Traces",
-          "url": "/d/deus-traces/deus-traces?var-trace_id=${request}&${__url_time_range}"
+          "title": "Open this trace in Explore",
+          "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${request}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+          "targetBlank": true
         }
       ]
     },

@@ -181,6 +181,9 @@ PCT = lambda name, orange, red: by_name(name, [
     {"id": "unit", "value": "percent"}, {"id": "decimals", "value": 2}, {"id": "custom.width", "value": 80},
     {"id": "custom.cellOptions", "value": {"type": "color-text"}},
     {"id": "thresholds", "value": thresholds(("green", None), ("orange", orange), ("red", red))}])
+EXPLORE_TRACE = ('/explore?left={"datasource":"VictoriaTraces","queries":[{"refId":"A","datasource":'
+                 '{"type":"jaeger","uid":"VictoriaTraces"},"query":"%s"}],"range":{"from":"${__from}","to":"${__to}"}}')
+explore_trace = lambda trace_id: [{"title": "Open this trace in Explore", "url": EXPLORE_TRACE % trace_id, "targetBlank": True}]
 LINKS_ON = lambda name, links, width=None: by_name(name, [{"id": "links", "value": links}]
                                                     + ([{"id": "custom.width", "value": width}] if width else []))
 

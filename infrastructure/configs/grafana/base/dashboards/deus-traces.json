@@ -120,15 +120,20 @@
       },
       {
         "name": "min_duration",
-        "label": "Slow request threshold",
+        "label": "Trace duration over",
         "type": "custom",
-        "query": "100ms : 100000000,250ms : 250000000,500ms : 500000000,1s : 1000000000,2s : 2000000000",
+        "query": "any : 0,100ms : 100000000,250ms : 250000000,500ms : 500000000,1s : 1000000000,2s : 2000000000",
         "current": {
           "selected": true,
-          "text": "500ms",
-          "value": "500000000"
+          "text": "any",
+          "value": "0"
         },
         "options": [
+          {
+            "selected": true,
+            "text": "any",
+            "value": "0"
+          },
           {
             "selected": false,
             "text": "100ms",
@@ -140,7 +145,7 @@
             "value": "250000000"
           },
           {
-            "selected": true,
+            "selected": false,
             "text": "500ms",
             "value": "500000000"
           },
@@ -157,52 +162,27 @@
         ]
       },
       {
-        "name": "session",
-        "label": "Browser session (latest first)",
-        "type": "query",
-        "datasource": {
-          "type": "victoriametrics-logs-datasource",
-          "uid": "VictoriaTracesLogsQL"
+        "name": "failed",
+        "label": "Traces",
+        "type": "custom",
+        "query": "all : 0,with errors : 1",
+        "current": {
+          "selected": true,
+          "text": "all",
+          "value": "0"
         },
-        "query": {
-          "type": "fieldValue",
-          "field": "option",
-          "query": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":* | copy \"resource_attr:session.id\" as session | stats by (session) max(_time) last, count() if (\"span_attr:ui.action\":*) actions | sort by (last desc) | limit 30 | format \"<last> · <actions> actions · <session>\" as option",
-          "limit": 100,
-          "refId": "session"
-        },
-        "definition": "option: latest browser sessions",
-        "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
-        "sort": 0,
-        "refresh": 2,
-        "multi": false,
-        "includeAll": false,
-        "allowCustomValue": true,
-        "current": {}
-      },
-      {
-        "name": "trace_id",
-        "label": "Trace (slowest first)",
-        "type": "query",
-        "datasource": {
-          "type": "victoriametrics-logs-datasource",
-          "uid": "VictoriaTracesLogsQL"
-        },
-        "query": {
-          "type": "fieldValue",
-          "field": "option",
-          "query": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 (duration:>${min_duration:raw} or \"span_attr:http.response.status_code\":~\"^5\") | stats by (trace_id) max(duration) d, max(\"span_attr:http.response.status_code\") code | sort by (d desc) | limit 30 | math round(d/1e6) as ms | format \"<ms> ms · HTTP <code> · <trace_id>\" as option",
-          "limit": 100,
-          "refId": "trace_id"
-        },
-        "definition": "option: slowest or failed requests",
-        "regex": "/^(?<text>.* · (?<value>[0-9a-f]{32}))$/",
-        "sort": 4,
-        "refresh": 2,
-        "multi": false,
-        "includeAll": false,
-        "allowCustomValue": true,
-        "current": {}
+        "options": [
+          {
+            "selected": true,
+            "text": "all",
+            "value": "0"
+          },
+          {
+            "selected": false,
+            "text": "with errors",
+            "value": "1"
+          }
+        ]
       }
     ]
   },
@@ -1405,8 +1385,9 @@
                 "id": "links",
                 "value": [
                   {
-                    "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                    "title": "Open this trace in Explore",
+                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__value.raw}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+                    "targetBlank": true
                   }
                 ]
               },
@@ -3148,7 +3129,7 @@
     },
     {
       "type": "row",
-      "title": "Traces — $service",
+      "title": "Traces",
       "collapsed": false,
       "panels": [],
       "id": 32,
@@ -3161,8 +3142,8 @@
     },
     {
       "type": "table",
-      "title": "Slowest requests (over ${min_duration:text})",
-      "description": "Server spans slower than the threshold, slowest first. Click a trace ID to show the trace below.",
+      "title": "Traces",
+      "description": "One row per trace, newest first, like a trace search: the root is the user's action in the browser (page load, click, navigation) or the first API request of the trace. Click the root or the trace ID to open the trace in Explore: the waterfall from the browser through the gateway to the services and the database, with links to each span's logs and metrics. Filter with Service, Trace duration over and Traces, or with the column filters.",
       "datasource": {
         "type": "victoriametrics-logs-datasource",
         "uid": "VictoriaTracesLogsQL"
@@ -3173,7 +3154,8 @@
             "align": "auto",
             "cellOptions": {
               "type": "auto"
-            }
+            },
+            "filterable": true
           }
         },
         "overrides": [
@@ -3196,21 +3178,18 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Trace ID"
+              "options": "Root"
             },
             "properties": [
               {
                 "id": "links",
                 "value": [
                   {
-                    "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
+                    "title": "Open this trace in Explore",
+                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__data.fields.Trace}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+                    "targetBlank": true
                   }
                 ]
-              },
-              {
-                "id": "custom.width",
-                "value": 250
               }
             ]
           },
@@ -3222,19 +3201,31 @@
             "properties": [
               {
                 "id": "custom.width",
-                "value": 110
+                "value": 120
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Status"
+              "options": "Page"
             },
             "properties": [
               {
                 "id": "custom.width",
-                "value": 60
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
               }
             ]
           },
@@ -3254,314 +3245,14 @@
               },
               {
                 "id": "custom.width",
-                "value": 85
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
-        },
-        "sortBy": [
-          {
-            "displayName": "Duration",
-            "desc": true
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns",
-            "valueLabel": "__name__"
-          }
-        },
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "started": true
-            },
-            "indexByName": {
-              "started_ms": 0,
-              "trace_id": 1,
-              "service": 2,
-              "name": 3,
-              "code": 4,
-              "took": 5
-            },
-            "renameByName": {
-              "started_ms": "Time",
-              "trace_id": "Trace ID",
-              "service": "Service",
-              "name": "Endpoint",
-              "code": "Status",
-              "took": "Duration"
-            }
-          }
-        }
-      ],
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "VictoriaTracesLogsQL"
-          },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 duration:>${min_duration:raw} | copy \"resource_attr:service.name\" as service | copy \"span_attr:http.response.status_code\" as code | stats by (trace_id, service, name, code) max(duration) took, max(start_time_unix_nano) started | math round(started/1e6) as started_ms | sort by (took desc) | limit 50",
-          "queryType": "stats",
-          "editorMode": "code",
-          "refId": "A"
-        }
-      ],
-      "id": 33,
-      "gridPos": {
-        "x": 0,
-        "y": 117,
-        "w": 12,
-        "h": 10
-      }
-    },
-    {
-      "type": "table",
-      "title": "Failed requests (5xx)",
-      "description": "Server spans answered with a 5xx, newest first. Click a trace ID to show the trace below.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "VictoriaTracesLogsQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Time"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "dateTimeAsLocal"
-              },
-              {
-                "id": "custom.width",
-                "value": 165
+                "value": 90
               }
             ]
           },
           {
             "matcher": {
               "id": "byName",
-              "options": "Trace ID"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
-                  }
-                ]
-              },
-              {
-                "id": "custom.width",
-                "value": 250
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Service"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 110
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Status"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 60
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Duration"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "ns"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "custom.width",
-                "value": 85
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
-        },
-        "sortBy": [
-          {
-            "displayName": "Time",
-            "desc": true
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns",
-            "valueLabel": "__name__"
-          }
-        },
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "started": true
-            },
-            "indexByName": {
-              "started_ms": 0,
-              "trace_id": 1,
-              "service": 2,
-              "name": 3,
-              "code": 4,
-              "took": 5
-            },
-            "renameByName": {
-              "started_ms": "Time",
-              "trace_id": "Trace ID",
-              "service": "Service",
-              "name": "Endpoint",
-              "code": "Status",
-              "took": "Duration"
-            }
-          }
-        }
-      ],
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "VictoriaTracesLogsQL"
-          },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:service.name\":in($service) kind:=2 \"span_attr:http.response.status_code\":~\"^5\" | copy \"resource_attr:service.name\" as service | copy \"span_attr:http.response.status_code\" as code | stats by (trace_id, service, name, code) max(duration) took, max(start_time_unix_nano) started | math round(started/1e6) as started_ms | sort by (started_ms desc) | limit 50",
-          "queryType": "stats",
-          "editorMode": "code",
-          "refId": "A"
-        }
-      ],
-      "id": 34,
-      "gridPos": {
-        "x": 12,
-        "y": 117,
-        "w": 12,
-        "h": 10
-      }
-    },
-    {
-      "type": "table",
-      "title": "User sessions",
-      "description": "Browser sessions of the dashboard, the most recent first. A session is one browser tab; the user is the user.id after login. Click a session to list its actions below.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "VictoriaTracesLogsQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Last activity"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "dateTimeAsLocal"
-              },
-              {
-                "id": "custom.width",
-                "value": 165
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Session"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "Show this session's actions",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${__url_time_range}&var-session=${__value.raw}"
-                  }
-                ]
-              },
-              {
-                "id": "custom.width",
-                "value": 270
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Actions"
+              "options": "Spans"
             },
             "properties": [
               {
@@ -3574,7 +3265,27 @@
               },
               {
                 "id": "custom.width",
-                "value": 75
+                "value": 70
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Services"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "short"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "custom.width",
+                "value": 80
               }
             ]
           },
@@ -3615,16 +3326,22 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "Length"
+              "options": "Trace"
             },
             "properties": [
               {
-                "id": "unit",
-                "value": "s"
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open this trace in Explore",
+                    "url": "/explore?left={\"datasource\":\"VictoriaTraces\",\"queries\":[{\"refId\":\"A\",\"datasource\":{\"type\":\"jaeger\",\"uid\":\"VictoriaTraces\"},\"query\":\"${__value.raw}\"}],\"range\":{\"from\":\"${__from}\",\"to\":\"${__to}\"}}",
+                    "targetBlank": true
+                  }
+                ]
               },
               {
                 "id": "custom.width",
-                "value": 80
+                "value": 270
               }
             ]
           }
@@ -3638,7 +3355,7 @@
         },
         "sortBy": [
           {
-            "displayName": "Last activity",
+            "displayName": "Time",
             "desc": true
           }
         ]
@@ -3662,239 +3379,27 @@
               "Time": true
             },
             "indexByName": {
-              "last_ms": 0,
-              "session": 1,
-              "user_id": 2,
-              "last_route": 3,
-              "actions": 4,
-              "errors": 5,
-              "length_s": 6
-            },
-            "renameByName": {
-              "last_ms": "Last activity",
-              "session": "Session",
-              "user_id": "User",
-              "last_route": "Last page",
-              "actions": "Actions",
-              "errors": "Errors",
-              "length_s": "Length"
-            }
-          }
-        }
-      ],
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "VictoriaTracesLogsQL"
-          },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":* | copy \"resource_attr:session.id\" as session, \"span_attr:user.id\" as user, \"span_attr:app.route\" as route | stats by (session) min(start_time_unix_nano) first_ns, max(start_time_unix_nano) last_ns, count() if (\"span_attr:ui.action\":*) actions, count() if (status_code:=2) errors, field_max(start_time_unix_nano, route) if (route:*) last_route, max(user) user_id | math round(last_ns/1e6) as last_ms, round((last_ns-first_ns)/1e9) as length_s | stats by (session, user_id, last_route) max(last_ms) last_ms, max(length_s) length_s, max(actions) actions, max(errors) errors | sort by (last_ms desc) | limit 50",
-          "queryType": "stats",
-          "editorMode": "code",
-          "refId": "A"
-        }
-      ],
-      "id": 35,
-      "gridPos": {
-        "x": 0,
-        "y": 127,
-        "w": 24,
-        "h": 8
-      }
-    },
-    {
-      "type": "table",
-      "title": "Actions in session",
-      "description": "What the user did, in order, like breadcrumbs: page loads, clicks (named after the button or link) and navigations, with the API calls each caused. Typed values are never recorded. Click a trace to show it below, from the click to the database.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "VictoriaTracesLogsQL"
-      },
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "cellOptions": {
-              "type": "auto"
-            }
-          }
-        },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Time"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "dateTimeAsLocal"
-              },
-              {
-                "id": "custom.width",
-                "value": 165
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Action"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 95
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Duration"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "ns"
-              },
-              {
-                "id": "decimals",
-                "value": 1
-              },
-              {
-                "id": "custom.width",
-                "value": 90
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "API calls"
-            },
-            "properties": [
-              {
-                "id": "unit",
-                "value": "short"
-              },
-              {
-                "id": "decimals",
-                "value": 0
-              },
-              {
-                "id": "custom.width",
-                "value": 80
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Failed"
-            },
-            "properties": [
-              {
-                "id": "custom.width",
-                "value": 65
-              },
-              {
-                "id": "custom.cellOptions",
-                "value": {
-                  "type": "color-text"
-                }
-              },
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "green",
-                      "value": null
-                    },
-                    {
-                      "color": "red",
-                      "value": 1
-                    }
-                  ]
-                }
-              }
-            ]
-          },
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Trace"
-            },
-            "properties": [
-              {
-                "id": "links",
-                "value": [
-                  {
-                    "title": "Show this trace below",
-                    "url": "/d/deus-traces/deus-traces?${service:queryparam}&${endpoint:queryparam}&${attribute:queryparam}&${min_duration:queryparam}&${session:queryparam}&${__url_time_range}&var-trace_id=${__value.raw}"
-                  }
-                ]
-              },
-              {
-                "id": "custom.width",
-                "value": 270
-              }
-            ]
-          }
-        ]
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "footer": {
-          "show": false
-        },
-        "sortBy": [
-          {
-            "displayName": "Time",
-            "desc": false
-          }
-        ]
-      },
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns",
-            "valueLabel": "__name__"
-          }
-        },
-        {
-          "id": "merge",
-          "options": {}
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "started_ns": true
-            },
-            "indexByName": {
               "started_ms": 0,
-              "action": 1,
-              "name": 2,
-              "route": 3,
-              "took": 4,
-              "calls": 5,
-              "failed": 6,
-              "trace_id": 7
+              "root": 1,
+              "service": 2,
+              "page": 3,
+              "user": 4,
+              "took": 5,
+              "spans": 6,
+              "services": 7,
+              "errors": 8,
+              "trace_id": 9
             },
             "renameByName": {
               "started_ms": "Time",
-              "action": "Action",
-              "name": "What",
-              "route": "Page",
+              "root": "Root",
+              "service": "Service",
+              "page": "Page",
+              "user": "User",
               "took": "Duration",
-              "calls": "API calls",
-              "failed": "Failed",
+              "spans": "Spans",
+              "services": "Services",
+              "errors": "Errors",
               "trace_id": "Trace"
             }
           }
@@ -3906,82 +3411,18 @@
             "type": "victoriametrics-logs-datasource",
             "uid": "VictoriaTracesLogsQL"
           },
-          "expr": "\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" \"span_attr:ui.action\":* | copy \"span_attr:ui.action\" as action, \"span_attr:app.route\" as route | join by (trace_id) (\"resource_attr:service.namespace\":=deus \"resource_attr:session.id\":=\"${session:raw}\" kind:=3 | stats by (trace_id) count() calls, count() if (status_code:=2) failed) | stats by (trace_id, action, name, route) max(start_time_unix_nano) started_ns, max(duration) took, max(calls) calls, max(failed) failed | math round(started_ns/1e6) as started_ms | sort by (started_ms) | limit 200",
+          "expr": "\"resource_attr:service.namespace\":=deus | copy \"resource_attr:service.name\" as svc, \"span_attr:user.id\" as user, \"span_attr:app.route\" as page | stats by (trace_id) min(start_time_unix_nano) started_ns, max(end_time_unix_nano) ended_ns, field_min(start_time_unix_nano, svc) if (parent_span_id:=\"\" or kind:=2) service, field_min(start_time_unix_nano, name) if (parent_span_id:=\"\" or kind:=2) root, count() spans, count_uniq(svc) services, count() if (status_code:=2 -\"span_attr:http.response.status_code\":~\"^4\") errors, max(user) user, field_min(start_time_unix_nano, page) if (page:*) page, count() if (\"resource_attr:service.name\":in($service)) touched | math round(started_ns/1e6) as started_ms, ended_ns-started_ns as took | filter touched:>0 took:>=${min_duration:raw} errors:>=${failed:raw} | stats by (trace_id, service, root, page, user) max(started_ms) started_ms, max(took) took, max(spans) spans, max(services) services, max(errors) errors | sort by (started_ms desc) | limit 200",
           "queryType": "stats",
           "editorMode": "code",
           "refId": "A"
         }
       ],
-      "id": 36,
+      "id": 33,
       "gridPos": {
         "x": 0,
-        "y": 135,
-        "w": 16,
-        "h": 10
-      }
-    },
-    {
-      "type": "logs",
-      "title": "Browser errors in session",
-      "description": "Errors the dashboard reported in this session, with the page and the stack trace.",
-      "datasource": {
-        "type": "victoriametrics-logs-datasource",
-        "uid": "VictoriaLogs"
-      },
-      "options": {
-        "showTime": true,
-        "wrapLogMessage": true,
-        "enableLogDetails": true,
-        "sortOrder": "Descending",
-        "dedupStrategy": "none",
-        "prettifyLogMessage": false
-      },
-      "targets": [
-        {
-          "datasource": {
-            "type": "victoriametrics-logs-datasource",
-            "uid": "VictoriaLogs"
-          },
-          "expr": "telemetry.source:=browser session.id:=\"${session:raw}\" severity_text:in(ERROR,WARN)",
-          "queryType": "instant",
-          "editorMode": "code",
-          "refId": "A",
-          "maxLines": 500
-        }
-      ],
-      "id": 37,
-      "gridPos": {
-        "x": 16,
-        "y": 135,
-        "w": 8,
-        "h": 10
-      }
-    },
-    {
-      "type": "traces",
-      "title": "Trace: ${trace_id:text}",
-      "datasource": {
-        "type": "jaeger",
-        "uid": "VictoriaTraces"
-      },
-      "description": "The slowest or failed request of the time range by default; pick another in the Trace variable or click a trace ID in the tables above. Every span with its timing, attributes and links to the logs and metrics of its service.",
-      "options": {},
-      "targets": [
-        {
-          "datasource": {
-            "type": "jaeger",
-            "uid": "VictoriaTraces"
-          },
-          "refId": "A",
-          "query": "${trace_id}"
-        }
-      ],
-      "id": 38,
-      "gridPos": {
-        "x": 0,
-        "y": 145,
+        "y": 117,
         "w": 24,
-        "h": 60
+        "h": 16
       }
     }
   ]

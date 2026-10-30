@@ -1,5 +1,5 @@
 from .common import (ADHOC, COUNT, LEVEL_COLORS, LINKS_ON, PCT, SEARCH, SEARCH_VAR, VL, WHEN, by_name, Dash, dashboard,
-    describe, level_colors, logs_panel, logsql_table, status_history, thresholds, ts, vl, vl_stat)
+    describe, explore_trace, level_colors, logs_panel, logsql_table, status_history, thresholds, ts, vl, vl_stat)
 from .deus import ANNOTATIONS, LINKS_DEUS, LOGS as APP_LOGS
 
 FILE = "deus-logs.json"
@@ -135,7 +135,7 @@ p = d.add(logs_panel("All records of one request, oldest first", f'{APP_LOGS} tr
                      "Every service's records with the trace ID picked in the Request variable. The panel link opens "
                      "the trace."), 24, 9)
 p["options"]["sortOrder"] = "Ascending"
-p["links"] = [{"title": "Open the trace in Deus — Traces", "url": "/d/deus-traces/deus-traces?var-trace_id=${request}&${__url_time_range}"}]
+p["links"] = explore_trace("${request}")
 
 d.row("Log explorer")
 d.add(logs_panel("Records — $level", f"{LOGS_LEVEL} {READABLE}", "Expand a record for its fields; trace_id links to the "
