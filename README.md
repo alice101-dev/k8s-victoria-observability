@@ -171,9 +171,12 @@ gcloud container clusters get-credentials staging-observability \
 kubectl -n argocd get applicationsets,applications
 ```
 
-`apply-all` creates an empty Artifact Registry, so the application images must be pushed again before the deus
-Applications can sync. Until then their `*-migrate` hook Jobs stay in `ImagePullBackOff`. From the
-[microservice-deus](https://github.com/alice101-dev/microservice-deus) checkout next to this one:
+### Then release the application images
+
+`apply-all` creates an empty Artifact Registry (teardown deletes it), so after every bootstrap the application images
+must be pushed again before the deus Applications can sync. Until then their `*-migrate` hook Jobs stay in
+`ImagePullBackOff`. In the [microservice-deus](https://github.com/alice101-dev/microservice-deus) checkout next to
+this one:
 
 ```bash
 cd ../microservice-deus
@@ -183,12 +186,14 @@ git push
 ```
 
 `make release` builds and pushes every image tagged with the current commit and writes that tag into the
-`values-staging.yaml` files; once they are pushed, Argo CD retries the hooks with the new tag. If an Application still waits on a hook Job with the old tag, end that operation so the
-next sync uses the new commit:
+`values-staging.yaml` files; once they are pushed, Argo CD retries the hooks with the new tag. If an Application
+still waits on a hook Job with the old tag, end that operation so the next sync uses the new commit:
 
 ```bash
 kubectl -n argocd patch application <app> --type merge -p '{"status":{"operationState":{"phase":"Terminating"}}}'
 ```
+
+### Notes
 
 In `staging`, `apply-all` and `teardown` run without a confirmation prompt; pass `AUTO_APPROVE=0` to review each
 plan first. Other environments always ask.
